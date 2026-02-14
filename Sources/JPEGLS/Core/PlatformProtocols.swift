@@ -11,9 +11,9 @@ import Foundation
 /// Protocol defining platform-specific acceleration capabilities.
 ///
 /// Implementations of this protocol provide optimized routines for
-/// JPEG-LS operations on specific hardware architectures (e.g., ARM64, x86-64).
+/// JPEG-LS operations on specific hardware architectures (e.g., ARM64).
 public protocol PlatformAccelerator: Sendable {
-    /// The name of the platform (e.g., "ARM64", "x86-64")
+    /// The name of the platform (e.g., "ARM64", "Scalar")
     static var platformName: String { get }
     
     /// Returns true if this accelerator is supported on the current hardware.
@@ -131,11 +131,6 @@ public func selectPlatformAccelerator() -> any PlatformAccelerator {
     // Check if ARM64 NEON accelerator is available
     if ARM64Accelerator.isSupported {
         return ARM64Accelerator()
-    }
-    #elseif arch(x86_64)
-    // Check if x86-64 SIMD accelerator is available
-    if X86_64Accelerator.isSupported {
-        return X86_64Accelerator()
     }
     #endif
     

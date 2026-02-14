@@ -171,9 +171,6 @@ struct PlatformProtocolsTests {
         #if arch(arm64)
         // On ARM64, should get ARM64Accelerator
         #expect(type(of: accelerator) is ARM64Accelerator.Type || type(of: accelerator) is ScalarAccelerator.Type)
-        #elseif arch(x86_64)
-        // On x86_64, should get X86_64Accelerator
-        #expect(type(of: accelerator) is X86_64Accelerator.Type || type(of: accelerator) is ScalarAccelerator.Type)
         #else
         // On other architectures, should get ScalarAccelerator
         #expect(type(of: accelerator) is ScalarAccelerator.Type)
@@ -212,67 +209,6 @@ struct PlatformProtocolsTests {
         #expect(quant.q1 == 2)
         #expect(quant.q2 == 0)
         #expect(quant.q3 == -3)
-    }
-    #endif
-    
-    // MARK: - X86_64Accelerator Tests (conditionally compiled)
-    
-    #if arch(x86_64)
-    @Test("X86_64Accelerator platformName is correct")
-    func x86_64PlatformName() {
-        #expect(X86_64Accelerator.platformName == "x86-64")
-    }
-    
-    @Test("X86_64Accelerator is supported on x86-64")
-    func x86_64IsSupported() {
-        #expect(X86_64Accelerator.isSupported == true)
-    }
-    
-    @Test("X86_64Accelerator produces correct results")
-    func x86_64Results() {
-        let accelerator = X86_64Accelerator()
-        
-        // Test gradients
-        let gradients = accelerator.computeGradients(a: 10, b: 20, c: 15)
-        #expect(gradients.d1 == 5)
-        #expect(gradients.d2 == -5)
-        #expect(gradients.d3 == 5)
-        
-        // Test MED predictor - all cases
-        // Case 1: c >= max(a, b)
-        let pred1 = accelerator.medPredictor(a: 10, b: 20, c: 30)
-        #expect(pred1 == 10)
-        
-        // Case 2: c <= min(a, b)
-        let pred2 = accelerator.medPredictor(a: 20, b: 30, c: 10)
-        #expect(pred2 == 30)
-        
-        // Case 3: c between a and b
-        let pred3 = accelerator.medPredictor(a: 10, b: 30, c: 20)
-        #expect(pred3 == 20)
-        
-        // Test quantization - all quantization levels
-        // Positive quantization levels
-        let quant1 = accelerator.quantizeGradients(d1: 0, d2: 2, d3: 5, t1: 3, t2: 7, t3: 21)
-        #expect(quant1.q1 == 0)  // d == 0
-        #expect(quant1.q2 == 1)  // 0 < d < t1
-        #expect(quant1.q3 == 2)  // t1 <= d < t2
-        
-        let quant2 = accelerator.quantizeGradients(d1: 10, d2: 25, d3: 1, t1: 3, t2: 7, t3: 21)
-        #expect(quant2.q1 == 3)  // t2 <= d < t3
-        #expect(quant2.q2 == 4)  // d >= t3
-        #expect(quant2.q3 == 1)  // 0 < d < t1
-        
-        // Negative quantization levels
-        let quant3 = accelerator.quantizeGradients(d1: -1, d2: -5, d3: -10, t1: 3, t2: 7, t3: 21)
-        #expect(quant3.q1 == -1)  // -t1 < d < 0
-        #expect(quant3.q2 == -2)  // -t2 < d <= -t1
-        #expect(quant3.q3 == -3)  // -t3 < d <= -t2
-        
-        let quant4 = accelerator.quantizeGradients(d1: -25, d2: -21, d3: -2, t1: 3, t2: 7, t3: 21)
-        #expect(quant4.q1 == -4)  // d <= -t3
-        #expect(quant4.q2 == -4)  // d <= -t3
-        #expect(quant4.q3 == -1)  // -t1 < d < 0
     }
     #endif
     

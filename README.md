@@ -97,9 +97,8 @@ JLSMathUtils.isPrime(7)                      // true
 ### Architecture
 
 - **Platform Abstraction**: Protocol-based design with `PlatformAccelerator` for clean separation of architecture-specific code
-- **Conditional Compilation**: ARM64 and x86-64 code isolated with compile-time selection
+- **Conditional Compilation**: ARM64 code isolated with compile-time selection
 - **Scalar Fallback**: Reference implementation available on all platforms
-- **x86-64 Removability**: x86-64 code kept separate for future removal
 - **CharLS Compatible**: Validated against CharLS reference implementation (planned)
 - **Streaming Support**: Memory-efficient processing for large medical images (planned)
 
