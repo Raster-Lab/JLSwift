@@ -1,7 +1,7 @@
 import Foundation
 
 /// A collection of common validation utilities.
-public enum Validator {
+public enum JLSValidator {
     /// Checks whether the given string is a valid email address.
     ///
     /// The validation checks for:

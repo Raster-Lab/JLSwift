@@ -2,7 +2,7 @@ import Testing
 @testable import JLSwift
 
 @Suite("String Extension Tests")
-struct StringExtensionTests {
+struct JLSStringExtensionsTests {
     // MARK: - trimmed
 
     @Test("Trimming removes leading and trailing whitespace")
