@@ -63,16 +63,13 @@ struct JPEGLSContextModelTests {
         let params = try JPEGLSPresetParameters.defaultParameters(bitsPerSample: 8)
         let context = try JPEGLSContextModel(parameters: params, near: 0)
         
-        // Q1 = 1, Q2 = 0, Q3 = 0
-        // Index = 81*1 + 9*0 + 0 + 364 = 445 (but need to verify formula)
+        // Test various positive gradient combinations
         let index1 = context.computeContextIndex(q1: 1, q2: 0, q3: 0)
         #expect(index1 >= 0 && index1 < 365)
         
-        // Q1 = 0, Q2 = 1, Q3 = 0
         let index2 = context.computeContextIndex(q1: 0, q2: 1, q3: 0)
         #expect(index2 >= 0 && index2 < 365)
         
-        // Q1 = 0, Q2 = 0, Q3 = 1
         let index3 = context.computeContextIndex(q1: 0, q2: 0, q3: 1)
         #expect(index3 >= 0 && index3 < 365)
     }
@@ -358,14 +355,14 @@ struct JPEGLSContextModelTests {
         #expect(context.getRunInterruptionIndex(index: 0) == 0)
         #expect(context.getRunInterruptionIndex(index: 1) == 0)
         
-        // Update with a run
-        context.updateRunIndex(completedRunLength: 10)
+        // Update with a specific run length
+        let runLength = 10
+        context.updateRunIndex(completedRunLength: runLength)
         
-        // At least one interruption index should be updated
+        // The run interruption index should be set to the completed run length
+        // Based on the current runIndex (initially 0), index 0 should be updated
         let val0 = context.getRunInterruptionIndex(index: 0)
-        let val1 = context.getRunInterruptionIndex(index: 1)
-        
-        #expect(val0 > 0 || val1 > 0)
+        #expect(val0 == runLength)
     }
     
     @Test("Run interruption index bounds checking")
