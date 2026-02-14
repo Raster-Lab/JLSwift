@@ -54,8 +54,8 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
   - [x] `Sources/JPEGLS/Platform/ARM64/` — Apple Silicon / ARM NEON code
   - [x] `Sources/JPEGLS/Platform/x86_64/` — x86-64 specific code (removable)
   - [x] `Sources/jpegls/` — CLI tool source
-- [ ] Define architecture boundary protocols for platform abstraction
-- [ ] Create conditional compilation structure for architecture separation
+- [x] Define architecture boundary protocols for platform abstraction
+- [x] Create conditional compilation structure for architecture separation
 
 #### Phase 4.2: JPEG-LS Standard Core Types
 - [ ] Implement JPEG-LS marker segment types (SOI, EOI, SOF, SOS, LSE, etc.)

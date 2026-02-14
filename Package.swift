@@ -33,5 +33,9 @@ let package = Package(
             name: "jpegls",
             dependencies: ["JPEGLS"]
         ),
+        .testTarget(
+            name: "JPEGLSTests",
+            dependencies: ["JPEGLS"]
+        ),
     ]
 )
