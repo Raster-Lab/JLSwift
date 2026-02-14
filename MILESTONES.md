@@ -43,16 +43,16 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 **Status**: Planned
 
 #### Phase 4.1: Project Architecture Setup
-- [ ] Create `JLSwiftJPEGLS` library target in Package.swift
-- [ ] Create `jpegls` command-line tool target in Package.swift
-- [ ] Set up directory structure:
-  - [ ] `Sources/JLSwiftJPEGLS/Core/` — Core codec types and protocols
-  - [ ] `Sources/JLSwiftJPEGLS/Encoder/` — Encoding implementation
-  - [ ] `Sources/JLSwiftJPEGLS/Decoder/` — Decoding implementation
-  - [ ] `Sources/JLSwiftJPEGLS/Platform/` — Platform-specific optimizations
-  - [ ] `Sources/JLSwiftJPEGLS/Platform/ARM64/` — Apple Silicon / ARM NEON code
-  - [ ] `Sources/JLSwiftJPEGLS/Platform/x86_64/` — x86-64 specific code (removable)
-  - [ ] `Sources/jpegls/` — CLI tool source
+- [x] Create `JPEGLS` library target in Package.swift
+- [x] Create `jpegls` command-line tool target in Package.swift
+- [x] Set up directory structure:
+  - [x] `Sources/JPEGLS/Core/` — Core codec types and protocols
+  - [x] `Sources/JPEGLS/Encoder/` — Encoding implementation
+  - [x] `Sources/JPEGLS/Decoder/` — Decoding implementation
+  - [x] `Sources/JPEGLS/Platform/` — Platform-specific optimizations
+  - [x] `Sources/JPEGLS/Platform/ARM64/` — Apple Silicon / ARM NEON code
+  - [x] `Sources/JPEGLS/Platform/x86_64/` — x86-64 specific code (removable)
+  - [x] `Sources/jpegls/` — CLI tool source
 - [ ] Define architecture boundary protocols for platform abstraction
 - [ ] Create conditional compilation structure for architecture separation
 

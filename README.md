@@ -1,6 +1,6 @@
 # JLSwift
 
-A Swift 6.2+ utility library providing core helpers for validation, string manipulation, and mathematical operations. Also home to the **JLSwiftJPEGLS** native Swift implementation of JPEG-LS compression for DICOM medical imaging.
+A Swift 6.2+ utility library providing core helpers for validation, string manipulation, and mathematical operations. Also home to the **JPEGLS** native Swift implementation of JPEG-LS compression for DICOM medical imaging.
 
 [![CI](https://github.com/Raster-Lab/JLSwift/actions/workflows/ci.yml/badge.svg)](https://github.com/Raster-Lab/JLSwift/actions/workflows/ci.yml)
 
@@ -19,10 +19,12 @@ dependencies: [
 ]
 ```
 
-Then add `"JLSwift"` as a dependency of your target:
+Then add `"JLSwift"` or `"JPEGLS"` as a dependency of your target:
 
 ```swift
 .target(name: "YourTarget", dependencies: ["JLSwift"])
+// or for JPEG-LS functionality:
+.target(name: "YourTarget", dependencies: ["JPEGLS"])
 ```
 
 ## Modules
@@ -66,9 +68,9 @@ MathUtils.gcd(12, 8)                      // 4
 MathUtils.isPrime(7)                      // true
 ```
 
-## JPEG-LS Compression (Planned)
+## JPEG-LS Compression (In Development)
 
-**JLSwiftJPEGLS** is a planned native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compression, designed for the DICOMkit project.
+**JPEGLS** is a native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compression, designed for the DICOMkit project.
 
 ### Key Features (Planned)
 

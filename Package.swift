@@ -9,6 +9,14 @@ let package = Package(
             name: "JLSwift",
             targets: ["JLSwift"]
         ),
+        .library(
+            name: "JPEGLS",
+            targets: ["JPEGLS"]
+        ),
+        .executable(
+            name: "jpegls",
+            targets: ["jpegls"]
+        ),
     ],
     targets: [
         .target(
@@ -17,6 +25,13 @@ let package = Package(
         .testTarget(
             name: "JLSwiftTests",
             dependencies: ["JLSwift"]
+        ),
+        .target(
+            name: "JPEGLS"
+        ),
+        .executableTarget(
+            name: "jpegls",
+            dependencies: ["JPEGLS"]
         ),
     ]
 )
