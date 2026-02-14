@@ -78,16 +78,16 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 
 ### Milestone 5: JPEG-LS Encoder 📋
 **Target**: Complete encoding pipeline  
-**Status**: Planned
+**Status**: In Progress
 
-#### Phase 5.1: Regular Mode Encoding
-- [ ] Implement gradient computation for regular mode detection
-- [ ] Implement prediction using MED (Median Edge Detector)
-- [ ] Implement prediction error computation and modular reduction
-- [ ] Implement Golomb-Rice parameter estimation (k calculation)
-- [ ] Implement Golomb-Rice encoding of prediction errors
-- [ ] Implement context-based bias correction
-- [ ] Achieve >95% test coverage for regular mode
+#### Phase 5.1: Regular Mode Encoding ✅
+- [x] Implement gradient computation for regular mode detection
+- [x] Implement prediction using MED (Median Edge Detector)
+- [x] Implement prediction error computation and modular reduction
+- [x] Implement Golomb-Rice parameter estimation (k calculation)
+- [x] Implement Golomb-Rice encoding of prediction errors
+- [x] Implement context-based bias correction
+- [x] Achieve >95% test coverage for regular mode (96.97%)
 
 #### Phase 5.2: Run Mode Encoding
 - [ ] Implement run-length detection logic
