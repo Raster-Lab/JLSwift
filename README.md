@@ -72,6 +72,19 @@ JLSMathUtils.isPrime(7)                      // true
 
 **JPEGLS** is a native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compression, designed for the DICOMkit project.
 
+### Current Status
+
+**Phase 4.2: Core Types - Completed ✅**
+- All JPEG-LS standard marker types implemented
+- Frame and scan header structures with validation
+- Preset parameters with automatic defaults
+- Color transformation support (HP1, HP2, HP3)
+- Bitstream reader/writer with marker stuffing
+- Comprehensive error handling
+- **Test Coverage: 96.24%**
+
+**Next: Phase 4.3** - Context modeling implementation (quantization, state management)
+
 ### Key Features (Planned)
 
 - **Native Swift**: Pure Swift implementation with no external C dependencies
