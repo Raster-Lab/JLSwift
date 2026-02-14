@@ -81,11 +81,14 @@ JLSMathUtils.isPrime(7)                      // true
 - **Near-Lossless Support**: Configurable error tolerance encoding
 - **Command-Line Tool**: `jpegls` CLI for encoding, decoding, and validation
 
-### Architecture (Planned)
+### Architecture
 
-- **Platform Separation**: x86-64 code kept separate for future removal
-- **CharLS Compatible**: Validated against CharLS reference implementation
-- **Streaming Support**: Memory-efficient processing for large medical images
+- **Platform Abstraction**: Protocol-based design with `PlatformAccelerator` for clean separation of architecture-specific code
+- **Conditional Compilation**: ARM64 and x86-64 code isolated with compile-time selection
+- **Scalar Fallback**: Reference implementation available on all platforms
+- **x86-64 Removability**: x86-64 code kept separate for future removal
+- **CharLS Compatible**: Validated against CharLS reference implementation (planned)
+- **Streaming Support**: Memory-efficient processing for large medical images (planned)
 
 See [MILESTONES.md](MILESTONES.md) for the detailed development roadmap.
 
