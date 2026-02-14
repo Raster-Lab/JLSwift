@@ -90,9 +90,18 @@ JLSMathUtils.isPrime(7)                      // true
 - Golomb-Rice encoding of prediction errors
 - Context-based bias correction
 - **Test Coverage: 96.97%**
-- **Overall Project Coverage: 96.97%**
 
-**Next: Phase 5.2** - Run mode encoding implementation (run-length detection, encoding, context updates)
+**Phase 5.2: Run Mode Encoding - Completed ✅**
+- Run-length detection logic for flat regions
+- J[RUNindex] mapping table implementation
+- Run-length encoding with continuation bits
+- Run interruption sample encoding
+- Context adaptation based on run patterns
+- Run-length limit handling and splitting
+- **Test Coverage: 100.00%**
+- **Overall Project Coverage: 97.30%**
+
+**Next: Phase 5.3** - Near-lossless encoding implementation (error tolerance, quantized errors, reconstructed values)
 
 ### Key Features (Planned)
 
