@@ -54,7 +54,7 @@ public struct ARM64Accelerator: PlatformAccelerator {
                 return -3
             } else if d <= -t1 {
                 return -2
-            } else if d < -0 {
+            } else if d < 0 {
                 return -1
             } else if d == 0 {
                 return 0
