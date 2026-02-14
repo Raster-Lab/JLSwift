@@ -1,5 +1,5 @@
 /// A collection of mathematical utility functions.
-public enum MathUtils {
+public enum JLSMathUtils {
     /// Clamps the given value to the specified range.
     ///
     /// - Parameters:

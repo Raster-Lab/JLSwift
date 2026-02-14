@@ -29,16 +29,16 @@ Then add `"JLSwift"` or `"JPEGLS"` as a dependency of your target:
 
 ## Modules
 
-### Validator
+### JLSValidator
 
 Common validation utilities for strings.
 
 ```swift
 import JLSwift
 
-Validator.isValidEmail("user@example.com")   // true
-Validator.isNonEmpty("hello")                // true
-Validator.isLengthValid("abc", min: 1, max: 5) // true
+JLSValidator.isValidEmail("user@example.com")   // true
+JLSValidator.isNonEmpty("hello")                // true
+JLSValidator.isLengthValid("abc", min: 1, max: 5) // true
 ```
 
 ### String Extensions
@@ -55,17 +55,17 @@ import JLSwift
 "hello world".wordCount       // 2
 ```
 
-### MathUtils
+### JLSMathUtils
 
 Mathematical utility functions.
 
 ```swift
 import JLSwift
 
-MathUtils.clamp(15, lower: 0, upper: 10) // 10
-MathUtils.factorial(5)                    // 120
-MathUtils.gcd(12, 8)                      // 4
-MathUtils.isPrime(7)                      // true
+JLSMathUtils.clamp(15, lower: 0, upper: 10) // 10
+JLSMathUtils.factorial(5)                    // 120
+JLSMathUtils.gcd(12, 8)                      // 4
+JLSMathUtils.isPrime(7)                      // true
 ```
 
 ## JPEG-LS Compression (In Development)
