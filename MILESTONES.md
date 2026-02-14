@@ -10,7 +10,6 @@
 - [x] Set up project structure (`Sources/`, `Tests/`)
 - [x] Create GitHub Copilot instructions (`.github/copilot-instructions.md`)
 - [x] Set up CI pipeline with GitHub Actions
-- [x] Enforce >95% test code coverage in CI
 - [x] Create initial documentation (`README.md`, `MILESTONES.md`)
 
 ### Milestone 2: Core Utilities ✅

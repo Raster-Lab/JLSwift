@@ -82,8 +82,6 @@ swift test
 swift test --enable-code-coverage
 ```
 
-> **Test coverage requirement**: This project requires >95% test code coverage. The CI pipeline enforces this threshold on every push and pull request.
-
 ## Documentation
 
 - [MILESTONES.md](MILESTONES.md) — Project milestones and roadmap.
