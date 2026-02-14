@@ -1,6 +1,6 @@
 # JLSwift
 
-A Swift 6.2+ utility library providing core helpers for validation, string manipulation, and mathematical operations.
+A Swift 6.2+ utility library providing core helpers for validation, string manipulation, and mathematical operations. Also home to the **JLSwiftJPEGLS** native Swift implementation of JPEG-LS compression for DICOM medical imaging.
 
 [![CI](https://github.com/Raster-Lab/JLSwift/actions/workflows/ci.yml/badge.svg)](https://github.com/Raster-Lab/JLSwift/actions/workflows/ci.yml)
 
@@ -65,6 +65,27 @@ MathUtils.factorial(5)                    // 120
 MathUtils.gcd(12, 8)                      // 4
 MathUtils.isPrime(7)                      // true
 ```
+
+## JPEG-LS Compression (Planned)
+
+**JLSwiftJPEGLS** is a planned native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compression, designed for the DICOMkit project.
+
+### Key Features (Planned)
+
+- **Native Swift**: Pure Swift implementation with no external C dependencies
+- **Apple Silicon Optimized**: Primary target with ARM NEON/SIMD acceleration
+- **Hardware Acceleration**: Support for Apple Accelerate framework and Metal GPU
+- **DICOM Compatible**: Full support for DICOM transfer syntaxes
+- **Near-Lossless Support**: Configurable error tolerance encoding
+- **Command-Line Tool**: `jpegls` CLI for encoding, decoding, and validation
+
+### Architecture (Planned)
+
+- **Platform Separation**: x86-64 code kept separate for future removal
+- **CharLS Compatible**: Validated against CharLS reference implementation
+- **Streaming Support**: Memory-efficient processing for large medical images
+
+See [MILESTONES.md](MILESTONES.md) for the detailed development roadmap.
 
 ## Building
 
