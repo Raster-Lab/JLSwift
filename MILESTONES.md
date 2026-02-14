@@ -41,9 +41,9 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 
 ### Milestone 4: JPEG-LS Foundation 📋
 **Target**: Core architecture and basic implementation  
-**Status**: Planned
+**Status**: In Progress
 
-#### Phase 4.1: Project Architecture Setup
+#### Phase 4.1: Project Architecture Setup ✅
 - [x] Create `JPEGLS` library target in Package.swift
 - [x] Create `jpegls` command-line tool target in Package.swift
 - [x] Set up directory structure:
@@ -57,15 +57,15 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 - [x] Define architecture boundary protocols for platform abstraction
 - [x] Create conditional compilation structure for architecture separation
 
-#### Phase 4.2: JPEG-LS Standard Core Types
-- [ ] Implement JPEG-LS marker segment types (SOI, EOI, SOF, SOS, LSE, etc.)
-- [ ] Implement frame header structures per ITU-T.87
-- [ ] Implement scan header structures
-- [ ] Implement preset parameters structure (MAXVAL, T1, T2, T3, RESET)
-- [ ] Implement color transformation types (None, HP1, HP2, HP3)
-- [ ] Create `JPEGLSError` type with comprehensive error codes
-- [ ] Implement bitstream reader/writer utilities
-- [ ] Achieve >95% test coverage for core types
+#### Phase 4.2: JPEG-LS Standard Core Types ✅
+- [x] Implement JPEG-LS marker segment types (SOI, EOI, SOF, SOS, LSE, etc.)
+- [x] Implement frame header structures per ITU-T.87
+- [x] Implement scan header structures
+- [x] Implement preset parameters structure (MAXVAL, T1, T2, T3, RESET)
+- [x] Implement color transformation types (None, HP1, HP2, HP3)
+- [x] Create `JPEGLSError` type with comprehensive error codes
+- [x] Implement bitstream reader/writer utilities
+- [x] Achieve >95% test coverage for core types (96.24%)
 
 #### Phase 4.3: Context Modeling Implementation
 - [ ] Implement context quantization (Q1, Q2, Q3 gradient calculations)
