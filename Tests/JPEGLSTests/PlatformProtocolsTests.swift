@@ -304,7 +304,7 @@ struct PlatformProtocolsTests {
         
         // Test case where c == min(a, b)
         let result2 = accelerator.medPredictor(a: 20, b: 30, c: 20)
-        #expect(result2 == 30)  // a + b - c = 20 + 30 - 20 = 30
+        #expect(result2 == 30)  // c <= min(a,b), so max(a,b) = 30
     }
     
     @Test("ScalarAccelerator quantization at boundaries")
