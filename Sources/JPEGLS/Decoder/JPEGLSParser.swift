@@ -79,7 +79,40 @@ public final class JPEGLSParser {
         
         // Parse marker segments until EOI
         while !reader.isAtEnd {
-            let marker = try reader.readMarker()
+            // Read marker bytes manually to handle unknown markers
+            let byte1 = try reader.readByte()
+            guard byte1 == JPEGLSMarker.markerPrefix else {
+                throw JPEGLSError.invalidBitstreamStructure(
+                    reason: "Expected marker prefix (0xFF), got 0x\(String(byte1, radix: 16))"
+                )
+            }
+            
+            let byte2 = try reader.readByte()
+            
+            // Try to parse as known marker
+            guard let marker = JPEGLSMarker(rawValue: byte2) else {
+                // Unknown marker - skip it gracefully
+                // Some markers have no length field (standalone markers)
+                if byte2 >= 0xD0 && byte2 <= 0xD9 {
+                    // RST markers (0xD0-0xD7) and SOI/EOI (0xD8-0xD9) have no length
+                    continue
+                } else if byte2 >= 0x60 && byte2 <= 0x7F {
+                    // CharLS uses markers in the 0xFF60-0xFF7F range as standalone markers (no length field)
+                    // These appear to be used for internal purposes and can be safely skipped
+                    continue
+                } else {
+                    // Read length and skip the marker segment
+                    let length = try reader.readUInt16()
+                    guard length >= 2 else {
+                        throw JPEGLSError.invalidBitstreamStructure(
+                            reason: "Invalid marker segment length for unknown marker 0xFF\(String(byte2, radix: 16)): \(length)"
+                        )
+                    }
+                    let skipLength = Int(length) - 2
+                    _ = try reader.readBytes(skipLength)
+                    continue
+                }
+            }
             
             switch marker {
             case .endOfImage:
@@ -123,13 +156,20 @@ public final class JPEGLSParser {
                 
                 // Skip scan data until we hit a marker
                 // The scan data ends when we encounter a marker (0xFF followed by non-0x00)
+                // CharLS uses FF 60-FF 7F as escape sequences within scan data (similar to FF 00)
                 while !reader.isAtEnd {
                     let byte = try reader.readByte()
                     if byte == JPEGLSMarker.markerPrefix {
                         // Check if it's a marker or stuffed byte
                         if let nextByte = reader.peekByte() {
-                            if nextByte != 0x00 {
-                                // This is a marker - back up so we can read it in the next iteration
+                            if nextByte == 0x00 || (nextByte >= 0x60 && nextByte <= 0x7F) {
+                                // FF 00 is standard byte stuffing
+                                // FF 60-FF 7F are CharLS escape sequences within scan data
+                                // Skip the next byte and continue reading scan data
+                                _ = try reader.readByte()
+                                continue
+                            } else {
+                                // This is a real marker - back up so we can read it in the next iteration
                                 try reader.seek(to: reader.currentPosition - 1)
                                 break
                             }
