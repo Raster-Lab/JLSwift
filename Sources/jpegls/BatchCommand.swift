@@ -297,13 +297,9 @@ struct BatchProcessor {
         let semaphore = DispatchSemaphore(value: parallelism)
         let queue = DispatchQueue(label: "com.jpegls.batch", attributes: .concurrent)
         let group = DispatchGroup()
-        let lock = NSLock()
         
-        // Use a class wrapper to make results mutable in concurrent context
-        final class ResultsWrapper: @unchecked Sendable {
-            var results = BatchResults()
-        }
-        let resultsWrapper = ResultsWrapper()
+        // Use a thread-safe results aggregator
+        let resultsAggregator = ResultsAggregator()
         
         for (index, inputFile) in files.enumerated() {
             group.enter()
@@ -316,15 +312,12 @@ struct BatchProcessor {
                 }
                 
                 let fileResult = self.processFile(inputFile, index: index, total: files.count)
-                
-                lock.lock()
-                resultsWrapper.results.add(fileResult)
-                lock.unlock()
+                resultsAggregator.add(fileResult)
             }
         }
         
         group.wait()
-        return resultsWrapper.results
+        return resultsAggregator.getResults()
     }
     
     private func processFile(_ inputFile: String, index: Int, total: Int) -> FileResult {
@@ -434,8 +427,7 @@ struct BatchProcessor {
     }
     
     private func printSummary(results: BatchResults) {
-        print() // New line after progress dots
-        print("\nBatch Processing Summary:")
+        print("\n\nBatch Processing Summary:")
         print("  Total files: \(results.total)")
         print("  Successful: \(results.successes)")
         print("  Failed: \(results.failures)")
@@ -465,17 +457,18 @@ struct FileResult {
     let error: Error?
 }
 
-struct BatchResults {
-    private(set) var successes = 0
-    private(set) var failures = 0
-    private(set) var totalDuration: TimeInterval = 0
-    private(set) var failedFiles: [String] = []
+/// Thread-safe results aggregator using NSLock
+final class ResultsAggregator: @unchecked Sendable {
+    private let lock = NSLock()
+    private var successes = 0
+    private var failures = 0
+    private var totalDuration: TimeInterval = 0
+    private var failedFiles: [String] = []
     
-    var total: Int {
-        successes + failures
-    }
-    
-    mutating func add(_ result: FileResult) {
+    func add(_ result: FileResult) {
+        lock.lock()
+        defer { lock.unlock() }
+        
         if result.success {
             successes += 1
         } else {
@@ -483,5 +476,28 @@ struct BatchResults {
             failedFiles.append(result.file)
         }
         totalDuration += result.duration
+    }
+    
+    func getResults() -> BatchResults {
+        lock.lock()
+        defer { lock.unlock() }
+        
+        return BatchResults(
+            successes: successes,
+            failures: failures,
+            totalDuration: totalDuration,
+            failedFiles: failedFiles
+        )
+    }
+}
+
+struct BatchResults {
+    let successes: Int
+    let failures: Int
+    let totalDuration: TimeInterval
+    let failedFiles: [String]
+    
+    var total: Int {
+        successes + failures
     }
 }
