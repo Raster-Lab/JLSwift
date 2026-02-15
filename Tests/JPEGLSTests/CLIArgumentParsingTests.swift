@@ -1,13 +1,22 @@
-/// Tests for CLI argument parsing and validation
+/// Tests for CLI argument parsing and validation logic
+///
+/// Note: Since `jpegls` is an executable target, it cannot be directly imported or unit tested
+/// through Swift Package Manager's test infrastructure. These tests validate the **validation logic**
+/// and **business rules** that the CLI commands use for argument parsing:
+///
+/// - Parameter range validation (width, height, bits-per-sample, NEAR, etc.)
+/// - Mutual exclusivity of flags (verbose/quiet, json/quiet)
+/// - Valid option values (interleave modes, color transforms, shell types)
+/// - Edge cases and boundary conditions
+///
+/// The tests use boolean logic and value checking to verify the same patterns that ArgumentParser
+/// enforces in the actual CLI. For full integration testing of CLI commands with actual argument
+/// parsing, end-to-end tests with process execution would be required.
 
 import Testing
 import Foundation
 import ArgumentParser
 @testable import JPEGLS
-
-// Note: Since jpegls is an executable target, we can't directly import it in tests.
-// Instead, we test the command structures by recreating them here for validation testing.
-// The actual CLI integration should be tested through end-to-end tests with process execution.
 
 @Suite("CLI Argument Parsing Tests")
 struct CLIArgumentParsingTests {
@@ -374,20 +383,21 @@ struct CLIArgumentParsingTests {
     @Suite("ValidationError Tests")
     struct ValidationErrorTests {
         
-        @Test("ValidationError can be created with message")
-        func testValidationErrorCreation() throws {
-            struct ValidationError: Error, CustomStringConvertible {
-                let message: String
-                
-                init(_ message: String) {
-                    self.message = message
-                }
-                
-                var description: String {
-                    message
-                }
+        // Shared ValidationError definition for testing
+        struct ValidationError: Error, CustomStringConvertible {
+            let message: String
+            
+            init(_ message: String) {
+                self.message = message
             }
             
+            var description: String {
+                message
+            }
+        }
+        
+        @Test("ValidationError can be created with message")
+        func testValidationErrorCreation() throws {
             let error = ValidationError("Test error message")
             #expect(error.message == "Test error message")
             #expect(error.description == "Test error message")
@@ -395,18 +405,6 @@ struct CLIArgumentParsingTests {
         
         @Test("ValidationError description matches message")
         func testValidationErrorDescription() throws {
-            struct ValidationError: Error, CustomStringConvertible {
-                let message: String
-                
-                init(_ message: String) {
-                    self.message = message
-                }
-                
-                var description: String {
-                    message
-                }
-            }
-            
             let errorMessage = "Cannot use both --json and --quiet flags"
             let error = ValidationError(errorMessage)
             #expect(error.description == errorMessage)
