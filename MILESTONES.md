@@ -266,11 +266,20 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 
 #### Phase 7.2: CLI Utilities 📋
 - [x] Implement `--verbose` output with progress indication (completed in Phase 7.1)
-- [ ] Implement `--quiet` mode for scripting
+- [x] Implement `--quiet` mode for scripting (completed)
 - [x] Implement `--json` output format for programmatic use (completed in Phase 7.1)
 - [ ] Implement batch processing with glob patterns
 - [ ] Implement parallel processing for batch operations
 - [ ] Add shell completion scripts (bash, zsh, fish)
+
+**Implementation Details:**
+- Added `--quiet` flag to all CLI commands (info, verify, encode, decode)
+- Quiet mode suppresses all non-essential output, ideal for scripting and automation
+- Error messages are still displayed to stderr in quiet mode for debugging
+- Mutually exclusive flags validation: `--verbose` and `--quiet` cannot be used together, `--json` and `--quiet` cannot be used together
+- `info` command in quiet mode outputs single line: "WIDTHxHEIGHT BITS-bit COMPONENTS-component ENCODING"
+- `verify` command in quiet mode produces no output on success (exit code 0 indicates success)
+- Defined `ValidationError` type for consistent CLI argument validation
 
 #### Phase 7.3: CLI Help & Documentation ⏳
 - [x] Implement comprehensive `--help` for all commands (completed in Phase 7.1)
