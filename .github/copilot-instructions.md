@@ -78,6 +78,17 @@ swift test --show-codecov-path
 - The CI pipeline builds with Swift 6.2+ and enforces >95% test coverage.
 - PRs that drop coverage below 95% will fail the CI check.
 
+## Automatic Code Review
+
+Before finalizing any task, **always run the `code_review` tool** to get automated feedback on your changes:
+
+1. Use the `code_review` tool before completing any task, even for documentation-only changes.
+2. Provide a clear PR title and description when calling the tool.
+3. Review all comments returned by the code review tool carefully.
+4. Address relevant feedback - use your judgment as the tool may occasionally make incorrect suggestions.
+5. If you make significant changes after a code review, run the `code_review` tool again.
+6. After addressing code review feedback, run the `codeql_checker` tool to scan for security vulnerabilities.
+
 ## Code Review Checklist
 
 Before submitting or approving a PR, verify:
@@ -88,3 +99,5 @@ Before submitting or approving a PR, verify:
 4. MILESTONES.md is updated if milestone progress changed.
 5. All public APIs have documentation comments.
 6. Code follows Swift 6.2+ best practices and concurrency model.
+7. Automatic code review has been run and feedback addressed.
+8. Security scan (`codeql_checker`) has been run with no unaddressed vulnerabilities.
