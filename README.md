@@ -84,7 +84,7 @@ JPEG-LS is a lossless/near-lossless compression standard specifically designed f
 | **Multi-Component Support** | Full RGB and grayscale encoding with all interleaving modes |
 | **Interleaving Modes** | None (separate scans), Line-interleaved, Sample-interleaved |
 | **Near-Lossless Support** | Configurable error tolerance encoding with NEAR parameter (1-255) |
-| **Command-Line Tool** | `jpegls` CLI for encoding, decoding, and validation (planned) |
+| **Command-Line Tool** | `jpegls` CLI with info, verify, encode, and decode commands |
 
 ### Architecture Overview
 
@@ -167,6 +167,129 @@ defer { sharedBufferPool.release(contextBuffer, type: .contextArrays) }
 4. **x86-64 Removability**: Clear compilation boundaries for future x86-64 deprecation
 5. **Memory Efficiency**: Buffer pooling, tile-based processing, and cache-friendly layouts for large images
 6. **Standards Compliance**: Strict adherence to ISO/IEC 14495-1:1999 / ITU-T.87
+
+## Command-Line Tool
+
+The `jpegls` command-line tool provides easy access to JPEG-LS encoding, decoding, and file inspection.
+
+### Installation
+
+Build the CLI tool with:
+```bash
+swift build -c release
+```
+
+The binary will be available at `.build/release/jpegls`.
+
+### Commands
+
+#### `jpegls info` - Display File Information
+
+Display detailed information about a JPEG-LS file:
+
+```bash
+# Human-readable output
+jpegls info image.jls
+
+# JSON output for programmatic use
+jpegls info image.jls --json
+```
+
+**Example output:**
+```
+JPEG-LS File Information
+========================
+
+File size: 30 bytes
+
+Frame Header:
+  Width: 256 pixels
+  Height: 256 pixels
+  Bits per sample: 8
+  Component count: 1
+
+Scan Headers: 1
+  Scan 1:
+    Component count: 1
+    Component IDs: 1
+    Interleave mode: none
+    NEAR: 0 (lossless)
+    Point transform: 0
+
+Compression:
+  Uncompressed size: 65536 bytes
+  Compressed size: 30 bytes
+  Compression ratio: 2184.53:1
+  Space savings: 100.0%
+```
+
+#### `jpegls verify` - Verify File Integrity
+
+Validate JPEG-LS file structure and parameters:
+
+```bash
+# Basic verification
+jpegls verify image.jls
+
+# Verbose output with detailed validation
+jpegls verify image.jls --verbose
+```
+
+The verify command checks:
+- File structure validity (SOI, SOF, SOS, EOI markers)
+- Frame header parameters (dimensions, bits per sample, component count)
+- Scan header consistency with frame header
+- Preset parameter validity and threshold ordering
+- Component ID consistency
+
+#### `jpegls encode` - Encode Raw Image Data (Planned)
+
+Encode raw pixel data to JPEG-LS format:
+
+```bash
+# Encode grayscale image (lossless)
+jpegls encode input.raw output.jls --width 512 --height 512 --bits-per-sample 8
+
+# Encode RGB image with line interleaving
+jpegls encode input.raw output.jls \
+  --width 512 --height 512 \
+  --components 3 \
+  --interleave line
+
+# Near-lossless encoding (NEAR=3)
+jpegls encode input.raw output.jls \
+  --width 512 --height 512 \
+  --near 3 \
+  --verbose
+```
+
+**Options:**
+- `-w, --width`: Image width in pixels (required)
+- `-h, --height`: Image height in pixels (required)
+- `-b, --bits-per-sample`: Bits per sample, 2-16 (default: 8)
+- `-c, --components`: Number of components - 1 (grayscale) or 3 (RGB) (default: 1)
+- `--near`: NEAR parameter, 0=lossless, 1-255=lossy (default: 0)
+- `--interleave`: Interleave mode - none, line, sample (default: none)
+- `--color-transform`: Color transformation - none, hp1, hp2, hp3 (default: none)
+- `--verbose`: Enable verbose output
+
+#### `jpegls decode` - Decode JPEG-LS File (Planned)
+
+Decode JPEG-LS file to raw pixel data:
+
+```bash
+# Decode to raw format
+jpegls decode input.jls output.raw
+
+# Decode with verbose output
+jpegls decode input.jls output.raw --verbose
+```
+
+**Options:**
+- `--format`: Output format - raw, png, tiff (default: raw) *(PNG/TIFF support planned)*
+- `--verbose`: Enable verbose output
+
+**Note:** Full encode and decode functionality requires bitstream I/O integration, which is currently in development. The `info` and `verify` commands are fully functional.
 
 ### Supported DICOM Transfer Syntaxes (Planned)
 

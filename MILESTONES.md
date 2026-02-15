@@ -223,38 +223,59 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 - Achieved 100% code coverage for `X86_64Accelerator.swift` (78/78 lines covered)
 - All platform abstraction tests pass on both ARM64 and x86-64 architectures
 
-### Milestone 7: Command-Line Interface 📋
+### Milestone 7: Command-Line Interface ⏳
 **Target**: Full-featured CLI tool  
-**Status**: Planned
+**Status**: In Progress
 
-#### Phase 7.1: Core CLI Commands
-- [ ] Implement `jpegls encode` command
-  - [ ] Input file path (raw, PNG, TIFF, DICOM support)
-  - [ ] Output file path
-  - [ ] `--near` parameter for near-lossless encoding
-  - [ ] `--interleave` mode selection (none, line, sample)
-  - [ ] `--color-transform` selection
-  - [ ] `--bits-per-sample` specification
-  - [ ] `--preset` for custom T1, T2, T3, RESET parameters
-- [ ] Implement `jpegls decode` command
-  - [ ] Input JPEG-LS file path
-  - [ ] Output file path
-  - [ ] `--format` output format selection
-- [ ] Implement `jpegls info` command for file analysis
-- [ ] Implement `jpegls verify` for round-trip validation
+#### Phase 7.1: Core CLI Commands ✅
+- [x] Implement `jpegls encode` command
+  - [x] Input file path (raw pixel data)
+  - [x] Output file path
+  - [x] `--near` parameter for near-lossless encoding
+  - [x] `--interleave` mode selection (none, line, sample)
+  - [x] `--color-transform` selection
+  - [x] `--bits-per-sample` specification
+  - [x] `--preset` for custom T1, T2, T3, RESET parameters (parser ready, encoder integration pending)
+  - [x] `--verbose` output mode
+  - [ ] Complete bitstream writer integration for full encode functionality
+- [x] Implement `jpegls decode` command
+  - [x] Input JPEG-LS file path
+  - [x] Output file path
+  - [x] `--format` output format selection (raw only, PNG/TIFF planned)
+  - [x] `--verbose` output mode
+  - [ ] Complete bitstream reader integration for full decode functionality
+- [x] Implement `jpegls info` command for file analysis
+  - [x] Display frame header information (dimensions, bits per sample, components)
+  - [x] Display scan header information (interleave mode, NEAR, components)
+  - [x] Display preset parameters if present
+  - [x] Calculate and display compression statistics
+  - [x] `--json` output format for programmatic use
+- [x] Implement `jpegls verify` for integrity validation
+  - [x] Validate file structure (SOI, SOF, SOS, EOI markers)
+  - [x] Validate frame header parameters
+  - [x] Validate scan header consistency
+  - [x] Validate preset parameters
+  - [x] `--verbose` output mode for detailed validation steps
 
-#### Phase 7.2: CLI Utilities
-- [ ] Implement `--verbose` output with progress indication
+**Implementation Details:**
+- All four CLI commands implemented using Swift ArgumentParser
+- `info` and `verify` commands are fully functional and tested
+- `encode` and `decode` commands have complete argument parsing and validation, but require bitstream I/O integration with the encoder/decoder to be fully operational
+- Comprehensive help messages for all commands with examples
+- Full support for --verbose and --json output modes where applicable
+
+#### Phase 7.2: CLI Utilities 📋
+- [x] Implement `--verbose` output with progress indication (completed in Phase 7.1)
 - [ ] Implement `--quiet` mode for scripting
-- [ ] Implement `--json` output format for programmatic use
+- [x] Implement `--json` output format for programmatic use (completed in Phase 7.1)
 - [ ] Implement batch processing with glob patterns
 - [ ] Implement parallel processing for batch operations
 - [ ] Add shell completion scripts (bash, zsh, fish)
 
-#### Phase 7.3: CLI Help & Documentation
-- [ ] Implement comprehensive `--help` for all commands
+#### Phase 7.3: CLI Help & Documentation ⏳
+- [x] Implement comprehensive `--help` for all commands (completed in Phase 7.1)
 - [ ] Create man page documentation
-- [ ] Create usage examples in README
+- [x] Create usage examples in README (completed in Phase 7.1)
 - [ ] Achieve >95% test coverage for CLI argument parsing
 
 ### Milestone 8: Validation & Conformance Testing 📋
@@ -332,7 +353,7 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 | **4** | Decoder | Parsing, regular mode, run mode, multi-component ✅ |
 | **5** | Apple Silicon | NEON/SIMD ✅, Accelerate ✅, Metal 📋, memory optimization ✅ |
 | **6** | x86-64 | Removable x86-64 support with clear boundaries ✅ |
-| **7** | CLI | Encode/decode commands, batch processing, utilities 📋 |
+| **7** | CLI | Core commands (info ✅, verify ✅, encode/decode ⏳), utilities 📋 |
 | **8** | Validation | CharLS conformance, benchmarks, DICOM testing 📋 |
 | **9** | Release | Documentation, integration guides, distribution 📋 |
 
