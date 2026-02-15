@@ -91,9 +91,9 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 - [x] Achieve >95% test coverage for interleaved modes (100.00%)
 - [ ] Implement restart marker support (deferred to Phase 4)
 
-### Milestone 4: JPEG-LS Decoder 🔨
+### Milestone 4: JPEG-LS Decoder ✅
 **Target**: Complete decoding pipeline  
-**Status**: In Progress
+**Status**: Complete
 
 #### Phase 4.1: Bitstream Parsing ✅
 - [x] Implement JPEG-LS file format parser
@@ -118,11 +118,11 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 - [x] Implement run mode context reconstruction
 - [x] Achieve >95% test coverage for run mode decoding (100.00%)
 
-#### Phase 4.4: Multi-Component Decoding 📋
-- [ ] Implement deinterleaving for all modes
-- [ ] Implement component reconstruction
-- [ ] Implement color transformation inverse operations
-- [ ] Achieve >95% test coverage for multi-component decoding
+#### Phase 4.4: Multi-Component Decoding ✅
+- [x] Implement deinterleaving for all modes
+- [x] Implement component reconstruction
+- [x] Implement color transformation inverse operations
+- [x] Achieve >95% test coverage for multi-component decoding (92.10%)
 
 ### Milestone 5: Apple Silicon Optimization (ARM64) 📋
 **Target**: Hardware-accelerated performance on Apple Silicon  
@@ -283,7 +283,7 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 | **1** | Project Setup | Swift Package, CI, Documentation |
 | **2** | Foundation | Architecture, core types, context modeling |
 | **3** | Encoder | Regular mode, run mode, near-lossless, interleaving |
-| **4** | Decoder | Parsing, regular mode, run mode, multi-component |
+| **4** | Decoder | Parsing, regular mode, run mode, multi-component ✅ |
 | **5** | Apple Silicon | NEON/SIMD, Accelerate, Metal, memory optimization |
 | **6** | x86-64 | Removable x86-64 support with clear boundaries |
 | **7** | CLI | Encode/decode commands, batch processing, utilities |
