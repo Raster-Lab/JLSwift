@@ -292,9 +292,9 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 - Comprehensive tab completion for all commands, options, and file paths
 - Installation instructions included in help text and README
 
-#### Phase 7.3: CLI Help & Documentation ⏳
+#### Phase 7.3: CLI Help & Documentation ✅
 - [x] Implement comprehensive `--help` for all commands (completed in Phase 7.1)
-- [ ] Create man page documentation
+- [x] Create man page documentation
 - [x] Create usage examples in README (completed in Phase 7.1)
 - [x] Achieve >95% test coverage for CLI argument parsing
 
@@ -307,6 +307,9 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 - Edge case testing for boundary values (min/max dimensions, bits per sample range 2-16, NEAR range 0-255)
 - Overall project coverage maintained at 96.08% (exceeds 95% threshold)
 - Note: CLI executable target itself is not included in coverage metrics (Swift Package Manager limitation), but all validation logic is thoroughly tested
+- Created comprehensive man page documentation (`jpegls.1`) in groff format with all commands, options, examples, and standards information
+- Man page includes installation instructions for system-wide and user-specific installation
+- Added man page documentation section to README.md with installation and usage instructions
 
 ### Milestone 8: Validation & Conformance Testing 📋
 **Target**: CharLS compatibility and standards compliance  
@@ -383,7 +386,7 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 | **4** | Decoder | Parsing, regular mode, run mode, multi-component ✅ |
 | **5** | Apple Silicon | NEON/SIMD ✅, Accelerate ✅, Metal 📋, memory optimization ✅ |
 | **6** | x86-64 | Removable x86-64 support with clear boundaries ✅ |
-| **7** | CLI | Core commands (info ✅, verify ✅, encode/decode ⏳), utilities 📋 |
+| **7** | CLI | Core commands (info ✅, verify ✅, encode/decode ⏳), utilities ✅, help & docs ✅ |
 | **8** | Validation | CharLS conformance, benchmarks, DICOM testing 📋 |
 | **9** | Release | Documentation, integration guides, distribution 📋 |
 
