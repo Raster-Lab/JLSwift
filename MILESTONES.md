@@ -112,11 +112,11 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 - [x] Implement sample value computation with clamping
 - [x] Achieve >95% test coverage for regular mode decoding (96.90%)
 
-#### Phase 4.3: Run Mode Decoding 📋
-- [ ] Implement run-length decoding logic
-- [ ] Implement run interruption sample decoding
-- [ ] Implement run mode context reconstruction
-- [ ] Achieve >95% test coverage for run mode decoding
+#### Phase 4.3: Run Mode Decoding ✅
+- [x] Implement run-length decoding logic
+- [x] Implement run interruption sample decoding
+- [x] Implement run mode context reconstruction
+- [x] Achieve >95% test coverage for run mode decoding (100.00%)
 
 #### Phase 4.4: Multi-Component Decoding 📋
 - [ ] Implement deinterleaving for all modes
