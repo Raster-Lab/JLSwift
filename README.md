@@ -312,6 +312,96 @@ jpegls decode input.jls output.raw --quiet
 
 **Note:** Full encode and decode functionality requires bitstream I/O integration, which is currently in development. The `info` and `verify` commands are fully functional.
 
+#### `jpegls batch` - Batch Process Multiple Files
+
+Process multiple JPEG-LS files in parallel with encode, decode, info, or verify operations:
+
+```bash
+# Get info for all .jls files in a directory
+jpegls batch info "images/*.jls"
+
+# Verify all JPEG-LS files in a directory with verbose output
+jpegls batch verify "/path/to/images/*.jls" --verbose
+
+# Get info for all files with quiet mode (no output, exit code indicates success)
+jpegls batch info "*.jls" --quiet
+
+# Process with custom parallelism (default is CPU count)
+jpegls batch verify "*.jls" --parallelism 2
+
+# Batch encode (when encode is fully implemented)
+jpegls batch encode "*.raw" \
+  --output-dir encoded/ \
+  --width 512 --height 512 \
+  --verbose
+
+# Stop on first error instead of continuing
+jpegls batch info "*.jls" --fail-fast
+```
+
+**Features:**
+- **Glob patterns**: Match files with wildcards (`*.jls`, `images/*.raw`)
+- **Directory scanning**: Process all files in a directory
+- **Parallel processing**: Concurrent processing with configurable parallelism
+- **Progress reporting**: Real-time progress with verbose mode
+- **Error handling**: Continue on errors or stop with `--fail-fast`
+- **Operations**: Supports info, verify, encode, and decode
+
+**Options:**
+- `<operation>`: Operation to perform (encode, decode, info, verify)
+- `<input-pattern>`: Glob pattern or directory path
+- `-o, --output-dir`: Output directory (required for encode/decode)
+- `-p, --parallelism`: Max parallel operations (default: CPU count)
+- `-v, --verbose`: Show detailed progress for each file
+- `-q, --quiet`: Suppress all output except errors
+- `--fail-fast`: Stop on first error
+
+#### `jpegls completion` - Generate Shell Completions
+
+Generate shell completion scripts for bash, zsh, or fish:
+
+```bash
+# Generate bash completion
+jpegls completion bash > jpegls-completion.bash
+
+# Generate zsh completion
+jpegls completion zsh > _jpegls
+
+# Generate fish completion
+jpegls completion fish > jpegls.fish
+```
+
+**Installation:**
+
+**Bash:**
+```bash
+# System-wide installation
+sudo jpegls completion bash > /etc/bash_completion.d/jpegls
+
+# User installation
+jpegls completion bash > ~/.local/share/bash-completion/completions/jpegls
+```
+
+**Zsh:**
+```bash
+# System-wide installation
+sudo jpegls completion zsh > /usr/local/share/zsh/site-functions/_jpegls
+
+# User installation
+mkdir -p ~/.zfunc
+jpegls completion zsh > ~/.zfunc/_jpegls
+# Add to ~/.zshrc: fpath=(~/.zfunc $fpath)
+```
+
+**Fish:**
+```bash
+# User installation
+mkdir -p ~/.config/fish/completions
+jpegls completion fish > ~/.config/fish/completions/jpegls.fish
+```
+
+After installation, restart your shell or source the completion file to enable tab completion for all jpegls commands and options.
+
 ### Supported DICOM Transfer Syntaxes (Planned)
 
 | Transfer Syntax UID | Description |
