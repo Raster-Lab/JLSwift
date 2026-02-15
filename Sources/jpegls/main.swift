@@ -2,6 +2,19 @@ import ArgumentParser
 import Foundation
 import JPEGLS
 
+/// Validation error for CLI argument validation
+struct ValidationError: Error, CustomStringConvertible {
+    let message: String
+    
+    init(_ message: String) {
+        self.message = message
+    }
+    
+    var description: String {
+        message
+    }
+}
+
 /// Command-line tool for JPEG-LS encoding and decoding
 struct JPEGLSCLITool: ParsableCommand {
     static let configuration = CommandConfiguration(

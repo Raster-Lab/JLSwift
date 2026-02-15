@@ -14,7 +14,15 @@ extension JPEGLSCLITool {
         @Flag(name: .long, help: "Enable verbose output")
         var verbose: Bool = false
         
+        @Flag(name: .long, help: "Suppress non-essential output (quiet mode)")
+        var quiet: Bool = false
+        
         mutating func run() throws {
+            // Validate flags: verbose and quiet are mutually exclusive
+            if verbose && quiet {
+                throw ValidationError("Cannot use both --verbose and --quiet flags")
+            }
+            
             if verbose {
                 print("JPEG-LS File Verification")
                 print("=========================")
@@ -45,8 +53,10 @@ extension JPEGLSCLITool {
                     print()
                 }
             } catch {
-                print("✗ File structure validation failed")
-                print("Error: \(error)")
+                if !quiet {
+                    print("✗ File structure validation failed")
+                    print("Error: \(error)")
+                }
                 throw ExitCode.failure
             }
             
@@ -66,8 +76,10 @@ extension JPEGLSCLITool {
                     print()
                 }
             } catch {
-                print("✗ Frame header validation failed")
-                print("Error: \(error)")
+                if !quiet {
+                    print("✗ Frame header validation failed")
+                    print("Error: \(error)")
+                }
                 throw ExitCode.failure
             }
             
@@ -90,8 +102,10 @@ extension JPEGLSCLITool {
                     print()
                 }
             } catch {
-                print("✗ Scan header validation failed")
-                print("Error: \(error)")
+                if !quiet {
+                    print("✗ Scan header validation failed")
+                    print("Error: \(error)")
+                }
                 throw ExitCode.failure
             }
             
@@ -111,27 +125,31 @@ extension JPEGLSCLITool {
                         print()
                     }
                 } catch {
-                    print("✗ Preset parameters validation failed")
-                    print("Error: \(error)")
+                    if !quiet {
+                        print("✗ Preset parameters validation failed")
+                        print("Error: \(error)")
+                    }
                     throw ExitCode.failure
                 }
             }
             
             // Summary
-            print()
-            print("=========================")
-            print("✓ Verification successful")
-            print("=========================")
-            print()
-            print("File: \(input)")
-            print("Format: JPEG-LS")
-            print("Dimensions: \(parseResult.frameHeader.width)x\(parseResult.frameHeader.height)")
-            print("Components: \(parseResult.frameHeader.componentCount)")
-            print("Bits per sample: \(parseResult.frameHeader.bitsPerSample)")
-            print("Encoding: \(parseResult.scanHeaders.first?.near == 0 ? "Lossless" : "Near-lossless")")
-            
-            if parseResult.scanHeaders.count > 1 {
-                print("Scans: \(parseResult.scanHeaders.count)")
+            if !quiet {
+                print()
+                print("=========================")
+                print("✓ Verification successful")
+                print("=========================")
+                print()
+                print("File: \(input)")
+                print("Format: JPEG-LS")
+                print("Dimensions: \(parseResult.frameHeader.width)x\(parseResult.frameHeader.height)")
+                print("Components: \(parseResult.frameHeader.componentCount)")
+                print("Bits per sample: \(parseResult.frameHeader.bitsPerSample)")
+                print("Encoding: \(parseResult.scanHeaders.first?.near == 0 ? "Lossless" : "Near-lossless")")
+                
+                if parseResult.scanHeaders.count > 1 {
+                    print("Scans: \(parseResult.scanHeaders.count)")
+                }
             }
         }
         
