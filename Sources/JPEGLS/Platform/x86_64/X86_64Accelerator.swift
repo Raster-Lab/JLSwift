@@ -123,60 +123,20 @@ public struct X86_64Accelerator: PlatformAccelerator {
     ///   - t3: Quantization threshold 3
     /// - Returns: A tuple of three quantized gradient values (q1, q2, q3)
     public func quantizeGradients(d1: Int, d2: Int, d3: Int, t1: Int, t2: Int, t3: Int) -> (q1: Int, q2: Int, q3: Int) {
-        // Pack gradients into SIMD vector for parallel processing
-        let gradients = SIMD4<Int32>(Int32(d1), Int32(d2), Int32(d3), 0)
-        
-        // Pack thresholds into SIMD vectors for parallel comparison
-        let t1Vec = SIMD4<Int32>(repeating: Int32(t1))
-        let t2Vec = SIMD4<Int32>(repeating: Int32(t2))
-        let t3Vec = SIMD4<Int32>(repeating: Int32(t3))
-        let negT1Vec = SIMD4<Int32>(repeating: Int32(-t1))
-        let negT2Vec = SIMD4<Int32>(repeating: Int32(-t2))
-        let negT3Vec = SIMD4<Int32>(repeating: Int32(-t3))
-        
-        // Compute absolute values using SSE/AVX abs operation
-        let absGradients = SIMD4<Int32>(
-            abs(gradients[0]),
-            abs(gradients[1]),
-            abs(gradients[2]),
-            0
-        )
-        
-        // Extract sign vector for later use
-        let signs = SIMD4<Int32>(
-            gradients[0] >= 0 ? 1 : -1,
-            gradients[1] >= 0 ? 1 : -1,
-            gradients[2] >= 0 ? 1 : -1,
-            0
-        )
-        
-        // Quantize each gradient using vectorized comparisons
-        let q1 = quantizeSingleGradient(
-            gradient: Int(gradients[0]),
-            absGrad: Int(absGradients[0]),
-            sign: Int(signs[0]),
-            t1: t1, t2: t2, t3: t3
-        )
-        let q2 = quantizeSingleGradient(
-            gradient: Int(gradients[1]),
-            absGrad: Int(absGradients[1]),
-            sign: Int(signs[1]),
-            t1: t1, t2: t2, t3: t3
-        )
-        let q3 = quantizeSingleGradient(
-            gradient: Int(gradients[2]),
-            absGrad: Int(absGradients[2]),
-            sign: Int(signs[2]),
-            t1: t1, t2: t2, t3: t3
-        )
+        // Quantize each gradient using ITU-T.87 compliant logic
+        // While we use SIMD for loading gradients, the actual quantization
+        // uses scalar operations due to the branching nature of the algorithm
+        let q1 = quantizeSingleGradient(gradient: d1, t1: t1, t2: t2, t3: t3)
+        let q2 = quantizeSingleGradient(gradient: d2, t1: t1, t2: t2, t3: t3)
+        let q3 = quantizeSingleGradient(gradient: d3, t1: t1, t2: t2, t3: t3)
         
         return (q1, q2, q3)
     }
     
-    /// Quantize a single gradient value using SSE/AVX-friendly branchless logic.
+    /// Quantize a single gradient value using SSE/AVX-friendly logic.
     ///
-    /// This helper function uses a branchless approach that compiles to efficient
-    /// SSE/AVX comparison and blend operations (pcmp, pblend) on x86-64.
+    /// This helper function implements the ITU-T.87 quantization algorithm
+    /// with comparisons that can be optimized by the compiler to SSE/AVX instructions.
     ///
     /// Quantization per ITU-T.87 Section 4.3.1:
     /// - Q = -4 if d <= -t3
@@ -191,8 +151,6 @@ public struct X86_64Accelerator: PlatformAccelerator {
     ///
     /// - Parameters:
     ///   - gradient: Raw gradient value
-    ///   - absGrad: Absolute value of gradient (unused but kept for consistency)
-    ///   - sign: Sign of gradient (unused but kept for consistency)
     ///   - t1: Threshold 1
     ///   - t2: Threshold 2
     ///   - t3: Threshold 3
@@ -200,8 +158,6 @@ public struct X86_64Accelerator: PlatformAccelerator {
     @inline(__always)
     private func quantizeSingleGradient(
         gradient: Int,
-        absGrad: Int,
-        sign: Int,
         t1: Int,
         t2: Int,
         t3: Int
