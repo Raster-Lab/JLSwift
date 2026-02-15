@@ -63,7 +63,7 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 - [x] Implement Golomb-Rice parameter estimation (k calculation)
 - [x] Implement Golomb-Rice encoding of prediction errors
 - [x] Implement context-based bias correction
-- [x] Achieve >95% test coverage for regular mode (96.97%)
+- [x] Achieve >95% test coverage for regular mode (100.00%)
 
 #### Phase 3.2: Run Mode Encoding ✅
 - [x] Implement run-length detection logic
@@ -73,13 +73,13 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 - [x] Implement run-length limit handling
 - [x] Achieve >95% test coverage for run mode (100.00%)
 
-#### Phase 3.3: Near-Lossless Encoding
-- [ ] Implement NEAR parameter handling (error tolerance)
-- [ ] Implement quantized prediction error calculation
-- [ ] Implement reconstructed value computation for decoder tracking
-- [ ] Implement modified threshold parameters for near-lossless
-- [ ] Validate error bounds compliance
-- [ ] Achieve >95% test coverage for near-lossless mode
+#### Phase 3.3: Near-Lossless Encoding ✅
+- [x] Implement NEAR parameter handling (error tolerance)
+- [x] Implement quantized prediction error calculation
+- [x] Implement reconstructed value computation for decoder tracking
+- [x] Implement modified threshold parameters for near-lossless
+- [x] Validate error bounds compliance
+- [x] Achieve >95% test coverage for near-lossless mode (98.14%)
 
 #### Phase 3.4: Multi-Component & Interleaved Encoding
 - [ ] Implement component interleaving modes (None, Line, Sample)
