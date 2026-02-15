@@ -264,13 +264,13 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 - Comprehensive help messages for all commands with examples
 - Full support for --verbose and --json output modes where applicable
 
-#### Phase 7.2: CLI Utilities 📋
+#### Phase 7.2: CLI Utilities ✅
 - [x] Implement `--verbose` output with progress indication (completed in Phase 7.1)
 - [x] Implement `--quiet` mode for scripting (completed)
 - [x] Implement `--json` output format for programmatic use (completed in Phase 7.1)
-- [ ] Implement batch processing with glob patterns
-- [ ] Implement parallel processing for batch operations
-- [ ] Add shell completion scripts (bash, zsh, fish)
+- [x] Implement batch processing with glob patterns
+- [x] Implement parallel processing for batch operations
+- [x] Add shell completion scripts (bash, zsh, fish)
 
 **Implementation Details:**
 - Added `--quiet` flag to all CLI commands (info, verify, encode, decode)
@@ -280,6 +280,17 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 - `info` command in quiet mode outputs single line: "WIDTHxHEIGHT BITS-bit COMPONENTS-component ENCODING"
 - `verify` command in quiet mode produces no output (exit code 0 indicates success, non-zero indicates failure)
 - Defined `ValidationError` type for consistent CLI argument validation
+- Implemented `jpegls batch` command for processing multiple files with glob patterns
+- Batch processing supports parallel execution with configurable parallelism (defaults to CPU count)
+- Batch operations support info, verify, encode, and decode (encode/decode pending bitstream integration)
+- Glob pattern matching supports wildcards (`*`, `?`) for flexible file selection
+- Directory scanning for batch operations on entire directories
+- Progress reporting with verbose mode, quiet mode for scripting
+- Error handling with optional fail-fast mode
+- Implemented `jpegls completion` command for generating shell completion scripts
+- Shell completion support for bash, zsh, and fish shells
+- Comprehensive tab completion for all commands, options, and file paths
+- Installation instructions included in help text and README
 
 #### Phase 7.3: CLI Help & Documentation ⏳
 - [x] Implement comprehensive `--help` for all commands (completed in Phase 7.1)
