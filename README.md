@@ -405,6 +405,41 @@ jpegls completion fish > ~/.config/fish/completions/jpegls.fish
 
 After installation, restart your shell or source the completion file to enable tab completion for all jpegls commands and options.
 
+#### `jpegls` - Man Page Documentation
+
+Complete documentation for the `jpegls` command-line tool is available as a Unix manual page. The man page provides detailed information about all commands, options, and usage examples.
+
+**Installation:**
+
+```bash
+# System-wide installation (requires sudo)
+sudo cp jpegls.1 /usr/local/share/man/man1/
+sudo mandb  # Update man page database (on Linux)
+
+# User installation (no sudo required)
+mkdir -p ~/.local/share/man/man1
+cp jpegls.1 ~/.local/share/man/man1/
+# Add to ~/.bashrc or ~/.zshrc: export MANPATH="$HOME/.local/share/man:$MANPATH"
+```
+
+**View the man page:**
+
+```bash
+# After installation
+man jpegls
+
+# Or view directly without installation
+man ./jpegls.1
+```
+
+The man page includes:
+- Command synopsis and descriptions
+- Detailed option documentation
+- Usage examples for all commands
+- DICOM compatibility information
+- Performance optimization details
+- Standards compliance (ISO/IEC 14495-1:1999 / ITU-T.87)
+
 ### Supported DICOM Transfer Syntaxes (Planned)
 
 | Transfer Syntax UID | Description |

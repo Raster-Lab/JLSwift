@@ -1,0 +1,435 @@
+.TH JPEGLS 1 "2026-02-15" "JLSwift 0.1.0" "JPEG-LS Compression Tool"
+.SH NAME
+jpegls \- JPEG-LS command-line tool for encoding and decoding
+.SH SYNOPSIS
+.B jpegls
+[\fB\-\-version\fR]
+[\fB\-\-help\fR]
+.I command
+[\fIoptions\fR]
+.SH DESCRIPTION
+.B jpegls
+is a command-line tool for working with JPEG-LS compressed image files. JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) is a lossless/near-lossless compression standard specifically designed for continuous-tone images, widely used in medical imaging (DICOM) due to its excellent compression ratio while maintaining image fidelity.
+.PP
+JLSwift provides a native Swift implementation optimized for Apple Silicon with hardware acceleration support, while maintaining compatibility with x86-64 systems.
+.SH COMMANDS
+.TP
+.B encode
+Encode raw pixel data to JPEG-LS format.
+.TP
+.B decode
+Decode JPEG-LS file to raw pixel data.
+.TP
+.B info
+Display information about a JPEG-LS file.
+.TP
+.B verify
+Verify JPEG-LS file integrity and validate structure.
+.TP
+.B batch
+Process multiple JPEG-LS files in batch with parallel processing.
+.TP
+.B completion
+Generate shell completion scripts for bash, zsh, or fish.
+.SH ENCODE COMMAND
+.B jpegls encode
+[\fIoptions\fR]
+.I input-file output-file
+.PP
+Encode raw pixel data to JPEG-LS format. Requires image dimensions and parameters.
+.SS Options
+.TP
+.BR \-w ", " \-\-width " " \fIpixels\fR
+Image width in pixels (required).
+.TP
+.BR \-h ", " \-\-height " " \fIpixels\fR
+Image height in pixels (required).
+.TP
+.BR \-b ", " \-\-bits\-per\-sample " " \fIbits\fR
+Bits per sample, range 2-16 (default: 8).
+.TP
+.BR \-c ", " \-\-components " " \fIcount\fR
+Number of components: 1 for grayscale, 3 for RGB (default: 1).
+.TP
+.B \-\-near \fIvalue\fR
+NEAR parameter for near-lossless encoding. 0 for lossless, 1-255 for lossy (default: 0).
+.TP
+.B \-\-interleave \fImode\fR
+Interleaving mode: \fBnone\fR, \fBline\fR, or \fBsample\fR (default: none).
+Single-component images always use 'none'.
+.TP
+.B \-\-color\-transform \fItransform\fR
+Color transformation: \fBnone\fR, \fBhp1\fR, \fBhp2\fR, or \fBhp3\fR (default: none).
+.TP
+.B \-\-t1 \fIvalue\fR
+Custom T1 threshold parameter (optional).
+.TP
+.B \-\-t2 \fIvalue\fR
+Custom T2 threshold parameter (optional).
+.TP
+.B \-\-t3 \fIvalue\fR
+Custom T3 threshold parameter (optional).
+.TP
+.B \-\-reset \fIvalue\fR
+Custom RESET value for context reinitialization (optional).
+.TP
+.BR \-v ", " \-\-verbose
+Enable verbose output with encoding progress.
+.TP
+.BR \-q ", " \-\-quiet
+Suppress non-essential output (quiet mode).
+.SS Examples
+.TP
+Encode grayscale image (lossless):
+.B jpegls encode
+input.raw output.jls \fB\-\-width\fR 512 \fB\-\-height\fR 512
+.TP
+Encode RGB image with line interleaving:
+.B jpegls encode
+input.raw output.jls \fB\-\-width\fR 512 \fB\-\-height\fR 512 \fB\-\-components\fR 3 \fB\-\-interleave\fR line
+.TP
+Near-lossless encoding (NEAR=3):
+.B jpegls encode
+input.raw output.jls \fB\-\-width\fR 512 \fB\-\-height\fR 512 \fB\-\-near\fR 3 \fB\-\-verbose\fR
+.PP
+\fBNote:\fR Full encode functionality requires bitstream writer integration, currently in development.
+.SH DECODE COMMAND
+.B jpegls decode
+[\fIoptions\fR]
+.I input-file output-file
+.PP
+Decode JPEG-LS file to raw pixel data.
+.SS Options
+.TP
+.B \-\-format \fIformat\fR
+Output format: \fBraw\fR, \fBpng\fR, or \fBtiff\fR (default: raw).
+PNG and TIFF support is planned.
+.TP
+.BR \-v ", " \-\-verbose
+Enable verbose output with decoding progress.
+.TP
+.BR \-q ", " \-\-quiet
+Suppress non-essential output (quiet mode).
+.SS Examples
+.TP
+Decode to raw format:
+.B jpegls decode
+input.jls output.raw
+.TP
+Decode with verbose output:
+.B jpegls decode
+input.jls output.raw \fB\-\-verbose\fR
+.PP
+\fBNote:\fR Full decode functionality requires bitstream reader integration, currently in development.
+.SH INFO COMMAND
+.B jpegls info
+[\fIoptions\fR]
+.I input-file
+.PP
+Display detailed information about a JPEG-LS file, including frame header, scan headers, preset parameters, and compression statistics.
+.SS Options
+.TP
+.B \-\-json
+Output in JSON format for programmatic use.
+.TP
+.BR \-q ", " \-\-quiet
+Minimal output: single line with essential information only.
+Format: "WIDTHxHEIGHT BITS-bit COMPONENTS-component ENCODING"
+.SS Examples
+.TP
+Human-readable output:
+.B jpegls info
+image.jls
+.TP
+JSON output:
+.B jpegls info
+image.jls \fB\-\-json\fR
+.TP
+Quiet mode (single line):
+.B jpegls info
+image.jls \fB\-\-quiet\fR
+.SH VERIFY COMMAND
+.B jpegls verify
+[\fIoptions\fR]
+.I input-file
+.PP
+Validate JPEG-LS file structure and parameters. Checks file integrity, marker segments, header validity, and parameter consistency.
+.SS Verification Steps
+.IP \(bu 2
+File structure validity (SOI, SOF, SOS, EOI markers)
+.IP \(bu 2
+Frame header parameters (dimensions, bits per sample, component count)
+.IP \(bu 2
+Scan header consistency with frame header
+.IP \(bu 2
+Preset parameter validity and threshold ordering (T1 ≤ T2 ≤ T3 ≤ MAXVAL)
+.IP \(bu 2
+Component ID consistency across headers
+.SS Options
+.TP
+.BR \-v ", " \-\-verbose
+Enable verbose output with detailed validation steps.
+.TP
+.BR \-q ", " \-\-quiet
+Suppress all output. Exit code 0 indicates success, non-zero indicates failure.
+.SS Examples
+.TP
+Basic verification:
+.B jpegls verify
+image.jls
+.TP
+Verbose verification:
+.B jpegls verify
+image.jls \fB\-\-verbose\fR
+.TP
+Quiet mode (no output):
+.B jpegls verify
+image.jls \fB\-\-quiet\fR
+.SH BATCH COMMAND
+.B jpegls batch
+[\fIoptions\fR]
+.I operation input-pattern
+.PP
+Process multiple JPEG-LS files in parallel with encode, decode, info, or verify operations. Supports glob patterns for file matching and configurable parallelism.
+.SS Arguments
+.TP
+.I operation
+Operation to perform: \fBencode\fR, \fBdecode\fR, \fBinfo\fR, or \fBverify\fR.
+.TP
+.I input-pattern
+Glob pattern (e.g., "*.jls", "images/*.raw") or directory path.
+.SS Options
+.TP
+.BR \-o ", " \-\-output\-dir " " \fIdirectory\fR
+Output directory for processed files (required for encode/decode).
+.TP
+.BR \-w ", " \-\-width " " \fIpixels\fR
+Image width in pixels (required for encode operation).
+.TP
+.BR \-h ", " \-\-height " " \fIpixels\fR
+Image height in pixels (required for encode operation).
+.TP
+.BR \-b ", " \-\-bits\-per\-sample " " \fIbits\fR
+Bits per sample, range 2-16 (default: 8, for encode operation).
+.TP
+.BR \-c ", " \-\-components " " \fIcount\fR
+Number of components: 1 or 3 (default: 1, for encode operation).
+.TP
+.B \-\-near \fIvalue\fR
+NEAR parameter, 0=lossless, 1-255=lossy (default: 0, for encode operation).
+.TP
+.B \-\-interleave \fImode\fR
+Interleave mode: \fBnone\fR, \fBline\fR, or \fBsample\fR (default: none, for encode operation).
+.TP
+.B \-\-color\-transform \fItransform\fR
+Color transformation: \fBnone\fR, \fBhp1\fR, \fBhp2\fR, or \fBhp3\fR (default: none, for encode operation).
+.TP
+.BR \-p ", " \-\-parallelism " " \fIcount\fR
+Maximum number of parallel operations (default: CPU count).
+.TP
+.BR \-v ", " \-\-verbose
+Show detailed progress for each file.
+.TP
+.BR \-q ", " \-\-quiet
+Suppress all output except errors.
+.TP
+.B \-\-fail\-fast
+Stop processing on first error (default: continue processing all files).
+.SS Examples
+.TP
+Get info for all .jls files:
+.B jpegls batch info
+"images/*.jls"
+.TP
+Verify all JPEG-LS files with verbose output:
+.B jpegls batch verify
+"/path/to/images/*.jls" \fB\-\-verbose\fR
+.TP
+Process with custom parallelism:
+.B jpegls batch verify
+"*.jls" \fB\-\-parallelism\fR 2
+.TP
+Stop on first error:
+.B jpegls batch info
+"*.jls" \fB\-\-fail\-fast\fR
+.SH COMPLETION COMMAND
+.B jpegls completion
+.I shell
+.PP
+Generate shell completion scripts for bash, zsh, or fish shells. Install the generated script according to your shell's conventions to enable tab completion.
+.SS Arguments
+.TP
+.I shell
+Shell type: \fBbash\fR, \fBzsh\fR, or \fBfish\fR.
+.SS Installation
+.PP
+.B Bash:
+.IP
+# System-wide installation
+.br
+.B sudo jpegls completion bash
+> /etc/bash_completion.d/jpegls
+.IP
+# User installation
+.br
+.B jpegls completion bash
+> ~/.local/share/bash-completion/completions/jpegls
+.PP
+.B Zsh:
+.IP
+# System-wide installation
+.br
+.B sudo jpegls completion zsh
+> /usr/local/share/zsh/site-functions/_jpegls
+.IP
+# User installation
+.br
+.B mkdir -p ~/.zfunc
+.br
+.B jpegls completion zsh
+> ~/.zfunc/_jpegls
+.br
+# Add to ~/.zshrc: fpath=(~/.zfunc $fpath)
+.PP
+.B Fish:
+.IP
+# User installation
+.br
+.B mkdir -p ~/.config/fish/completions
+.br
+.B jpegls completion fish
+> ~/.config/fish/completions/jpegls.fish
+.PP
+After installation, restart your shell or source the completion file to enable tab completion.
+.SS Examples
+.TP
+Generate bash completion:
+.B jpegls completion bash
+> jpegls-completion.bash
+.TP
+Generate zsh completion:
+.B jpegls completion zsh
+> _jpegls
+.TP
+Generate fish completion:
+.B jpegls completion fish
+> jpegls.fish
+.SH GLOBAL OPTIONS
+.TP
+.B \-\-version
+Display version information.
+.TP
+.BR \-h ", " \-\-help
+Display help information. Use with a command to show command-specific help.
+.SH EXIT STATUS
+.TP
+.B 0
+Successful execution.
+.TP
+.B 1
+Error occurred (invalid arguments, file not found, parsing error, etc.).
+.SH DICOM COMPATIBILITY
+JLSwift supports DICOM transfer syntaxes for medical imaging:
+.TP
+.B 1.2.840.10008.1.2.4.80
+JPEG-LS Lossless Image Compression
+.TP
+.B 1.2.840.10008.1.2.4.81
+JPEG-LS Lossy (Near-Lossless) Image Compression
+.SH PERFORMANCE
+JLSwift is optimized for Apple Silicon (M1/M2/M3) with ARM NEON/SIMD acceleration and Apple Accelerate framework integration. It also supports x86-64 systems with SSE/AVX optimizations.
+.PP
+The implementation includes memory optimization features:
+.IP \(bu 2
+Buffer pooling for reduced allocation overhead
+.IP \(bu 2
+Tile-based processing for large images
+.IP \(bu 2
+Cache-friendly data layouts for improved performance
+.SH FILES
+.TP
+.B /etc/bash_completion.d/jpegls
+System-wide bash completion script.
+.TP
+.B ~/.local/share/bash-completion/completions/jpegls
+User-specific bash completion script.
+.TP
+.B /usr/local/share/zsh/site-functions/_jpegls
+System-wide zsh completion script.
+.TP
+.B ~/.zfunc/_jpegls
+User-specific zsh completion script.
+.TP
+.B ~/.config/fish/completions/jpegls.fish
+Fish shell completion script.
+.SH STANDARDS
+.B jpegls
+implements the JPEG-LS standard as defined in:
+.IP \(bu 2
+ISO/IEC 14495-1:1999 - Lossless and near-lossless compression of continuous-tone still images
+.IP \(bu 2
+ITU-T Recommendation T.87 (identical to ISO/IEC 14495-1)
+.SH BUGS
+.IP \(bu 2
+Full encode functionality requires bitstream writer integration (in development).
+.IP \(bu 2
+Full decode functionality requires bitstream reader integration (in development).
+.IP \(bu 2
+PNG and TIFF output formats for decode command are planned but not yet implemented.
+.IP \(bu 2
+Custom preset parameters (--t1, --t2, --t3, --reset) are not yet supported by the encoder.
+.PP
+Report bugs at: https://github.com/Raster-Lab/JLSwift/issues
+.SH EXAMPLES
+.PP
+Display information about a JPEG-LS file:
+.IP
+.B jpegls info
+medical-image.jls
+.PP
+Verify file integrity:
+.IP
+.B jpegls verify
+medical-image.jls \fB\-\-verbose\fR
+.PP
+Encode a grayscale medical image:
+.IP
+.B jpegls encode
+ct-scan.raw ct-scan.jls \e
+.br
+  \fB\-\-width\fR 512 \fB\-\-height\fR 512 \fB\-\-bits\-per\-sample\fR 12
+.PP
+Encode RGB image with sample interleaving:
+.IP
+.B jpegls encode
+photo.raw photo.jls \e
+.br
+  \fB\-\-width\fR 1920 \fB\-\-height\fR 1080 \e
+.br
+  \fB\-\-components\fR 3 \fB\-\-interleave\fR sample
+.PP
+Near-lossless encoding with NEAR=2:
+.IP
+.B jpegls encode
+image.raw image.jls \e
+.br
+  \fB\-\-width\fR 1024 \fB\-\-height\fR 768 \fB\-\-near\fR 2
+.PP
+Batch verify all JPEG-LS files in a directory:
+.IP
+.B jpegls batch verify
+"dicom-images/*.jls" \fB\-\-parallelism\fR 4
+.PP
+Batch get info with quiet mode:
+.IP
+.B jpegls batch info
+"*.jls" \fB\-\-quiet\fR
+.SH SEE ALSO
+.BR convert (1),
+.BR dcmtk (1)
+.SH AUTHORS
+JLSwift is developed by Raster-Lab for the DICOMkit project.
+.SH COPYRIGHT
+This project is available under the terms specified by the repository owner.
+.SH VERSION
+JLSwift version 0.1.0
