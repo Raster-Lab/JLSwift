@@ -55,15 +55,16 @@ JPEG-LS is a lossless/near-lossless compression standard specifically designed f
 
 | Phase | Component | Status | Coverage |
 |-------|-----------|--------|----------|
-| 4.2 | Core Types & Bitstream | ✅ Complete | 96.24% |
-| 4.3 | Context Modeling | ✅ Complete | 96.88% |
-| 5.1 | Regular Mode Encoding | ✅ Complete | 96.97% |
-| 5.2 | Run Mode Encoding | ✅ Complete | 100.00% |
-| 5.3 | Near-Lossless Encoding | 🔄 In Progress | - |
-| 6.x | Decoder | 📋 Planned | - |
-| 7.x | Apple Silicon Optimization | 📋 Planned | - |
+| 2.2 | Core Types & Bitstream | ✅ Complete | 96.24% |
+| 2.3 | Context Modeling | ✅ Complete | 96.91% |
+| 3.1 | Regular Mode Encoding | ✅ Complete | 100.00% |
+| 3.2 | Run Mode Encoding | ✅ Complete | 100.00% |
+| 3.3 | Near-Lossless Encoding | ✅ Complete | 98.14% |
+| 3.4 | Multi-Component Encoding | 📋 Planned | - |
+| 4.x | Decoder | 📋 Planned | - |
+| 5.x | Apple Silicon Optimization | 📋 Planned | - |
 
-**Overall Project Coverage: 97.30%**
+**Overall Project Coverage: 97.34%**
 
 ### Key Features
 
@@ -73,7 +74,7 @@ JPEG-LS is a lossless/near-lossless compression standard specifically designed f
 | **Apple Silicon Optimized** | Primary target with ARM NEON/SIMD acceleration (planned) |
 | **Hardware Acceleration** | Support for Apple Accelerate framework and Metal GPU (planned) |
 | **DICOM Compatible** | Full support for DICOM transfer syntaxes |
-| **Near-Lossless Support** | Configurable error tolerance encoding (in development) |
+| **Near-Lossless Support** | Configurable error tolerance encoding with NEAR parameter (1-255) |
 | **Command-Line Tool** | `jpegls` CLI for encoding, decoding, and validation |
 
 ### Architecture Overview
@@ -90,7 +91,8 @@ JPEGLS/
 │   └── JPEGLSError          # Comprehensive error handling
 ├── Encoder/                 # Encoding implementation
 │   ├── RegularModeEncoder   # Gradient-based encoding (MED prediction)
-│   └── RunModeEncoder       # Run-length encoding for flat regions
+│   ├── RunModeEncoder       # Run-length encoding for flat regions
+│   └── NearLosslessEncoder  # Near-lossless encoding with NEAR parameter
 ├── Platform/                # Platform-specific optimizations
 │   ├── ARM64/               # Apple Silicon / ARM NEON code
 │   └── x86_64/              # x86-64 specific code (removable)
