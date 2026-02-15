@@ -45,7 +45,8 @@ extension JPEGLSCLITool {
                     print()
                 }
             } catch {
-                print("✗ File structure validation failed: \(error)")
+                print("✗ File structure validation failed")
+                print("Error: \(error)")
                 throw ExitCode.failure
             }
             
@@ -65,7 +66,8 @@ extension JPEGLSCLITool {
                     print()
                 }
             } catch {
-                print("✗ Frame header validation failed: \(error)")
+                print("✗ Frame header validation failed")
+                print("Error: \(error)")
                 throw ExitCode.failure
             }
             
@@ -88,7 +90,8 @@ extension JPEGLSCLITool {
                     print()
                 }
             } catch {
-                print("✗ Scan header validation failed: \(error)")
+                print("✗ Scan header validation failed")
+                print("Error: \(error)")
                 throw ExitCode.failure
             }
             
@@ -108,7 +111,8 @@ extension JPEGLSCLITool {
                         print()
                     }
                 } catch {
-                    print("✗ Preset parameters validation failed: \(error)")
+                    print("✗ Preset parameters validation failed")
+                    print("Error: \(error)")
                     throw ExitCode.failure
                 }
             }

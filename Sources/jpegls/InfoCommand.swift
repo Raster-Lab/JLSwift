@@ -143,6 +143,9 @@ extension JPEGLSCLITool {
             if let jsonData = try? JSONSerialization.data(withJSONObject: json, options: .prettyPrinted),
                let jsonString = String(data: jsonData, encoding: .utf8) {
                 print(jsonString)
+            } else {
+                // Fallback: Print error message to stderr
+                FileHandle.standardError.write(Data("Error: Failed to serialize JSON output\n".utf8))
             }
         }
         

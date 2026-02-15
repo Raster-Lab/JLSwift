@@ -68,7 +68,7 @@ extension JPEGLSCLITool {
             let interleaveMode = try parseInterleaveMode(interleave)
             
             // Parse color transformation
-            let colorTransformation = try parseColorTransformation(colorTransform)
+            let colorTransformation = try parseColorTransform(colorTransform)
             
             if verbose {
                 print("JPEG-LS Encoder")
@@ -205,7 +205,7 @@ extension JPEGLSCLITool {
             }
         }
         
-        private func parseColorTransformation(_ transform: String) throws -> JPEGLSColorTransformation {
+        private func parseColorTransform(_ transform: String) throws -> JPEGLSColorTransformation {
             switch transform.lowercased() {
             case "none":
                 return .none
