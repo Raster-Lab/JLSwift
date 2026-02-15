@@ -25,6 +25,7 @@ JLSwift provides a native Swift JPEG-LS compression library designed for the DIC
 - **Swift 6.2** or later
 - **Platforms**: Linux, macOS 12+ (Monterey), iOS 15+
 - **Primary Target**: Apple Silicon (M1/M2/M3) with ARM64 optimizations
+- **Secondary Target**: x86-64 (Intel Macs, Linux) with SSE/AVX optimizations
 
 ## Installation
 
@@ -241,6 +242,7 @@ JLSwift/
 |----------|-------------|
 | [README.md](README.md) | Project overview and usage guide (this file) |
 | [MILESTONES.md](MILESTONES.md) | Project milestones and development roadmap |
+| [X86_64_REMOVAL_GUIDE.md](X86_64_REMOVAL_GUIDE.md) | Step-by-step guide for removing x86-64 support |
 | [Copilot Instructions](.github/copilot-instructions.md) | Coding guidelines for contributors |
 
 ### API Documentation
