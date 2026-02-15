@@ -91,20 +91,20 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 - [x] Achieve >95% test coverage for interleaved modes (100.00%)
 - [ ] Implement restart marker support (deferred to Phase 4)
 
-### Milestone 4: JPEG-LS Decoder 📋
+### Milestone 4: JPEG-LS Decoder 🔨
 **Target**: Complete decoding pipeline  
-**Status**: Planned
+**Status**: In Progress
 
-#### Phase 4.1: Bitstream Parsing
-- [ ] Implement JPEG-LS file format parser
-- [ ] Implement marker segment parsing and validation
-- [ ] Implement frame header decoding
-- [ ] Implement scan header decoding
-- [ ] Implement preset parameter table decoding
-- [ ] Implement extension marker handling
-- [ ] Achieve >95% test coverage for parsing
+#### Phase 4.1: Bitstream Parsing ✅
+- [x] Implement JPEG-LS file format parser
+- [x] Implement marker segment parsing and validation
+- [x] Implement frame header decoding
+- [x] Implement scan header decoding
+- [x] Implement preset parameter table decoding
+- [x] Implement extension marker handling
+- [x] Achieve >95% test coverage for parsing (100.00%)
 
-#### Phase 4.2: Regular Mode Decoding
+#### Phase 4.2: Regular Mode Decoding 📋
 - [ ] Implement prediction reconstruction
 - [ ] Implement Golomb-Rice decoding
 - [ ] Implement prediction error recovery with bias correction
@@ -112,13 +112,13 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 - [ ] Implement sample value computation with clamping
 - [ ] Achieve >95% test coverage for regular mode decoding
 
-#### Phase 4.3: Run Mode Decoding
+#### Phase 4.3: Run Mode Decoding 📋
 - [ ] Implement run-length decoding logic
 - [ ] Implement run interruption sample decoding
 - [ ] Implement run mode context reconstruction
 - [ ] Achieve >95% test coverage for run mode decoding
 
-#### Phase 4.4: Multi-Component Decoding
+#### Phase 4.4: Multi-Component Decoding 📋
 - [ ] Implement deinterleaving for all modes
 - [ ] Implement component reconstruction
 - [ ] Implement color transformation inverse operations
