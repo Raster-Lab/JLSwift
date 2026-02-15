@@ -49,11 +49,16 @@ public final class JPEGLSBufferPool: @unchecked Sendable {
         if var buffers = pools[type] {
             // Find first buffer with sufficient capacity
             if let index = buffers.firstIndex(where: { $0.capacity >= size }) {
-                let buffer = buffers.remove(at: index)
+                let pooledBuffer = buffers.remove(at: index)
                 pools[type] = buffers
                 
-                // Return a fresh array with the requested size
-                return Array(repeating: 0, count: size)
+                // If buffer size matches, reuse it directly; otherwise, create appropriately sized buffer
+                if pooledBuffer.capacity == size {
+                    return pooledBuffer.data
+                } else {
+                    // Buffer is larger than needed, return a fresh buffer of exact size
+                    return Array(repeating: 0, count: size)
+                }
             }
         }
         
