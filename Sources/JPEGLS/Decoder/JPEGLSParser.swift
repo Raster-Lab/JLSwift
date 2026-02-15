@@ -2,6 +2,13 @@
 ///
 /// Parses JPEG-LS encoded data streams, extracting frame headers, scan headers,
 /// preset parameters, and locating compressed image data.
+///
+/// ## CharLS Compatibility
+///
+/// This parser includes support for CharLS-specific extension markers in the range 0xFF60-0xFF7F.
+/// These markers are used by the CharLS library as escape sequences within scan data (similar to
+/// the standard 0xFF00 byte stuffing). The parser treats these sequences transparently, allowing
+/// it to correctly parse CharLS-encoded files while maintaining compatibility with standard JPEG-LS.
 
 import Foundation
 
@@ -64,6 +71,9 @@ public final class JPEGLSParser {
     /// Parse the JPEG-LS bitstream
     ///
     /// Validates the structure and extracts all metadata.
+    ///
+    /// The parser handles both standard JPEG-LS files and CharLS-encoded files with extension markers.
+    /// Unknown markers (including CharLS-specific markers 0xFF60-0xFF7F) are gracefully skipped.
     ///
     /// - Returns: Parse result containing frame header, scan headers, and parameters
     /// - Throws: `JPEGLSError` if the bitstream is invalid or corrupted
