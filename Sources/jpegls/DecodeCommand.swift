@@ -20,7 +20,15 @@ extension JPEGLSCLITool {
         @Flag(name: .long, help: "Enable verbose output")
         var verbose: Bool = false
         
+        @Flag(name: .long, help: "Suppress non-essential output (quiet mode)")
+        var quiet: Bool = false
+        
         mutating func run() throws {
+            // Validate flags: verbose and quiet are mutually exclusive
+            if verbose && quiet {
+                throw ValidationError("Cannot use both --verbose and --quiet flags")
+            }
+            
             if verbose {
                 print("JPEG-LS Decoder")
                 print("===============")

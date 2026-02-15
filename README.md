@@ -193,6 +193,9 @@ jpegls info image.jls
 
 # JSON output for programmatic use
 jpegls info image.jls --json
+
+# Quiet mode - minimal output (single line)
+jpegls info image.jls --quiet
 ```
 
 **Example output:**
@@ -223,6 +226,11 @@ Compression:
   Space savings: 100.0%
 ```
 
+**Quiet mode output:**
+```
+256x256 8-bit 1-component lossless
+```
+
 #### `jpegls verify` - Verify File Integrity
 
 Validate JPEG-LS file structure and parameters:
@@ -233,6 +241,9 @@ jpegls verify image.jls
 
 # Verbose output with detailed validation
 jpegls verify image.jls --verbose
+
+# Quiet mode - no output on success (exit code 0)
+jpegls verify image.jls --quiet
 ```
 
 The verify command checks:
@@ -261,6 +272,11 @@ jpegls encode input.raw output.jls \
   --width 512 --height 512 \
   --near 3 \
   --verbose
+
+# Quiet mode - suppress non-essential output
+jpegls encode input.raw output.jls \
+  --width 512 --height 512 \
+  --quiet
 ```
 
 **Options:**
@@ -272,6 +288,7 @@ jpegls encode input.raw output.jls \
 - `--interleave`: Interleave mode - none, line, sample (default: none)
 - `--color-transform`: Color transformation - none, hp1, hp2, hp3 (default: none)
 - `--verbose`: Enable verbose output
+- `--quiet`: Suppress non-essential output
 
 #### `jpegls decode` - Decode JPEG-LS File (Planned)
 
@@ -283,11 +300,15 @@ jpegls decode input.jls output.raw
 
 # Decode with verbose output
 jpegls decode input.jls output.raw --verbose
+
+# Quiet mode - suppress non-essential output
+jpegls decode input.jls output.raw --quiet
 ```
 
 **Options:**
 - `--format`: Output format - raw, png, tiff (default: raw) *(PNG/TIFF support planned)*
 - `--verbose`: Enable verbose output
+- `--quiet`: Suppress non-essential output
 
 **Note:** Full encode and decode functionality requires bitstream I/O integration, which is currently in development. The `info` and `verify` commands are fully functional.
 

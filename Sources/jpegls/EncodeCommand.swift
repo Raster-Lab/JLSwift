@@ -50,7 +50,15 @@ extension JPEGLSCLITool {
         @Flag(name: .long, help: "Enable verbose output")
         var verbose: Bool = false
         
+        @Flag(name: .long, help: "Suppress non-essential output (quiet mode)")
+        var quiet: Bool = false
+        
         mutating func run() throws {
+            // Validate flags: verbose and quiet are mutually exclusive
+            if verbose && quiet {
+                throw ValidationError("Cannot use both --verbose and --quiet flags")
+            }
+            
             // Validate inputs
             guard (2...16).contains(bitsPerSample) else {
                 throw ValidationError("Bits per sample must be between 2 and 16")

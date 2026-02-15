@@ -14,7 +14,15 @@ extension JPEGLSCLITool {
         @Flag(name: .long, help: "Output in JSON format")
         var json: Bool = false
         
+        @Flag(name: .long, help: "Suppress non-essential output (quiet mode)")
+        var quiet: Bool = false
+        
         mutating func run() throws {
+            // Validate flags: json and quiet are mutually exclusive
+            if json && quiet {
+                throw ValidationError("Cannot use both --json and --quiet flags")
+            }
+            
             // Read input file
             let inputData = try Data(contentsOf: URL(fileURLWithPath: input))
             
@@ -32,6 +40,13 @@ extension JPEGLSCLITool {
         }
         
         private func printHumanReadable(parseResult: JPEGLSParseResult, fileSize: Int) {
+            if quiet {
+                // Quiet mode: single line output with essential info only
+                let compressionType = parseResult.scanHeaders.first?.near == 0 ? "lossless" : "near-lossless"
+                print("\(parseResult.frameHeader.width)x\(parseResult.frameHeader.height) \(parseResult.frameHeader.bitsPerSample)-bit \(parseResult.frameHeader.componentCount)-component \(compressionType)")
+                return
+            }
+            
             print("JPEG-LS File Information")
             print("========================")
             print()
