@@ -104,13 +104,13 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 - [x] Implement extension marker handling
 - [x] Achieve >95% test coverage for parsing (100.00%)
 
-#### Phase 4.2: Regular Mode Decoding 📋
-- [ ] Implement prediction reconstruction
-- [ ] Implement Golomb-Rice decoding
-- [ ] Implement prediction error recovery with bias correction
-- [ ] Implement context state reconstruction
-- [ ] Implement sample value computation with clamping
-- [ ] Achieve >95% test coverage for regular mode decoding
+#### Phase 4.2: Regular Mode Decoding ✅
+- [x] Implement prediction reconstruction
+- [x] Implement Golomb-Rice decoding
+- [x] Implement prediction error recovery with bias correction
+- [x] Implement context state reconstruction
+- [x] Implement sample value computation with clamping
+- [x] Achieve >95% test coverage for regular mode decoding (96.90%)
 
 #### Phase 4.3: Run Mode Decoding 📋
 - [ ] Implement run-length decoding logic
