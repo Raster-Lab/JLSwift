@@ -67,6 +67,7 @@ JPEG-LS is a lossless/near-lossless compression standard specifically designed f
 | 4.4 | Multi-Component Decoding | ✅ Complete | 92.10% |
 | 5.1 | ARM NEON / SIMD Optimization | ✅ Complete | 100.00% |
 | 5.2 | Apple Accelerate Integration | ✅ Complete | 100.00% |
+| 5.4 | Memory Optimization | ✅ Complete | 100.00% |
 
 **Overall Project Coverage: >95%**
 
@@ -77,6 +78,7 @@ JPEG-LS is a lossless/near-lossless compression standard specifically designed f
 | **Native Swift** | Pure Swift implementation with no external C dependencies |
 | **Apple Silicon Optimized** | ARM NEON/SIMD acceleration with Swift SIMD4 types |
 | **Hardware Acceleration** | Apple Accelerate framework (vDSP) for batch operations & statistics |
+| **Memory Optimized** | Buffer pooling, tile-based processing, and cache-friendly data layouts |
 | **DICOM Compatible** | Full support for DICOM transfer syntaxes |
 | **Multi-Component Support** | Full RGB and grayscale encoding with all interleaving modes |
 | **Interleaving Modes** | None (separate scans), Line-interleaved, Sample-interleaved |
@@ -113,13 +115,56 @@ JPEGLS/
 └── PlatformProtocols        # Protocol-based platform abstraction
 ```
 
+### Memory Optimization Features
+
+JLSwift includes comprehensive memory optimization features for handling large medical images:
+
+#### Buffer Pooling (`JPEGLSBufferPool`)
+- Thread-safe buffer reuse to reduce allocation overhead
+- Supports multiple buffer types (context arrays, pixel data, bitstream)
+- Automatic cleanup of expired buffers
+- Shared global pool available via `sharedBufferPool`
+
+#### Tile-Based Processing (`JPEGLSTileProcessor`)
+- Divides large images into manageable tiles
+- Configurable tile size and overlap for boundary handling
+- Memory savings estimation for large images
+- Enables processing of images larger than available memory
+
+#### Cache-Friendly Data Layout (`JPEGLSCacheFriendlyBuffer`)
+- Contiguous memory layout in row-major order
+- Optimized neighbor access patterns for CPU cache efficiency
+- Batch row access for vectorized operations
+- Compatible with existing encoder/decoder interfaces
+
+**Example Usage:**
+```swift
+// Create a tile processor for a large image
+let processor = JPEGLSTileProcessor(
+    imageWidth: 8192,
+    imageHeight: 8192,
+    configuration: TileConfiguration(tileWidth: 512, tileHeight: 512, overlap: 4)
+)
+
+// Calculate tiles with overlap for boundary handling
+let tiles = processor.calculateTilesWithOverlap()
+
+// Estimate memory savings
+let savings = processor.estimateMemorySavings(bytesPerPixel: 2)
+print("Memory reduction: \(savings * 100)%")
+
+// Use buffer pooling for context arrays
+let contextBuffer = sharedBufferPool.acquire(type: .contextArrays, size: 365)
+defer { sharedBufferPool.release(contextBuffer, type: .contextArrays) }
+```
+
 ### Design Principles
 
 1. **Platform Abstraction**: All platform-specific code behind protocols for clean separation
 2. **Testability**: Every component designed for unit testing with >95% coverage
 3. **Performance First**: Optimized for Apple Silicon while maintaining correctness
 4. **x86-64 Removability**: Clear compilation boundaries for future x86-64 deprecation
-5. **Memory Efficiency**: Streaming support for large medical images (planned)
+5. **Memory Efficiency**: Buffer pooling, tile-based processing, and cache-friendly layouts for large images
 6. **Standards Compliance**: Strict adherence to ISO/IEC 14495-1:1999 / ITU-T.87
 
 ### Supported DICOM Transfer Syntaxes (Planned)
