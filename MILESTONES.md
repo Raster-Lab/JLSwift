@@ -145,13 +145,26 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 
 **Note**: Golomb parameter calculation and run detection are inherently sequential operations that do not benefit from SIMD vectorization. These remain optimally implemented using scalar operations with bit manipulation and lookup tables per the JPEG-LS standard.
 
-#### Phase 5.2: Apple Accelerate Framework Integration 📋
-- [ ] Evaluate vDSP functions for applicable operations
-- [ ] Implement Accelerate-based batch gradient computation
-- [ ] Implement Accelerate-based histogram operations
-- [ ] Implement Accelerate-based statistical analysis
-- [ ] Benchmark Accelerate vs manual SIMD implementations
-- [ ] Select optimal implementation paths based on benchmarks
+#### Phase 5.2: Apple Accelerate Framework Integration ✅
+- [x] Evaluate vDSP functions for applicable operations
+- [x] Implement Accelerate-based batch gradient computation
+- [x] Implement Accelerate-based histogram operations
+- [x] Implement Accelerate-based statistical analysis
+- [x] Benchmark Accelerate vs manual SIMD implementations
+- [x] Select optimal implementation paths based on benchmarks
+- [x] Achieve >95% test coverage for Accelerate implementations
+
+**Implementation Details:**
+- Created AccelerateFrameworkAccelerator using Apple's vDSP library
+- Implemented batch gradient computation for processing multiple pixels simultaneously
+- Added statistical analysis functions (mean, variance, standard deviation, min/max)
+- Implemented histogram computation for image analysis
+- Added batch vector operations (addition, subtraction, scalar multiplication)
+- Created comprehensive test suite with 50+ tests for all operations
+- Implemented performance benchmarks comparing Accelerate vs scalar implementations
+- All implementations produce bit-exact results verified by comprehensive tests
+
+**Note**: The Accelerate framework is optimized for batch operations on arrays rather than single-pixel operations. For single-pixel operations, the ARM64Accelerator with SIMD4 types remains the optimal choice. The AccelerateFrameworkAccelerator is best suited for preprocessing, statistical analysis, and batch processing scenarios.
 
 #### Phase 5.3: Metal GPU Acceleration (Optional/Experimental) 📋
 - [ ] Design GPU-friendly encoding pipeline
@@ -292,7 +305,7 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 | **2** | Foundation | Architecture, core types, context modeling ✅ |
 | **3** | Encoder | Regular mode, run mode, near-lossless, interleaving ✅ |
 | **4** | Decoder | Parsing, regular mode, run mode, multi-component ✅ |
-| **5** | Apple Silicon | NEON/SIMD ✅, Accelerate 📋, Metal 📋, memory optimization 📋 |
+| **5** | Apple Silicon | NEON/SIMD ✅, Accelerate ✅, Metal 📋, memory optimization 📋 |
 | **6** | x86-64 | Removable x86-64 support with clear boundaries 📋 |
 | **7** | CLI | Encode/decode commands, batch processing, utilities 📋 |
 | **8** | Validation | CharLS conformance, benchmarks, DICOM testing 📋 |
@@ -310,8 +323,8 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 ### Dependencies
 
 - **Swift 6.2+**: Required for modern concurrency and language features
-- **Apple Accelerate**: Optional, for vectorized math operations
-- **Metal**: Optional, for GPU acceleration
+- **Apple Accelerate**: Implemented, provides vDSP-based batch operations and statistical analysis (macOS, iOS, tvOS, watchOS)
+- **Metal**: Optional, for GPU acceleration (planned)
 - **CharLS**: Test reference only (not runtime dependency)
 
 ### Hardware Targets
