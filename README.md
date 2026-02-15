@@ -63,11 +63,11 @@ JPEG-LS is a lossless/near-lossless compression standard specifically designed f
 | 3.4 | Multi-Component Encoding | ✅ Complete | 100.00% |
 | 4.1 | Bitstream Parsing | ✅ Complete | 100.00% |
 | 4.2 | Regular Mode Decoding | ✅ Complete | 96.90% |
-| 4.3 | Run Mode Decoding | 📋 Planned | - |
+| 4.3 | Run Mode Decoding | ✅ Complete | 100.00% |
 | 4.4 | Multi-Component Decoding | 📋 Planned | - |
 | 5.x | Apple Silicon Optimization | 📋 Planned | - |
 
-**Overall Project Coverage: 96.90%**
+**Overall Project Coverage: 96.12%**
 
 ### Key Features
 
