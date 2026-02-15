@@ -11,9 +11,6 @@ import Foundation
 /// the overhead of batch processing.
 @Suite("Accelerate Framework Benchmarks")
 struct AccelerateFrameworkBenchmarks {
-    /// Sample size for benchmark iterations
-    private static let benchmarkIterations = 10_000
-    
     // MARK: - Batch Gradient Computation Benchmarks
     
     @Test("Benchmark: Batch gradient computation vs scalar")
