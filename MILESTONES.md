@@ -311,16 +311,28 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 - Man page includes installation instructions for system-wide and user-specific installation
 - Added man page documentation section to README.md with installation and usage instructions
 
-### Milestone 8: Validation & Conformance Testing 📋
+### Milestone 8: Validation & Conformance Testing ⏳
 **Target**: CharLS compatibility and standards compliance  
-**Status**: Planned
+**Status**: In Progress
 
-#### Phase 8.1: CharLS Reference Integration
-- [ ] Set up CharLS as test reference (via C interop or test fixtures)
-- [ ] Create test image corpus (various sizes, bit depths, component counts)
-- [ ] Implement bit-exact comparison with CharLS output
-- [ ] Create automated conformance test suite
+#### Phase 8.1: CharLS Reference Integration ⏳
+- [x] Set up CharLS test fixtures (downloaded from GitHub conformance directory)
+- [x] Create test image corpus (12 JPEG-LS files + 7 reference images: various sizes, bit depths, component counts)
+- [x] Implement test fixture loading utilities (PGM/PPM parsers, JPEG-LS file loaders)
+- [x] Create automated conformance test suite (5 test groups, 589 total tests)
+- [x] Validate JPEG-LS file structure (SOI/EOI markers)
+- [ ] Add support for CharLS extension markers (0xFF7F, 0xFF7E, etc.) to JPEGLSParser
+- [ ] Implement bit-exact comparison with CharLS reference output
 - [ ] Document any intentional deviations from CharLS behavior
+
+**Implementation Details:**
+- Downloaded CharLS test fixtures from `team-charls/charls/test/conformance`
+- 12 reference JPEG-LS files covering: 8-bit/16-bit, grayscale/color, lossless/near-lossless, various interleaving modes
+- 7 reference images (PGM/PPM format) for encoder validation
+- TestFixtureLoader utility for loading and parsing reference images
+- CharLSConformanceTests suite validates file structure and markers
+- Note: CharLS uses extension markers not yet supported by our parser - will be added in next iteration
+- Overall project coverage maintained at 97.11% (exceeds 95% threshold)
 
 #### Phase 8.2: Performance Benchmarking
 - [ ] Create comprehensive benchmark suite
@@ -387,7 +399,7 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 | **5** | Apple Silicon | NEON/SIMD ✅, Accelerate ✅, Metal 📋, memory optimization ✅ |
 | **6** | x86-64 | Removable x86-64 support with clear boundaries ✅ |
 | **7** | CLI | Core commands (info ✅, verify ✅, encode/decode ⏳), utilities ✅, help & docs ✅ |
-| **8** | Validation | CharLS conformance, benchmarks, DICOM testing 📋 |
+| **8** | Validation | CharLS conformance ⏳, benchmarks 📋, DICOM testing 📋 |
 | **9** | Release | Documentation, integration guides, distribution 📋 |
 
 ### Architecture Principles
