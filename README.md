@@ -60,11 +60,11 @@ JPEG-LS is a lossless/near-lossless compression standard specifically designed f
 | 3.1 | Regular Mode Encoding | ✅ Complete | 100.00% |
 | 3.2 | Run Mode Encoding | ✅ Complete | 100.00% |
 | 3.3 | Near-Lossless Encoding | ✅ Complete | 98.14% |
-| 3.4 | Multi-Component Encoding | 📋 Planned | - |
+| 3.4 | Multi-Component Encoding | ✅ Complete | 100.00% |
 | 4.x | Decoder | 📋 Planned | - |
 | 5.x | Apple Silicon Optimization | 📋 Planned | - |
 
-**Overall Project Coverage: 97.34%**
+**Overall Project Coverage: 97.76%**
 
 ### Key Features
 
@@ -74,6 +74,8 @@ JPEG-LS is a lossless/near-lossless compression standard specifically designed f
 | **Apple Silicon Optimized** | Primary target with ARM NEON/SIMD acceleration (planned) |
 | **Hardware Acceleration** | Support for Apple Accelerate framework and Metal GPU (planned) |
 | **DICOM Compatible** | Full support for DICOM transfer syntaxes |
+| **Multi-Component Support** | Full RGB and grayscale encoding with all interleaving modes |
+| **Interleaving Modes** | None (separate scans), Line-interleaved, Sample-interleaved |
 | **Near-Lossless Support** | Configurable error tolerance encoding with NEAR parameter (1-255) |
 | **Command-Line Tool** | `jpegls` CLI for encoding, decoding, and validation |
 
@@ -92,7 +94,9 @@ JPEGLS/
 ├── Encoder/                 # Encoding implementation
 │   ├── RegularModeEncoder   # Gradient-based encoding (MED prediction)
 │   ├── RunModeEncoder       # Run-length encoding for flat regions
-│   └── NearLosslessEncoder  # Near-lossless encoding with NEAR parameter
+│   ├── NearLosslessEncoder  # Near-lossless encoding with NEAR parameter
+│   ├── MultiComponentEncoder # Multi-component & interleaving orchestration
+│   └── PixelBuffer          # Component-aware pixel access with neighbors
 ├── Platform/                # Platform-specific optimizations
 │   ├── ARM64/               # Apple Silicon / ARM NEON code
 │   └── x86_64/              # x86-64 specific code (removable)

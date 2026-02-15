@@ -52,9 +52,9 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 - [x] Implement context update and adaptation logic
 - [x] Achieve >95% test coverage for context modeling (96.88%)
 
-### Milestone 3: JPEG-LS Encoder 📋
+### Milestone 3: JPEG-LS Encoder ✅
 **Target**: Complete encoding pipeline  
-**Status**: In Progress
+**Status**: Complete
 
 #### Phase 3.1: Regular Mode Encoding ✅
 - [x] Implement gradient computation for regular mode detection
@@ -81,13 +81,15 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 - [x] Validate error bounds compliance
 - [x] Achieve >95% test coverage for near-lossless mode (98.14%)
 
-#### Phase 3.4: Multi-Component & Interleaved Encoding
-- [ ] Implement component interleaving modes (None, Line, Sample)
-- [ ] Implement multi-component frame handling
-- [ ] Implement restart marker support
-- [ ] Implement line-interleaved encoding
-- [ ] Implement sample-interleaved encoding
-- [ ] Achieve >95% test coverage for interleaved modes
+#### Phase 3.4: Multi-Component & Interleaved Encoding ✅
+- [x] Implement component interleaving modes (None, Line, Sample)
+- [x] Implement multi-component frame handling
+- [x] Implement pixel buffer abstraction for multi-component access
+- [x] Implement line-interleaved encoding
+- [x] Implement sample-interleaved encoding
+- [x] Create comprehensive tests (14 tests covering all modes)
+- [x] Achieve >95% test coverage for interleaved modes (100.00%)
+- [ ] Implement restart marker support (deferred to Phase 4)
 
 ### Milestone 4: JPEG-LS Decoder 📋
 **Target**: Complete decoding pipeline  
