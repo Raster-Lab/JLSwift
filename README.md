@@ -70,8 +70,9 @@ JPEG-LS is a lossless/near-lossless compression standard specifically designed f
 | 5.2 | Apple Accelerate Integration | ✅ Complete | 100.00% |
 | 5.4 | Memory Optimization | ✅ Complete | 100.00% |
 | 7.3 | CLI Argument Parsing Tests | ✅ Complete | N/A* |
+| 8.1 | CharLS Reference Integration | ⏳ In Progress | 100.00% |
 
-**Overall Project Coverage: 96.08%** (exceeds 95% threshold)
+**Overall Project Coverage: 97.11%** (exceeds 95% threshold)
 
 *CLI executable target not included in coverage metrics (Swift Package Manager limitation), but validation logic thoroughly tested with 60 comprehensive tests.
 
@@ -477,9 +478,28 @@ swift test --enable-code-coverage
 # Run tests for a specific target
 swift test --filter JPEGLSTests
 
+# Run CharLS conformance tests
+swift test --filter CharLSConformanceTests
+
 # View coverage report JSON path
 swift test --show-codecov-path
 ```
+
+### CharLS Conformance Testing
+
+JLSwift includes comprehensive conformance testing using reference files from the [CharLS](https://github.com/team-charls/charls) project. The test suite validates:
+
+- **File Structure**: SOI/EOI markers and basic JPEG-LS file format
+- **Reference Images**: 12 JPEG-LS files covering various configurations:
+  - 8-bit and 16-bit samples
+  - Grayscale and RGB color images
+  - Lossless and near-lossless (NEAR=3) encoding
+  - Different color transformation modes
+  - Sub-sampling and interleaving modes
+  - Non-default parameters
+- **Image Loading**: PGM (grayscale) and PPM (color) reference image parsing
+
+The conformance tests are located in `Tests/JPEGLSTests/CharLSConformanceTests.swift` with reference fixtures in `Tests/JPEGLSTests/TestFixtures/`. These tests ensure compatibility with the JPEG-LS standard (ISO/IEC 14495-1:1999 / ITU-T.87) and provide a foundation for bit-exact comparison with CharLS output.
 
 ### Code Coverage Requirement
 

@@ -34,7 +34,10 @@ let package = Package(
         ),
         .testTarget(
             name: "JPEGLSTests",
-            dependencies: ["JPEGLS"]
+            dependencies: ["JPEGLS"],
+            resources: [
+                .copy("TestFixtures")
+            ]
         ),
     ]
 )
