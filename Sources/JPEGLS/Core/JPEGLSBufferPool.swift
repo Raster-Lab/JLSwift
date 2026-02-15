@@ -40,7 +40,9 @@ public final class JPEGLSBufferPool: @unchecked Sendable {
     /// - Parameters:
     ///   - type: The type of buffer to acquire
     ///   - size: Required buffer size
-    /// - Returns: A buffer of at least the requested size
+    /// - Returns: A buffer of at least the requested size. The returned buffer may be larger
+    ///   than requested if a larger pooled buffer was available. Callers needing exact size
+    ///   should slice the result: `buffer.prefix(size)`
     public func acquire(type: BufferType, size: Int) -> [Int] {
         lock.lock()
         defer { lock.unlock() }
