@@ -66,6 +66,7 @@ JPEG-LS is a lossless/near-lossless compression standard specifically designed f
 | 4.3 | Run Mode Decoding | ✅ Complete | 100.00% |
 | 4.4 | Multi-Component Decoding | ✅ Complete | 92.10% |
 | 5.1 | ARM NEON / SIMD Optimization | ✅ Complete | 100.00% |
+| 5.2 | Apple Accelerate Integration | ✅ Complete | 100.00% |
 
 **Overall Project Coverage: >95%**
 
@@ -74,13 +75,13 @@ JPEG-LS is a lossless/near-lossless compression standard specifically designed f
 | Feature | Description |
 |---------|-------------|
 | **Native Swift** | Pure Swift implementation with no external C dependencies |
-| **Apple Silicon Optimized** | Primary target with ARM NEON/SIMD acceleration (planned) |
-| **Hardware Acceleration** | Support for Apple Accelerate framework and Metal GPU (planned) |
+| **Apple Silicon Optimized** | ARM NEON/SIMD acceleration with Swift SIMD4 types |
+| **Hardware Acceleration** | Apple Accelerate framework (vDSP) for batch operations & statistics |
 | **DICOM Compatible** | Full support for DICOM transfer syntaxes |
 | **Multi-Component Support** | Full RGB and grayscale encoding with all interleaving modes |
 | **Interleaving Modes** | None (separate scans), Line-interleaved, Sample-interleaved |
 | **Near-Lossless Support** | Configurable error tolerance encoding with NEAR parameter (1-255) |
-| **Command-Line Tool** | `jpegls` CLI for encoding, decoding, and validation |
+| **Command-Line Tool** | `jpegls` CLI for encoding, decoding, and validation (planned) |
 
 ### Architecture Overview
 
@@ -106,6 +107,7 @@ JPEGLS/
 │   ├── MultiComponentEncoder # Multi-component & interleaving orchestration
 │   └── PixelBuffer          # Component-aware pixel access with neighbors
 ├── Platform/                # Platform-specific optimizations
+│   ├── Accelerate/          # Apple Accelerate framework (vDSP batch operations)
 │   ├── ARM64/               # Apple Silicon / ARM NEON code
 │   └── x86_64/              # x86-64 specific code (removable)
 └── PlatformProtocols        # Protocol-based platform abstraction
