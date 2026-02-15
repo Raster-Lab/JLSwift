@@ -44,6 +44,9 @@ public enum JPEGLSError: Error, Sendable {
     /// Corrupted bitstream data
     case corruptedData(reason: String)
     
+    /// Invalid bitstream structure
+    case invalidBitstreamStructure(reason: String)
+    
     // MARK: - Frame and Scan Header Errors
     
     /// Invalid frame header
@@ -136,6 +139,8 @@ extension JPEGLSError: CustomStringConvertible {
             return "Invalid segment length for marker 0xFF\(String(format: "%02X", marker.rawValue)): \(length)"
         case .corruptedData(let reason):
             return "Corrupted bitstream data: \(reason)"
+        case .invalidBitstreamStructure(let reason):
+            return "Invalid bitstream structure: \(reason)"
         case .invalidFrameHeader(let reason):
             return "Invalid frame header: \(reason)"
         case .invalidScanHeader(let reason):
