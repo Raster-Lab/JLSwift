@@ -1,23 +1,22 @@
 # JLSwift
 
-A Swift 6.2+ utility library providing core helpers for validation, string manipulation, and mathematical operations. Also home to the **JPEGLS** native Swift implementation of JPEG-LS compression for DICOM medical imaging.
+A native Swift implementation of **JPEG-LS** (ISO/IEC 14495-1:1999 / ITU-T.87) compression for DICOM medical imaging. Optimized for Apple Silicon with hardware acceleration support.
 
 [![CI](https://github.com/Raster-Lab/JLSwift/actions/workflows/ci.yml/badge.svg)](https://github.com/Raster-Lab/JLSwift/actions/workflows/ci.yml)
 
 ## Overview
 
-JLSwift is designed for developers who need reliable, well-tested utility functions in their Swift projects. The library emphasizes:
+JLSwift provides a native Swift JPEG-LS compression library designed for the DICOMkit project and optimized for medical imaging workflows. The library emphasizes:
 
 - **Type Safety**: Leverages Swift 6.2+ strict concurrency and type system
 - **Performance**: Optimized implementations with support for hardware acceleration
 - **Reliability**: Comprehensive test coverage exceeding 95% for all modules
-- **Modularity**: Clean separation of concerns with distinct modules for different functionality
+- **DICOM Compatible**: Full support for DICOM transfer syntaxes
 
 ### Library Modules
 
 | Module | Description |
 |--------|-------------|
-| **JLSwift** | Core utilities including validation, string extensions, and math functions |
 | **JPEGLS** | Native Swift JPEG-LS compression for medical imaging (DICOM compatible) |
 | **jpegls** | Command-line tool for JPEG-LS encoding and decoding |
 
@@ -37,122 +36,11 @@ dependencies: [
 ]
 ```
 
-Then add the desired module(s) as a dependency of your target:
+Then add JPEGLS as a dependency of your target:
 
 ```swift
-// For core utilities
-.target(name: "YourTarget", dependencies: ["JLSwift"])
-
 // For JPEG-LS compression functionality
 .target(name: "YourTarget", dependencies: ["JPEGLS"])
-
-// For both modules
-.target(name: "YourTarget", dependencies: ["JLSwift", "JPEGLS"])
-```
-
-## JLSwift Module
-
-The JLSwift module provides essential utility functions organized into three main categories:
-
-### JLSValidator
-
-Common validation utilities for strings with a clean, functional API.
-
-| Method | Description |
-|--------|-------------|
-| `isValidEmail(_:)` | Validates email format (checks for `@`, domain with `.`) |
-| `isNonEmpty(_:)` | Checks if string contains non-whitespace characters |
-| `isLengthValid(_:min:max:)` | Validates string length is within bounds |
-
-```swift
-import JLSwift
-
-// Email validation
-JLSValidator.isValidEmail("user@example.com")     // true
-JLSValidator.isValidEmail("invalid-email")        // false
-JLSValidator.isValidEmail("user@domain")          // false (no TLD)
-
-// Non-empty validation  
-JLSValidator.isNonEmpty("hello")                  // true
-JLSValidator.isNonEmpty("   ")                    // false
-
-// Length validation
-JLSValidator.isLengthValid("abc", min: 1, max: 5) // true
-JLSValidator.isLengthValid("toolong", min: 1, max: 5) // false
-```
-
-### String Extensions
-
-Handy extensions on `String` for common text manipulation tasks.
-
-| Extension | Description |
-|-----------|-------------|
-| `trimmed()` | Returns string with leading/trailing whitespace removed |
-| `capitalizedFirst()` | Capitalizes only the first letter |
-| `isAlphanumeric` | Property checking if all characters are letters/digits |
-| `repeated(_:)` | Returns string repeated n times |
-| `wordCount` | Property returning the number of words |
-
-```swift
-import JLSwift
-
-// Trimming whitespace
-"  hello world  ".trimmed()       // "hello world"
-"\n\ttabbed\n".trimmed()          // "tabbed"
-
-// First letter capitalization (preserves rest)
-"hello world".capitalizedFirst()  // "Hello world"
-"HELLO".capitalizedFirst()        // "HELLO"
-
-// Alphanumeric check
-"abc123".isAlphanumeric           // true
-"hello world".isAlphanumeric      // false (contains space)
-"".isAlphanumeric                 // false
-
-// String repetition
-"ab".repeated(3)                  // "ababab"
-"hi".repeated(0)                  // ""
-
-// Word counting
-"hello world".wordCount           // 2
-"one".wordCount                   // 1
-"  spaced   out  ".wordCount      // 2
-```
-
-### JLSMathUtils
-
-Mathematical utility functions with safe handling of edge cases.
-
-| Method | Description |
-|--------|-------------|
-| `clamp(_:lower:upper:)` | Constrains value to specified range |
-| `factorial(_:)` | Computes factorial (returns `nil` for negative input) |
-| `gcd(_:_:)` | Greatest common divisor using Euclidean algorithm |
-| `isPrime(_:)` | Checks if number is prime |
-
-```swift
-import JLSwift
-
-// Value clamping
-JLSMathUtils.clamp(15, lower: 0, upper: 10)  // 10
-JLSMathUtils.clamp(-5, lower: 0, upper: 10)  // 0
-JLSMathUtils.clamp(5, lower: 0, upper: 10)   // 5
-
-// Factorial (safe for negative numbers)
-JLSMathUtils.factorial(5)                     // 120
-JLSMathUtils.factorial(0)                     // 1
-JLSMathUtils.factorial(-1)                    // nil
-
-// Greatest common divisor
-JLSMathUtils.gcd(12, 8)                       // 4
-JLSMathUtils.gcd(17, 13)                      // 1
-JLSMathUtils.gcd(-12, 8)                      // 4 (handles negatives)
-
-// Prime checking
-JLSMathUtils.isPrime(7)                       // true
-JLSMathUtils.isPrime(4)                       // false
-JLSMathUtils.isPrime(1)                       // false
-JLSMathUtils.isPrime(2)                       // true
 ```
 
 ## JPEGLS Module
@@ -239,7 +127,6 @@ swift build
 swift build -c release
 
 # Build a specific target
-swift build --target JLSwift
 swift build --target JPEGLS
 swift build --target jpegls
 ```
@@ -254,7 +141,6 @@ swift test
 swift test --enable-code-coverage
 
 # Run tests for a specific target
-swift test --filter JLSwiftTests
 swift test --filter JPEGLSTests
 
 # View coverage report JSON path
@@ -271,11 +157,6 @@ swift test --show-codecov-path
 JLSwift/
 ├── Package.swift              # Swift Package Manager manifest (Swift 6.2+)
 ├── Sources/
-│   ├── JLSwift/               # Core utility library
-│   │   ├── JLSCore.swift      # Version and core exports
-│   │   ├── JLSValidator.swift # Validation utilities
-│   │   ├── JLSMathUtils.swift # Mathematical functions
-│   │   └── JLSStringExtensions.swift # String extensions
 │   ├── JPEGLS/                # JPEG-LS compression library
 │   │   ├── Core/              # Core types and protocols
 │   │   ├── Encoder/           # Encoding implementation
@@ -283,7 +164,6 @@ JLSwift/
 │   │   └── JPEGLS.swift       # Module exports
 │   └── jpegls/                # Command-line tool
 ├── Tests/
-│   ├── JLSwiftTests/          # JLSwift unit tests
 │   └── JPEGLSTests/           # JPEGLS unit tests
 ├── .github/
 │   ├── copilot-instructions.md # Coding guidelines
