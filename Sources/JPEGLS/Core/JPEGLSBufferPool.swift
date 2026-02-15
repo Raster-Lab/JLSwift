@@ -40,7 +40,11 @@ public final class JPEGLSBufferPool: @unchecked Sendable {
     /// - Parameters:
     ///   - type: The type of buffer to acquire
     ///   - size: Required buffer size
-    /// - Returns: A buffer of at least the requested size
+    /// - Returns: A zero-initialized buffer of at least the requested size. The returned buffer
+    ///   may be larger than requested if a larger pooled buffer was available.
+    /// - Note: Due to Swift's copy-on-write array semantics, this returns a new zero-initialized
+    ///   array of the pooled buffer's size. Future optimization could use unsafe buffer pointers
+    ///   for more efficient memory reuse.
     public func acquire(type: BufferType, size: Int) -> [Int] {
         lock.lock()
         defer { lock.unlock() }
@@ -49,11 +53,12 @@ public final class JPEGLSBufferPool: @unchecked Sendable {
         if var buffers = pools[type] {
             // Find first buffer with sufficient capacity
             if let index = buffers.firstIndex(where: { $0.capacity >= size }) {
-                let buffer = buffers.remove(at: index)
+                let pooledBuffer = buffers.remove(at: index)
                 pools[type] = buffers
                 
-                // Return a fresh array with the requested size
-                return Array(repeating: 0, count: size)
+                // Return a zero-initialized array of the pooled capacity
+                // This reuses the capacity information from the pool
+                return Array(repeating: 0, count: pooledBuffer.capacity)
             }
         }
         
