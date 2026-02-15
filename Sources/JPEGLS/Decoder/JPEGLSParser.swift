@@ -103,8 +103,8 @@ public final class JPEGLSParser {
             guard let marker = JPEGLSMarker(rawValue: byte2) else {
                 // Unknown marker - skip it gracefully
                 // Some markers have no length field (standalone markers)
-                if byte2 >= 0xD0 && byte2 <= 0xD9 {
-                    // RST markers (0xD0-0xD7) and SOI/EOI (0xD8-0xD9) have no length
+                if (byte2 >= 0xD0 && byte2 <= 0xD7) || byte2 == 0xD8 || byte2 == 0xD9 {
+                    // RST markers (0xD0-0xD7), SOI (0xD8), and EOI (0xD9) have no length field
                     continue
                 } else if byte2 >= 0x60 && byte2 <= 0x7F {
                     // CharLS uses markers in the 0xFF60-0xFF7F range as standalone markers (no length field)
@@ -165,21 +165,22 @@ public final class JPEGLSParser {
                 scanHeaders.append(scanHeader)
                 
                 // Skip scan data until we hit a marker
-                // The scan data ends when we encounter a marker (0xFF followed by non-0x00)
-                // CharLS uses FF 60-FF 7F as escape sequences within scan data (similar to FF 00)
+                // Scan data ends when we encounter a marker (0xFF followed by non-stuffing byte)
+                // Byte stuffing rules:
+                //   - FF 00: Standard JPEG-LS byte stuffing (0x00 is removed during decoding)
+                //   - FF 60-FF 7F: CharLS escape sequences (treated like byte stuffing for compatibility)
+                //   - FF XX (other): Real marker - terminates scan data
                 while !reader.isAtEnd {
                     let byte = try reader.readByte()
                     if byte == JPEGLSMarker.markerPrefix {
-                        // Check if it's a marker or stuffed byte
+                        // Check next byte to determine if it's stuffing or a real marker
                         if let nextByte = reader.peekByte() {
                             if nextByte == 0x00 || (nextByte >= 0x60 && nextByte <= 0x7F) {
-                                // FF 00 is standard byte stuffing
-                                // FF 60-FF 7F are CharLS escape sequences within scan data
-                                // Skip the next byte and continue reading scan data
+                                // Byte stuffing or CharLS escape - skip and continue reading scan data
                                 _ = try reader.readByte()
                                 continue
                             } else {
-                                // This is a real marker - back up so we can read it in the next iteration
+                                // Real marker - back up to re-read the FF byte in the outer loop
                                 try reader.seek(to: reader.currentPosition - 1)
                                 break
                             }
