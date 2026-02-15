@@ -6,10 +6,6 @@ let package = Package(
     name: "JLSwift",
     products: [
         .library(
-            name: "JLSwift",
-            targets: ["JLSwift"]
-        ),
-        .library(
             name: "JPEGLS",
             targets: ["JPEGLS"]
         ),
@@ -19,13 +15,6 @@ let package = Package(
         ),
     ],
     targets: [
-        .target(
-            name: "JLSwift"
-        ),
-        .testTarget(
-            name: "JLSwiftTests",
-            dependencies: ["JLSwift"]
-        ),
         .target(
             name: "JPEGLS"
         ),
