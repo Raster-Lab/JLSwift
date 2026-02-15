@@ -89,13 +89,13 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 - [x] Implement context-based bias correction
 - [x] Achieve >95% test coverage for regular mode (96.97%)
 
-#### Phase 5.2: Run Mode Encoding
-- [ ] Implement run-length detection logic
-- [ ] Implement run-length encoding with run interruption samples
-- [ ] Implement J[RUNindex] mapping table
-- [ ] Implement run mode context updates
-- [ ] Implement run-length limit handling
-- [ ] Achieve >95% test coverage for run mode
+#### Phase 5.2: Run Mode Encoding ✅
+- [x] Implement run-length detection logic
+- [x] Implement run-length encoding with run interruption samples
+- [x] Implement J[RUNindex] mapping table
+- [x] Implement run mode context updates
+- [x] Implement run-length limit handling
+- [x] Achieve >95% test coverage for run mode (100.00%)
 
 #### Phase 5.3: Near-Lossless Encoding
 - [ ] Implement NEAR parameter handling (error tolerance)
