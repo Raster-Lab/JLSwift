@@ -52,13 +52,8 @@ public final class JPEGLSBufferPool: @unchecked Sendable {
                 let pooledBuffer = buffers.remove(at: index)
                 pools[type] = buffers
                 
-                // If buffer size matches, reuse it directly; otherwise, create appropriately sized buffer
-                if pooledBuffer.capacity == size {
-                    return pooledBuffer.data
-                } else {
-                    // Buffer is larger than needed, return a fresh buffer of exact size
-                    return Array(repeating: 0, count: size)
-                }
+                // Return the pooled buffer (may be larger than requested, which is acceptable)
+                return pooledBuffer.data
             }
         }
         
