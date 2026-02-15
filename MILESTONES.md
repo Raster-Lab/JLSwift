@@ -45,7 +45,6 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 
 #### Phase 4.1: Project Architecture Setup ✅
 - [x] Create `JPEGLS` library target in Package.swift
-- [x] Create `jpegls` command-line tool target in Package.swift
 - [x] Set up directory structure:
   - [x] `Sources/JPEGLS/Core/` — Core codec types and protocols
   - [x] `Sources/JPEGLS/Encoder/` — Encoding implementation
@@ -53,7 +52,6 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
   - [x] `Sources/JPEGLS/Platform/` — Platform-specific optimizations
   - [x] `Sources/JPEGLS/Platform/ARM64/` — Apple Silicon / ARM NEON code
   - [x] `Sources/JPEGLS/Platform/x86_64/` — x86-64 specific code (removable)
-  - [x] `Sources/jpegls/` — CLI tool source
 - [x] Define architecture boundary protocols for platform abstraction
 - [x] Create conditional compilation structure for architecture separation
 
@@ -199,52 +197,18 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 - [ ] Verify bit-exact output between ARM64 and x86-64 implementations
 - [ ] Achieve >95% test coverage for x86-64 code paths
 
-### Milestone 9: Command-Line Interface 📋
-**Target**: Full-featured CLI tool  
-**Status**: Planned
-
-#### Phase 9.1: Core CLI Commands
-- [ ] Implement `jpegls encode` command
-  - [ ] Input file path (raw, PNG, TIFF, DICOM support)
-  - [ ] Output file path
-  - [ ] `--near` parameter for near-lossless encoding
-  - [ ] `--interleave` mode selection (none, line, sample)
-  - [ ] `--color-transform` selection
-  - [ ] `--bits-per-sample` specification
-  - [ ] `--preset` for custom T1, T2, T3, RESET parameters
-- [ ] Implement `jpegls decode` command
-  - [ ] Input JPEG-LS file path
-  - [ ] Output file path
-  - [ ] `--format` output format selection
-- [ ] Implement `jpegls info` command for file analysis
-- [ ] Implement `jpegls verify` for round-trip validation
-
-#### Phase 9.2: CLI Utilities
-- [ ] Implement `--verbose` output with progress indication
-- [ ] Implement `--quiet` mode for scripting
-- [ ] Implement `--json` output format for programmatic use
-- [ ] Implement batch processing with glob patterns
-- [ ] Implement parallel processing for batch operations
-- [ ] Add shell completion scripts (bash, zsh, fish)
-
-#### Phase 9.3: CLI Help & Documentation
-- [ ] Implement comprehensive `--help` for all commands
-- [ ] Create man page documentation
-- [ ] Create usage examples in README
-- [ ] Achieve >95% test coverage for CLI argument parsing
-
-### Milestone 10: Validation & Conformance Testing 📋
+### Milestone 9: Validation & Conformance Testing 📋
 **Target**: CharLS compatibility and standards compliance  
 **Status**: Planned
 
-#### Phase 10.1: CharLS Reference Integration
+#### Phase 9.1: CharLS Reference Integration
 - [ ] Set up CharLS as test reference (via C interop or test fixtures)
 - [ ] Create test image corpus (various sizes, bit depths, component counts)
 - [ ] Implement bit-exact comparison with CharLS output
 - [ ] Create automated conformance test suite
 - [ ] Document any intentional deviations from CharLS behavior
 
-#### Phase 10.2: Performance Benchmarking
+#### Phase 9.2: Performance Benchmarking
 - [ ] Create comprehensive benchmark suite
 - [ ] Benchmark encoding speed vs CharLS
 - [ ] Benchmark decoding speed vs CharLS
@@ -257,38 +221,38 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
   - [ ] Near-lossless parameters
   - [ ] Hardware configurations (M1, M2, M3, Intel)
 
-#### Phase 10.3: DICOM Integration Testing
+#### Phase 9.3: DICOM Integration Testing
 - [ ] Test with real-world DICOM files
 - [ ] Validate transfer syntax compliance (1.2.840.10008.1.2.4.80, 1.2.840.10008.1.2.4.81)
 - [ ] Test with various DICOM modalities (CT, MR, CR, US, etc.)
 - [ ] Create DICOM-specific test fixtures
 - [ ] Document DICOM integration guidelines
 
-#### Phase 10.4: Edge Cases & Robustness
+#### Phase 9.4: Edge Cases & Robustness
 - [ ] Test with malformed input handling
 - [ ] Test boundary conditions (MAXVAL limits, extreme dimensions)
 - [ ] Test memory pressure scenarios
 - [ ] Implement fuzz testing for decoder robustness
 - [ ] Achieve >95% overall test coverage
 
-### Milestone 11: Documentation & Release 📋
+### Milestone 10: Documentation & Release 📋
 **Target**: Production-ready release  
 **Status**: Planned
 
-#### Phase 11.1: API Documentation
+#### Phase 10.1: API Documentation
 - [ ] Complete DocC documentation for all public APIs
 - [ ] Create getting started guide
 - [ ] Create migration guide for CharLS users
 - [ ] Create performance tuning guide
 - [ ] Create troubleshooting guide
 
-#### Phase 11.2: Integration Guides
+#### Phase 10.2: Integration Guides
 - [ ] Create DICOMkit integration guide
 - [ ] Create standalone usage examples
 - [ ] Create SwiftUI/AppKit image loading examples
 - [ ] Create server-side Swift usage examples
 
-#### Phase 11.3: Release Preparation
+#### Phase 10.3: Release Preparation
 - [ ] Create semantic versioning strategy
 - [ ] Create CHANGELOG.md
 - [ ] Create release notes template
@@ -307,9 +271,8 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 | **6** | Decoder | Parsing, regular mode, run mode, multi-component |
 | **7** | Apple Silicon | NEON/SIMD, Accelerate, Metal, memory optimization |
 | **8** | x86-64 | Removable x86-64 support with clear boundaries |
-| **9** | CLI | Encode/decode commands, batch processing, utilities |
-| **10** | Validation | CharLS conformance, benchmarks, DICOM testing |
-| **11** | Release | Documentation, integration guides, distribution |
+| **9** | Validation | CharLS conformance, benchmarks, DICOM testing |
+| **10** | Release | Documentation, integration guides, distribution |
 
 ### Architecture Principles
 

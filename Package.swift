@@ -13,10 +13,6 @@ let package = Package(
             name: "JPEGLS",
             targets: ["JPEGLS"]
         ),
-        .executable(
-            name: "jpegls",
-            targets: ["jpegls"]
-        ),
     ],
     targets: [
         .target(
@@ -28,10 +24,6 @@ let package = Package(
         ),
         .target(
             name: "JPEGLS"
-        ),
-        .executableTarget(
-            name: "jpegls",
-            dependencies: ["JPEGLS"]
         ),
         .testTarget(
             name: "JPEGLSTests",

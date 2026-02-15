@@ -3,6 +3,9 @@
 A Swift 6.2+ utility library providing core helpers for validation, string manipulation, and mathematical operations. Also home to the **JPEGLS** native Swift implementation of JPEG-LS compression for DICOM medical imaging.
 
 [![CI](https://github.com/Raster-Lab/JLSwift/actions/workflows/ci.yml/badge.svg)](https://github.com/Raster-Lab/JLSwift/actions/workflows/ci.yml)
+[![Swift 6.2+](https://img.shields.io/badge/Swift-6.2+-orange.svg)](https://swift.org)
+[![Platforms](https://img.shields.io/badge/Platforms-macOS%20%7C%20iOS%20%7C%20Linux-blue.svg)](https://swift.org)
+[![License](https://img.shields.io/badge/License-See%20Repository-lightgrey.svg)](LICENSE)
 
 ## Overview
 
@@ -19,7 +22,6 @@ JLSwift is designed for developers who need reliable, well-tested utility functi
 |--------|-------------|
 | **JLSwift** | Core utilities including validation, string extensions, and math functions |
 | **JPEGLS** | Native Swift JPEG-LS compression for medical imaging (DICOM compatible) |
-| **jpegls** | Command-line tool for JPEG-LS encoding and decoding |
 
 ## Requirements
 
@@ -186,7 +188,6 @@ JPEG-LS is a lossless/near-lossless compression standard specifically designed f
 | **Hardware Acceleration** | Support for Apple Accelerate framework and Metal GPU (planned) |
 | **DICOM Compatible** | Full support for DICOM transfer syntaxes |
 | **Near-Lossless Support** | Configurable error tolerance encoding (in development) |
-| **Command-Line Tool** | `jpegls` CLI for encoding, decoding, and validation |
 
 ### Architecture Overview
 
@@ -241,7 +242,6 @@ swift build -c release
 # Build a specific target
 swift build --target JLSwift
 swift build --target JPEGLS
-swift build --target jpegls
 ```
 
 ### Test Commands
@@ -276,12 +276,11 @@ JLSwift/
 │   │   ├── JLSValidator.swift # Validation utilities
 │   │   ├── JLSMathUtils.swift # Mathematical functions
 │   │   └── JLSStringExtensions.swift # String extensions
-│   ├── JPEGLS/                # JPEG-LS compression library
-│   │   ├── Core/              # Core types and protocols
-│   │   ├── Encoder/           # Encoding implementation
-│   │   ├── Platform/          # Platform-specific code
-│   │   └── JPEGLS.swift       # Module exports
-│   └── jpegls/                # Command-line tool
+│   └── JPEGLS/                # JPEG-LS compression library
+│       ├── Core/              # Core types and protocols
+│       ├── Encoder/           # Encoding implementation
+│       ├── Platform/          # Platform-specific code
+│       └── JPEGLS.swift       # Module exports
 ├── Tests/
 │   ├── JLSwiftTests/          # JLSwift unit tests
 │   └── JPEGLSTests/           # JPEGLS unit tests
