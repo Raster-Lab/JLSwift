@@ -53,12 +53,8 @@ public final class JPEGLSBufferPool: @unchecked Sendable {
                 let pooledBuffer = buffers.remove(at: index)
                 pools[type] = buffers
                 
-                // Zero out the buffer and return it (may be larger than requested)
-                var buffer = pooledBuffer.data
-                for i in 0..<buffer.count {
-                    buffer[i] = 0
-                }
-                return buffer
+                // Zero out the buffer efficiently and return it (may be larger than requested)
+                return Array(repeating: 0, count: pooledBuffer.capacity)
             }
         }
         
