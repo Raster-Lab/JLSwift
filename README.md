@@ -64,10 +64,10 @@ JPEG-LS is a lossless/near-lossless compression standard specifically designed f
 | 4.1 | Bitstream Parsing | ✅ Complete | 100.00% |
 | 4.2 | Regular Mode Decoding | ✅ Complete | 96.90% |
 | 4.3 | Run Mode Decoding | ✅ Complete | 100.00% |
-| 4.4 | Multi-Component Decoding | 📋 Planned | - |
+| 4.4 | Multi-Component Decoding | ✅ Complete | 92.10% |
 | 5.x | Apple Silicon Optimization | 📋 Planned | - |
 
-**Overall Project Coverage: 96.12%**
+**Overall Project Coverage: 95.80%**
 
 ### Key Features
 
@@ -94,6 +94,11 @@ JPEGLS/
 │   ├── JPEGLSContextModel   # Context state management (365 contexts)
 │   ├── JPEGLSBitstreamReader/Writer # Bitstream I/O utilities
 │   └── JPEGLSError          # Comprehensive error handling
+├── Decoder/                 # Decoding implementation
+│   ├── JPEGLSParser         # JPEG-LS file format parser
+│   ├── RegularModeDecoder   # Gradient-based decoding (MED prediction)
+│   ├── RunModeDecoder       # Run-length decoding for flat regions
+│   └── MultiComponentDecoder # Multi-component deinterleaving & color transform
 ├── Encoder/                 # Encoding implementation
 │   ├── RegularModeEncoder   # Gradient-based encoding (MED prediction)
 │   ├── RunModeEncoder       # Run-length encoding for flat regions
@@ -168,6 +173,7 @@ JLSwift/
 ├── Sources/
 │   ├── JPEGLS/                # JPEG-LS compression library
 │   │   ├── Core/              # Core types and protocols
+│   │   ├── Decoder/           # Decoding implementation
 │   │   ├── Encoder/           # Encoding implementation
 │   │   ├── Platform/          # Platform-specific code
 │   │   └── JPEGLS.swift       # Module exports
