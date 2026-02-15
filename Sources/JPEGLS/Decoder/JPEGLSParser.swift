@@ -2,6 +2,13 @@
 ///
 /// Parses JPEG-LS encoded data streams, extracting frame headers, scan headers,
 /// preset parameters, and locating compressed image data.
+///
+/// ## CharLS Compatibility
+///
+/// This parser includes support for CharLS-specific extension markers in the range 0xFF60-0xFF7F.
+/// These markers are used by the CharLS library as escape sequences within scan data (similar to
+/// the standard 0xFF00 byte stuffing). The parser treats these sequences transparently, allowing
+/// it to correctly parse CharLS-encoded files while maintaining compatibility with standard JPEG-LS.
 
 import Foundation
 
@@ -65,6 +72,9 @@ public final class JPEGLSParser {
     ///
     /// Validates the structure and extracts all metadata.
     ///
+    /// The parser handles both standard JPEG-LS files and CharLS-encoded files with extension markers.
+    /// Unknown markers (including CharLS-specific markers 0xFF60-0xFF7F) are gracefully skipped.
+    ///
     /// - Returns: Parse result containing frame header, scan headers, and parameters
     /// - Throws: `JPEGLSError` if the bitstream is invalid or corrupted
     public func parse() throws -> JPEGLSParseResult {
@@ -79,7 +89,40 @@ public final class JPEGLSParser {
         
         // Parse marker segments until EOI
         while !reader.isAtEnd {
-            let marker = try reader.readMarker()
+            // Read marker bytes manually to handle unknown markers
+            let byte1 = try reader.readByte()
+            guard byte1 == JPEGLSMarker.markerPrefix else {
+                throw JPEGLSError.invalidBitstreamStructure(
+                    reason: "Expected marker prefix (0xFF), got 0x\(String(byte1, radix: 16))"
+                )
+            }
+            
+            let byte2 = try reader.readByte()
+            
+            // Try to parse as known marker
+            guard let marker = JPEGLSMarker(rawValue: byte2) else {
+                // Unknown marker - skip it gracefully
+                // Some markers have no length field (standalone markers)
+                if (byte2 >= 0xD0 && byte2 <= 0xD7) || byte2 == 0xD8 || byte2 == 0xD9 {
+                    // RST markers (0xD0-0xD7), SOI (0xD8), and EOI (0xD9) have no length field
+                    continue
+                } else if byte2 >= 0x60 && byte2 <= 0x7F {
+                    // CharLS uses markers in the 0xFF60-0xFF7F range as standalone markers (no length field)
+                    // These appear to be used for internal purposes and can be safely skipped
+                    continue
+                } else {
+                    // Read length and skip the marker segment
+                    let length = try reader.readUInt16()
+                    guard length >= 2 else {
+                        throw JPEGLSError.invalidBitstreamStructure(
+                            reason: "Invalid marker segment length for unknown marker 0xFF\(String(byte2, radix: 16)): \(length)"
+                        )
+                    }
+                    let skipLength = Int(length) - 2
+                    _ = try reader.readBytes(skipLength)
+                    continue
+                }
+            }
             
             switch marker {
             case .endOfImage:
@@ -122,14 +165,22 @@ public final class JPEGLSParser {
                 scanHeaders.append(scanHeader)
                 
                 // Skip scan data until we hit a marker
-                // The scan data ends when we encounter a marker (0xFF followed by non-0x00)
+                // Scan data ends when we encounter a marker (0xFF followed by non-stuffing byte)
+                // Byte stuffing rules:
+                //   - FF 00: Standard JPEG-LS byte stuffing (0x00 is removed during decoding)
+                //   - FF 60-FF 7F: CharLS escape sequences (treated like byte stuffing for compatibility)
+                //   - FF XX (other): Real marker - terminates scan data
                 while !reader.isAtEnd {
                     let byte = try reader.readByte()
                     if byte == JPEGLSMarker.markerPrefix {
-                        // Check if it's a marker or stuffed byte
+                        // Check next byte to determine if it's stuffing or a real marker
                         if let nextByte = reader.peekByte() {
-                            if nextByte != 0x00 {
-                                // This is a marker - back up so we can read it in the next iteration
+                            if nextByte == 0x00 || (nextByte >= 0x60 && nextByte <= 0x7F) {
+                                // Byte stuffing or CharLS escape - skip and continue reading scan data
+                                _ = try reader.readByte()
+                                continue
+                            } else {
+                                // Real marker - back up to re-read the FF byte in the outer loop
                                 try reader.seek(to: reader.currentPosition - 1)
                                 break
                             }
