@@ -1270,7 +1270,10 @@ final class WorkerPool {
     private func performEncode(_ request: EncodeRequest) throws -> EncodeResult {
         // Use buffer pooling for better memory management
         let bufferPool = JPEGLSBufferPool.shared
-        let contextBuffer = bufferPool.acquire(type: .contextArrays, size: 365)
+        let contextBuffer = bufferPool.acquire(
+            type: .contextArrays,
+            size: 365 * MemoryLayout<JPEGLSContextModel.ContextState>.stride
+        )
         defer { bufferPool.release(contextBuffer, type: .contextArrays) }
         
         // Perform encoding
@@ -1630,6 +1633,13 @@ Add health checks and metrics:
 ```swift
 import Vapor
 
+// Module-level variables for metrics tracking
+private var startTime = Date()
+private var requestCount = 0
+private var successCount = 0
+private var errorCount = 0
+private var avgProcessingTime: Double = 0
+
 func configureMonitoring(_ app: Application) {
     
     // Health check endpoint
@@ -1651,12 +1661,6 @@ func configureMonitoring(_ app: Application) {
         ]
     }
 }
-
-private var startTime = Date()
-private var requestCount = 0
-private var successCount = 0
-private var errorCount = 0
-private var avgProcessingTime: Double = 0
 ```
 
 ## Conclusion
