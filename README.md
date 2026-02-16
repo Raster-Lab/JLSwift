@@ -578,6 +578,8 @@ JLSwift/
 | [APPKIT_EXAMPLES.md](APPKIT_EXAMPLES.md) | AppKit integration guide for macOS applications |
 | [PERFORMANCE_TUNING.md](PERFORMANCE_TUNING.md) | Performance optimization and benchmarking guide |
 | [TROUBLESHOOTING.md](TROUBLESHOOTING.md) | Common issues and solutions |
+| [VERSIONING.md](VERSIONING.md) | Semantic versioning strategy and release guidelines |
+| [CHANGELOG.md](CHANGELOG.md) | Complete history of changes and releases |
 | [MILESTONES.md](MILESTONES.md) | Project milestones and development roadmap |
 | [X86_64_REMOVAL_GUIDE.md](X86_64_REMOVAL_GUIDE.md) | Step-by-step guide for removing x86-64 support |
 | [Copilot Instructions](.github/copilot-instructions.md) | Coding guidelines for contributors |
