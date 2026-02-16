@@ -482,9 +482,47 @@ swift test --filter JPEGLSTests
 # Run CharLS conformance tests
 swift test --filter CharLSConformanceTests
 
+# Run performance benchmarks
+swift test --filter JPEGLSPerformanceBenchmarks
+
 # View coverage report JSON path
 swift test --show-codecov-path
 ```
+
+### Performance Benchmarking
+
+JLSwift includes comprehensive performance benchmarks to measure encoding and decoding speed across various configurations. The benchmark suite includes:
+
+**Test Configurations:**
+- Image sizes: 256x256, 512x512, 1024x1024, 2048x2048, 4096x4096
+- Bit depths: 8-bit, 12-bit, 16-bit
+- Component counts: grayscale (1), RGB (3)
+- Encoding modes: lossless (NEAR=0), near-lossless (NEAR=3, NEAR=10)
+- Interleaving modes: none, line, sample
+- Content types: flat, gradient, checkerboard, medical-like
+
+**Run Benchmarks:**
+```bash
+# Run all performance benchmarks (may take several minutes)
+swift test --filter JPEGLSPerformanceBenchmarks
+
+# Run a specific benchmark
+swift test --filter "benchmarkEncode512x512Grayscale8bit"
+```
+
+**Sample Results (x86_64 Linux, scalar implementation):**
+```
+Encode 512x512 8-bit grayscale (lossless):
+  Image:          512x512, 8-bit, 1 component(s)
+  Iterations:     10
+  Average time:   97.51 ms
+  Min time:       95.80 ms
+  Max time:       104.91 ms
+  Throughput:     2.56 MB/s
+  Throughput:     2.69 Mpixels/s
+```
+
+Performance will vary significantly based on hardware (Apple Silicon with ARM NEON vs x86_64) and image content characteristics.
 
 ### CharLS Conformance Testing
 
