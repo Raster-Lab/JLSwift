@@ -452,8 +452,8 @@ do {
 
 - **[README.md](README.md)**: Detailed feature documentation
 - **[MILESTONES.md](MILESTONES.md)**: Development roadmap and progress
-- **[PERFORMANCE_TUNING.md](PERFORMANCE_TUNING.md)**: Performance optimization guide *(coming soon)*
-- **[TROUBLESHOOTING.md](TROUBLESHOOTING.md)**: Common issues and solutions *(coming soon)*
+- **[PERFORMANCE_TUNING.md](PERFORMANCE_TUNING.md)**: Performance optimization guide
+- **[TROUBLESHOOTING.md](TROUBLESHOOTING.md)**: Common issues and solutions
 
 ### API Documentation
 
