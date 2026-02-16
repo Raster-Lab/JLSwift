@@ -572,18 +572,27 @@ JLSwift/
 | Document | Description |
 |----------|-------------|
 | [README.md](README.md) | Project overview and usage guide (this file) |
+| [GETTING_STARTED.md](GETTING_STARTED.md) | Quick start guide with examples and common patterns |
+| [PERFORMANCE_TUNING.md](PERFORMANCE_TUNING.md) | Performance optimization and benchmarking guide |
+| [TROUBLESHOOTING.md](TROUBLESHOOTING.md) | Common issues and solutions |
 | [MILESTONES.md](MILESTONES.md) | Project milestones and development roadmap |
 | [X86_64_REMOVAL_GUIDE.md](X86_64_REMOVAL_GUIDE.md) | Step-by-step guide for removing x86-64 support |
 | [Copilot Instructions](.github/copilot-instructions.md) | Coding guidelines for contributors |
 
 ### API Documentation
 
-All public types and methods include documentation comments following Swift API Design Guidelines. Use Xcode's Quick Help or generate documentation using DocC:
+All public types and methods include comprehensive documentation comments following Swift API Design Guidelines. Use Xcode's Quick Help or generate documentation using DocC:
 
 ```bash
 # Generate documentation (requires Xcode)
 swift package generate-documentation
 ```
+
+### User Guides
+
+- **[Getting Started](GETTING_STARTED.md)**: Installation, quick start, and basic usage examples
+- **[Performance Tuning](PERFORMANCE_TUNING.md)**: Hardware acceleration, memory optimization, and profiling
+- **[Troubleshooting](TROUBLESHOOTING.md)**: Solutions to common problems and debugging tips
 
 ## Contributing
 

@@ -127,6 +127,7 @@ public struct JPEGLSPresetParameters: Sendable, Equatable {
 }
 
 extension JPEGLSPresetParameters: CustomStringConvertible {
+    /// Human-readable summary of preset parameters
     public var description: String {
         return "JPEGLSPresetParameters(MAXVAL=\(maxValue), T1=\(threshold1), T2=\(threshold2), T3=\(threshold3), RESET=\(reset))"
     }

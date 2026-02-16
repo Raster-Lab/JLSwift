@@ -355,6 +355,7 @@ public struct JPEGLSContextModel: Sendable {
 // MARK: - CustomStringConvertible
 
 extension JPEGLSContextModel: CustomStringConvertible {
+    /// Human-readable description of the context model state
     public var description: String {
         return "JPEGLSContextModel(contexts: \(Self.regularContextCount), near: \(near), reset: \(parameters.reset))"
     }

@@ -9,8 +9,10 @@ public struct JPEGLSCacheFriendlyBuffer: Sendable {
     /// Component data stored in contiguous memory (row-major order)
     private let componentData: [UInt8: [Int]]
     
-    /// Image dimensions
+    /// Image width in pixels
     public let width: Int
+    
+    /// Image height in pixels
     public let height: Int
     
     /// Number of components
@@ -56,6 +58,9 @@ public struct JPEGLSCacheFriendlyBuffer: Sendable {
     }
     
     /// Gets a pixel value at the specified position
+    ///
+    /// Uses inline hint for optimal performance in tight encoding/decoding loops.
+    ///
     /// - Parameters:
     ///   - componentId: Component identifier
     ///   - row: Row index
@@ -91,6 +96,9 @@ public struct JPEGLSCacheFriendlyBuffer: Sendable {
     }
     
     /// Gets a contiguous row of pixels for cache-efficient processing
+    ///
+    /// Optimized for sequential access patterns with better cache locality.
+    ///
     /// - Parameters:
     ///   - componentId: Component identifier
     ///   - row: Row index
@@ -106,6 +114,9 @@ public struct JPEGLSCacheFriendlyBuffer: Sendable {
     }
     
     /// Gets multiple contiguous rows for cache-efficient processing
+    ///
+    /// Returns a flattened array for vectorized batch operations.
+    ///
     /// - Parameters:
     ///   - componentId: Component identifier
     ///   - rowStart: Starting row (inclusive)
@@ -122,6 +133,9 @@ public struct JPEGLSCacheFriendlyBuffer: Sendable {
     }
     
     /// Gets neighbor pixels in cache-friendly manner
+    ///
+    /// Retrieves the four neighbors used in JPEG-LS prediction with minimal cache misses.
+    ///
     /// - Parameters:
     ///   - componentId: Component identifier
     ///   - row: Row index

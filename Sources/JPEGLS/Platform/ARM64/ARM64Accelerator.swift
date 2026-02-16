@@ -25,6 +25,7 @@ public struct ARM64Accelerator: PlatformAccelerator {
         return true
     }
     
+    /// Initialize an ARM64 NEON accelerator
     public init() {}
     
     // MARK: - NEON-Optimized Gradient Computation
