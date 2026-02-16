@@ -17,10 +17,6 @@ let package = Package(
             name: "jpegls",
             targets: ["jpegls"]
         ),
-        .executable(
-            name: "jpegls-bench",
-            targets: ["JPEGLSBenchmarks"]
-        ),
     ],
     dependencies: [
         .package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.5.0"),
@@ -35,11 +31,6 @@ let package = Package(
                 "JPEGLS",
                 .product(name: "ArgumentParser", package: "swift-argument-parser"),
             ]
-        ),
-        .executableTarget(
-            name: "JPEGLSBenchmarks",
-            dependencies: ["JPEGLS"],
-            path: "Benchmarks/JPEGLSBenchmarks"
         ),
         .testTarget(
             name: "JPEGLSTests",
