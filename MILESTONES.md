@@ -363,6 +363,7 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 - [x] Test with malformed input handling
 - [x] Test boundary conditions (MAXVAL limits, extreme dimensions)
 - [x] Test memory pressure scenarios
+- [ ] Implement fuzz testing for decoder robustness (deferred - requires specialized infrastructure)
 - [x] Achieve >95% overall test coverage (97.18%)
 
 **Implementation Details:**
