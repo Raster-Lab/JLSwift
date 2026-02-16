@@ -415,9 +415,9 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 - Updated README.md with links to new documentation guides
 - All 645 tests passing, build successful with no errors
 
-#### Phase 9.2: Integration Guides ✅
-- [x] Create standalone usage examples
+#### Phase 9.2: Integration Guides
 - [ ] Create DICOMkit integration guide
+- [x] Create standalone usage examples
 - [ ] Create SwiftUI/AppKit image loading examples
 - [ ] Create server-side Swift usage examples
 

@@ -231,7 +231,8 @@ func decodeJPEGLSFile(from path: String) throws {
         print("  Interleave mode: \(scanHeader.interleaveMode)")
     }
     
-    // TODO: Full decoding requires bitstream reader integration
+    // TODO: Full decoding requires bitstream reader integration (Phase 7.1 - encode/decode commands)
+    // See MILESTONES.md Phase 7.1 for status of bitstream I/O integration
     // For now, we can validate the file structure
 }
 
@@ -253,7 +254,7 @@ func processMedicalImage() throws {
     let width = 2048
     let height = 2048
     let bitsPerSample = 12
-    let maxValue = (1 << bitsPerSample) - 1  // 4095 for 12-bit
+    let maxValue = (1 << bitsPerSample) - 1  // Example: 4095 when bitsPerSample is 12
     
     // Load medical image data (example: CT scan)
     let pixels = loadMedicalImageData(width: width, height: height)
@@ -295,17 +296,27 @@ func processMedicalImage() throws {
 
 func loadMedicalImageData(width: Int, height: Int) -> [[Int]] {
     // Simulate loading a medical image with tissue and bone
+    // NOTE: This is simplified example code. Production code should use more efficient
+    // algorithms or pre-computed lookup tables for large images.
     var pixels: [[Int]] = []
+    let centerX = width / 2
+    let centerY = height / 2
+    
     for y in 0..<height {
         var row: [Int] = []
         for x in 0..<width {
             // Simulate Hounsfield units mapped to 12-bit range
             // Air: 0, Soft tissue: 2048, Bone: 3500
-            let distance = sqrt(pow(Double(x - width/2), 2) + pow(Double(y - height/2), 2))
+            let dx = x - centerX
+            let dy = y - centerY
+            let distanceSquared = dx * dx + dy * dy
+            let threshold1 = (width / 4) * (width / 4)
+            let threshold2 = (width / 3) * (width / 3)
+            
             let value: Int
-            if distance < Double(width) / 4 {
+            if distanceSquared < threshold1 {
                 value = 3500  // Bone
-            } else if distance < Double(width) / 3 {
+            } else if distanceSquared < threshold2 {
                 value = 2048  // Soft tissue
             } else {
                 value = 100   // Air
