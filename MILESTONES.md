@@ -417,9 +417,21 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 
 #### Phase 9.2: Integration Guides
 - [ ] Create DICOMkit integration guide
-- [ ] Create standalone usage examples
+- [x] Create standalone usage examples
 - [ ] Create SwiftUI/AppKit image loading examples
 - [ ] Create server-side Swift usage examples
+
+**Implementation Details:**
+- Created comprehensive `USAGE_EXAMPLES.md` with real-world standalone usage examples
+- Includes 25+ complete working examples organized into categories:
+  - Basic examples: grayscale/RGB encoding, near-lossless compression, decoding
+  - Advanced examples: medical imaging workflow, batch processing, large image tiling, custom presets, interleaving modes
+  - Performance optimization: buffer pooling, cache-friendly buffers, platform acceleration, memory-efficient streaming
+  - Error handling: robust file processing, validation and error recovery
+  - CLI examples: file analysis, batch verification, scripting and automation
+- All examples are self-contained and can be run independently
+- Updated README.md and GETTING_STARTED.md to link to new documentation
+- Examples demonstrate best practices for using JLSwift in production scenarios
 
 #### Phase 9.3: Release Preparation
 - [ ] Create semantic versioning strategy

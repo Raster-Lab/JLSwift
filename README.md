@@ -573,6 +573,7 @@ JLSwift/
 |----------|-------------|
 | [README.md](README.md) | Project overview and usage guide (this file) |
 | [GETTING_STARTED.md](GETTING_STARTED.md) | Quick start guide with examples and common patterns |
+| [USAGE_EXAMPLES.md](USAGE_EXAMPLES.md) | Comprehensive real-world usage examples |
 | [PERFORMANCE_TUNING.md](PERFORMANCE_TUNING.md) | Performance optimization and benchmarking guide |
 | [TROUBLESHOOTING.md](TROUBLESHOOTING.md) | Common issues and solutions |
 | [MILESTONES.md](MILESTONES.md) | Project milestones and development roadmap |

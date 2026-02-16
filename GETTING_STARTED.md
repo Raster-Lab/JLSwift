@@ -451,6 +451,7 @@ do {
 ### Learn More
 
 - **[README.md](README.md)**: Detailed feature documentation
+- **[USAGE_EXAMPLES.md](USAGE_EXAMPLES.md)**: Comprehensive real-world usage examples
 - **[MILESTONES.md](MILESTONES.md)**: Development roadmap and progress
 - **[PERFORMANCE_TUNING.md](PERFORMANCE_TUNING.md)**: Performance optimization guide
 - **[TROUBLESHOOTING.md](TROUBLESHOOTING.md)**: Common issues and solutions
