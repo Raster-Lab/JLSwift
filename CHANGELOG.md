@@ -305,4 +305,5 @@ See [RELEASE_NOTES_TEMPLATE.md](RELEASE_NOTES_TEMPLATE.md) for the release notes
 - **0.8.0** - Validation & conformance (CharLS, benchmarks, edge cases)
 - **1.0.0** - Planned stable release
 
-[Unreleased]: https://github.com/Raster-Lab/JLSwift/compare/HEAD...HEAD
+<!-- Note: Comparison links will be added after the first release is tagged -->
+[Unreleased]: https://github.com/Raster-Lab/JLSwift/commits/main
