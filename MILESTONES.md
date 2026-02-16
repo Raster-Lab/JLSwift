@@ -417,12 +417,22 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 - All 645 tests passing, build successful with no errors
 
 #### Phase 9.2: Integration Guides
-- [ ] Create DICOMkit integration guide
+- [x] Create DICOMkit integration guide
 - [x] Create standalone usage examples
 - [x] Create SwiftUI/AppKit image loading examples
 - [x] Create server-side Swift usage examples
 
 **Implementation Details:**
+- Created comprehensive `DICOMKIT_INTEGRATION.md` with DICOMkit integration patterns
+  - DICOM transfer syntax mapping (1.2.840.10008.1.2.4.80 lossless, 1.2.840.10008.1.2.4.81 near-lossless)
+  - Basic integration: encoding/decoding DICOM pixel data, transfer syntax selection
+  - Advanced integration: multi-frame images, color images, near-lossless, custom presets
+  - Modality-specific examples: CT, MR, CR/DX, US (with signed pixel handling)
+  - DICOM codec provider pattern for DICOMkit registration
+  - Transcoding pipeline for transfer syntax conversion
+  - Performance: buffer pooling for series, tile-based processing for large images
+  - Error handling with DICOM-specific context
+  - Testing examples for DICOM JPEG-LS integration validation
 - Created comprehensive `USAGE_EXAMPLES.md` with real-world standalone usage examples
 - Includes 25+ complete working examples organized into categories:
   - Basic examples: grayscale/RGB encoding, near-lossless compression, decoding
@@ -511,7 +521,7 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 | **6** | x86-64 | Removable x86-64 support with clear boundaries ✅ |
 | **7** | CLI | Core commands (info ✅, verify ✅, encode/decode ⏳), utilities ✅, help & docs ✅ |
 | **8** | Validation | CharLS conformance ✅, benchmarks ✅, DICOM testing 📋, edge cases ✅ |
-| **9** | Release | API docs ✅, integration guides (DICOMkit 📋), versioning ✅, changelog ✅, release template ✅ |
+| **9** | Release | API docs ✅, integration guides ✅, versioning ✅, changelog ✅, release template ✅ |
 
 ### Architecture Principles
 
