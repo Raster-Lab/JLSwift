@@ -420,7 +420,7 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 - [ ] Create DICOMkit integration guide
 - [x] Create standalone usage examples
 - [x] Create SwiftUI/AppKit image loading examples
-- [ ] Create server-side Swift usage examples
+- [x] Create server-side Swift usage examples
 
 **Implementation Details:**
 - Created comprehensive `USAGE_EXAMPLES.md` with real-world standalone usage examples
@@ -452,6 +452,14 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
   - Measurement and annotation tools
   - Quick Look preview support
   - Performance optimization: background loading, thumbnail generation, memory management
+- Created comprehensive `SERVER_SIDE_EXAMPLES.md` with server-side Swift integration patterns
+  - Vapor framework examples: REST API, medical imaging upload service, streaming encoder, batch processing
+  - Hummingbird framework examples: lightweight API service, file upload handlers
+  - Swift NIO examples: custom protocol handlers, non-blocking file processing
+  - Deployment guides: Docker containers, Kubernetes manifests, systemd services
+  - Performance optimization: connection pooling, worker thread management, memory-efficient streaming
+  - Middleware integration: authentication, rate limiting, response caching
+  - Complete production-ready examples with error handling, logging, and monitoring
 - Updated README.md documentation table with links to new guides
 
 #### Phase 9.3: Release Preparation ✅

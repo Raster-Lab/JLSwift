@@ -578,6 +578,7 @@ JLSwift/
 | [USAGE_EXAMPLES.md](USAGE_EXAMPLES.md) | Comprehensive real-world usage examples |
 | [SWIFTUI_EXAMPLES.md](SWIFTUI_EXAMPLES.md) | SwiftUI integration guide with image loading examples |
 | [APPKIT_EXAMPLES.md](APPKIT_EXAMPLES.md) | AppKit integration guide for macOS applications |
+| [SERVER_SIDE_EXAMPLES.md](SERVER_SIDE_EXAMPLES.md) | Server-side Swift integration guide (Vapor, Hummingbird, NIO) |
 | [PERFORMANCE_TUNING.md](PERFORMANCE_TUNING.md) | Performance optimization and benchmarking guide |
 | [TROUBLESHOOTING.md](TROUBLESHOOTING.md) | Common issues and solutions |
 | [VERSIONING.md](VERSIONING.md) | Semantic versioning strategy and release guidelines |
