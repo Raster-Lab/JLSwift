@@ -50,7 +50,8 @@ jobs:
           covered = 0
           total = 0
           for f in files:
-              if '/Sources/' in f['filename']:
+              # Only count project source files, not dependencies
+              if '/Sources/JPEGLS/' in f['filename'] or '/Sources/jpegls/' in f['filename']:
                   covered += f['summary']['lines']['covered']
                   total += f['summary']['lines']['count']
           pct = (covered / total * 100) if total else 0
