@@ -86,30 +86,8 @@ struct JPEGLSPerformanceBenchmarks {
                 bitsPerSample: bitsPerSample
             )
         } else {
-            // For other component counts, use the general initializer
-            let frameHeader: JPEGLSFrameHeader
-            if componentCount == 1 {
-                frameHeader = try JPEGLSFrameHeader.grayscale(
-                    bitsPerSample: bitsPerSample,
-                    width: width,
-                    height: height
-                )
-            } else {
-                frameHeader = try JPEGLSFrameHeader.rgb(
-                    bitsPerSample: bitsPerSample,
-                    width: width,
-                    height: height
-                )
-            }
-            
-            let components = componentPixels.enumerated().map { (index, pixels) in
-                MultiComponentImageData.ComponentData(id: UInt8(index + 1), pixels: pixels)
-            }
-            
-            return try MultiComponentImageData(
-                components: components,
-                frameHeader: frameHeader
-            )
+            // Unsupported component count - should not reach here based on current tests
+            fatalError("Unsupported component count: \(componentCount). Only 1 (grayscale) and 3 (RGB) are currently supported.")
         }
     }
     
@@ -637,10 +615,11 @@ struct JPEGLSPerformanceBenchmarks {
                 scanHeader: scanHeader
             )
             
-            let start = Date()
+            let start = DispatchTime.now()
             _ = try encoder.encodeScan(buffer: buffer)
-            let elapsed = Date().timeIntervalSince(start)
-            times.append(elapsed * 1000) // Convert to milliseconds
+            let end = DispatchTime.now()
+            let elapsed = Double(end.uptimeNanoseconds - start.uptimeNanoseconds) / 1_000_000
+            times.append(elapsed) // Already in milliseconds
         }
         
         return calculateBenchmarkResult(
@@ -679,7 +658,7 @@ struct JPEGLSPerformanceBenchmarks {
         
         // Benchmark iterations
         for _ in 0..<iterations {
-            let start = Date()
+            let start = DispatchTime.now()
             
             // Encode each component separately
             for componentId in 1...componentCount {
@@ -698,8 +677,9 @@ struct JPEGLSPerformanceBenchmarks {
                 _ = try encoder.encodeScan(buffer: buffer)
             }
             
-            let elapsed = Date().timeIntervalSince(start)
-            times.append(elapsed * 1000) // Convert to milliseconds
+            let end = DispatchTime.now()
+            let elapsed = Double(end.uptimeNanoseconds - start.uptimeNanoseconds) / 1_000_000
+            times.append(elapsed) // Already in milliseconds
         }
         
         return calculateBenchmarkResult(
@@ -755,10 +735,11 @@ struct JPEGLSPerformanceBenchmarks {
                 scanHeader: scanHeader
             )
             
-            let start = Date()
+            let start = DispatchTime.now()
             _ = try decoder.decodeScan(buffer: buffer)
-            let elapsed = Date().timeIntervalSince(start)
-            times.append(elapsed * 1000) // Convert to milliseconds
+            let end = DispatchTime.now()
+            let elapsed = Double(end.uptimeNanoseconds - start.uptimeNanoseconds) / 1_000_000
+            times.append(elapsed) // Already in milliseconds
         }
         
         return calculateBenchmarkResult(
