@@ -29,6 +29,7 @@ public struct X86_64Accelerator: PlatformAccelerator {
         return true
     }
     
+    /// Initialize an x86-64 SSE/AVX accelerator
     public init() {}
     
     // MARK: - SSE/AVX-Optimized Gradient Computation

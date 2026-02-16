@@ -30,6 +30,7 @@ public struct AccelerateFrameworkAccelerator: Sendable {
         return true
     }
     
+    /// Initialize an Accelerate framework accelerator
     public init() {}
     
     // MARK: - Batch Gradient Computation

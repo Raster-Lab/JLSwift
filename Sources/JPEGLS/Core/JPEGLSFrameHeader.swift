@@ -38,6 +38,7 @@ public enum JPEGLSInterleaveMode: UInt8, Sendable, Equatable {
 }
 
 extension JPEGLSInterleaveMode: CustomStringConvertible {
+    /// Human-readable name of the interleave mode
     public var description: String {
         switch self {
         case .none:
@@ -197,6 +198,7 @@ public struct JPEGLSFrameHeader: Sendable, Equatable {
 }
 
 extension JPEGLSFrameHeader: CustomStringConvertible {
+    /// Human-readable summary of frame header parameters
     public var description: String {
         return "JPEGLSFrameHeader(\(width)×\(height), \(bitsPerSample) bps, \(componentCount) components)"
     }

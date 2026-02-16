@@ -163,6 +163,7 @@ public struct JPEGLSScanHeader: Sendable, Equatable {
 }
 
 extension JPEGLSScanHeader: CustomStringConvertible {
+    /// Human-readable summary of scan header parameters
     public var description: String {
         let mode = isLossless ? "lossless" : "near-lossless(NEAR=\(near))"
         return "JPEGLSScanHeader(\(componentCount) components, \(interleaveMode), \(mode))"

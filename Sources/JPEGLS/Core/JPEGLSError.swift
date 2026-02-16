@@ -115,6 +115,7 @@ public enum JPEGLSError: Error, Sendable {
 }
 
 extension JPEGLSError: CustomStringConvertible {
+    /// Human-readable description of the error
     public var description: String {
         switch self {
         case .invalidDimensions(let width, let height):

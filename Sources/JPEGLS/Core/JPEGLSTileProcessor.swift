@@ -66,8 +66,10 @@ public struct TileConfiguration: Sendable {
 
 /// Manages tile-based processing of large images
 public struct JPEGLSTileProcessor: Sendable {
-    /// Image dimensions
+    /// Width of the full image in pixels
     public let imageWidth: Int
+    
+    /// Height of the full image in pixels
     public let imageHeight: Int
     
     /// Tile configuration

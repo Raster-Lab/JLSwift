@@ -68,8 +68,21 @@ public struct ScalarAccelerator: PlatformAccelerator {
     public static let platformName = "Scalar"
     public static let isSupported = true
     
+    /// Initialize a scalar accelerator
     public init() {}
     
+    /// Compute gradients for JPEG-LS context modeling
+    ///
+    /// Calculates the three gradients used in context determination:
+    /// - d1 = b - c (horizontal gradient)
+    /// - d2 = a - c (vertical gradient)  
+    /// - d3 = c - a (diagonal gradient)
+    ///
+    /// - Parameters:
+    ///   - a: Left pixel value
+    ///   - b: Top pixel value
+    ///   - c: Top-left pixel value
+    /// - Returns: Tuple of three gradients (d1, d2, d3)
     public func computeGradients(a: Int, b: Int, c: Int) -> (d1: Int, d2: Int, d3: Int) {
         let d1 = b - c
         let d2 = a - c
@@ -77,6 +90,18 @@ public struct ScalarAccelerator: PlatformAccelerator {
         return (d1, d2, d3)
     }
     
+    /// Compute MED (Median Edge Detector) prediction
+    ///
+    /// Implements the non-linear predictor used in JPEG-LS regular mode:
+    /// - If c >= max(a, b): return min(a, b)
+    /// - If c <= min(a, b): return max(a, b)
+    /// - Otherwise: return a + b - c
+    ///
+    /// - Parameters:
+    ///   - a: Left pixel value
+    ///   - b: Top pixel value
+    ///   - c: Top-left pixel value
+    /// - Returns: Predicted pixel value
     public func medPredictor(a: Int, b: Int, c: Int) -> Int {
         // MED predictor: median of three values
         if c >= max(a, b) {
@@ -88,6 +113,19 @@ public struct ScalarAccelerator: PlatformAccelerator {
         }
     }
     
+    /// Quantize gradients for context index computation
+    ///
+    /// Maps each gradient to a quantized value in range [-4, 4] using
+    /// threshold parameters T1, T2, T3 per JPEG-LS standard.
+    ///
+    /// - Parameters:
+    ///   - d1: First gradient (horizontal)
+    ///   - d2: Second gradient (vertical)
+    ///   - d3: Third gradient (diagonal)
+    ///   - t1: Threshold 1 (smallest)
+    ///   - t2: Threshold 2 (medium)
+    ///   - t3: Threshold 3 (largest)
+    /// - Returns: Tuple of three quantized gradients (q1, q2, q3)
     public func quantizeGradients(d1: Int, d2: Int, d3: Int, t1: Int, t2: Int, t3: Int) -> (q1: Int, q2: Int, q3: Int) {
         func quantize(_ d: Int, t1: Int, t2: Int, t3: Int) -> Int {
             if d <= -t3 {

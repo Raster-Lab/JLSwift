@@ -127,6 +127,7 @@ public enum JPEGLSColorTransformation: UInt8, Sendable, Equatable {
 }
 
 extension JPEGLSColorTransformation: CustomStringConvertible {
+    /// Human-readable name of the color transformation
     public var description: String {
         switch self {
         case .none:
