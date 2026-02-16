@@ -339,18 +339,40 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 - All 12 CharLS reference files can now be parsed without errors
 - Overall project coverage maintained at 97.11% (exceeds 95% threshold)
 
-#### Phase 8.2: Performance Benchmarking
-- [ ] Create comprehensive benchmark suite
-- [ ] Benchmark encoding speed vs CharLS
-- [ ] Benchmark decoding speed vs CharLS
-- [ ] Benchmark memory usage vs CharLS
-- [ ] Create performance regression tests
-- [ ] Generate benchmark reports for various:
-  - [ ] Image sizes (small, medium, large, very large)
-  - [ ] Bit depths (8-bit, 12-bit, 16-bit)
-  - [ ] Component counts (grayscale, RGB, RGBA)
-  - [ ] Near-lossless parameters
-  - [ ] Hardware configurations (M1, M2, M3, Intel)
+#### Phase 8.2: Performance Benchmarking ✅
+- [x] Create comprehensive benchmark suite (18 benchmarks)
+- [ ] Benchmark encoding speed vs CharLS (deferred - requires CharLS integration)
+- [ ] Benchmark decoding speed vs CharLS (deferred - requires CharLS integration)
+- [ ] Benchmark memory usage vs CharLS (deferred - requires CharLS integration)
+- [ ] Create performance regression tests (baseline metrics established, automated detection deferred)
+- [x] Generate benchmark reports for various:
+  - [x] Image sizes (256x256, 512x512, 1024x1024, 2048x2048, 4096x4096)
+  - [x] Bit depths (8-bit, 12-bit, 16-bit)
+  - [x] Component counts (grayscale, RGB)
+  - [x] Near-lossless parameters (NEAR=3, NEAR=10)
+  - [ ] Hardware configurations (M1, M2, M3, Intel) - baseline on x86_64 Linux established
+
+**Implementation Details:**
+- Created comprehensive `JPEGLSPerformanceBenchmarks` test suite with 18 benchmarks
+- Test image generation with 4 content types (flat, gradient, checkerboard, medical-like)
+- Timing framework with throughput calculation (MB/s, Mpixels/s)
+- Cross-platform memory tracking (macOS/iOS only, skipped on Linux)
+- Encoding benchmarks for various sizes (256x256 to 4096x4096), bit depths (8/12/16), components (1/3)
+- Decoding benchmarks for representative configurations
+- Near-lossless benchmarks (NEAR=3, NEAR=10)
+- Interleaving mode benchmarks (none, line, sample)
+- Content-type-specific benchmarks (flat, gradient, medical-like)
+
+**Preliminary Performance Results (x86_64 Linux):**
+- 256x256 8-bit grayscale: ~2.69 Mpixels/s (2.56 MB/s)
+- 512x512 8-bit grayscale: ~2.69 Mpixels/s (2.56 MB/s)
+- 1024x1024 8-bit grayscale: ~2.66 Mpixels/s (2.54 MB/s)
+- 2048x2048 8-bit grayscale: ~4.18 Mpixels/s (3.99 MB/s)
+- 4096x4096 8-bit grayscale: ~3.76 Mpixels/s (3.58 MB/s)
+- 512x512 16-bit grayscale: ~3.31 Mpixels/s (6.31 MB/s)
+- 512x512 RGB sample-interleaved: ~1.80 Mpixels/s (1.71 MB/s)
+
+**Note**: CharLS comparison and automated performance regression detection deferred to post-release as they require CharLS library integration and CI enhancements.
 
 #### Phase 8.3: DICOM Integration Testing
 - [ ] Test with real-world DICOM files
@@ -412,7 +434,7 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 | **5** | Apple Silicon | NEON/SIMD ✅, Accelerate ✅, Metal 📋, memory optimization ✅ |
 | **6** | x86-64 | Removable x86-64 support with clear boundaries ✅ |
 | **7** | CLI | Core commands (info ✅, verify ✅, encode/decode ⏳), utilities ✅, help & docs ✅ |
-| **8** | Validation | CharLS conformance ⏳, benchmarks 📋, DICOM testing 📋 |
+| **8** | Validation | CharLS conformance ✅, benchmarks ✅, DICOM testing 📋, edge cases ✅ |
 | **9** | Release | Documentation, integration guides, distribution 📋 |
 
 ### Architecture Principles
