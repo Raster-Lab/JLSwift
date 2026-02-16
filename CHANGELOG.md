@@ -47,7 +47,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Man page installation instructions in README
 
 ### Changed
-- Overall project test coverage increased to 97.18% (exceeds 95% threshold)
+- Overall project test coverage measured at 95.80% on Linux x86_64 (exceeds 95% threshold)
+- Coverage varies by platform due to conditional compilation of platform-specific optimizations
+- README.md updated with accurate coverage measurements and platform notes
 - README.md updated with links to new documentation guides
 - MILESTONES.md updated to reflect progress on Milestone 8 and 9
 

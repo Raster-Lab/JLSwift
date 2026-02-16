@@ -73,9 +73,11 @@ JPEG-LS is a lossless/near-lossless compression standard specifically designed f
 | 8.1 | CharLS Reference Integration | ⏳ In Progress | 100.00% |
 | 8.4 | Edge Cases & Robustness | ✅ Complete | 100.00% |
 
-**Overall Project Coverage: 97.18%** (exceeds 95% threshold)
+**Overall Project Coverage: 95.80%** (exceeds 95% threshold)
 
 *CLI executable target not included in coverage metrics (Swift Package Manager limitation), but validation logic thoroughly tested with 60 comprehensive tests.
+
+**Note**: Coverage may vary slightly by platform due to conditional compilation of platform-specific optimizations (ARM64, Accelerate framework). The reported coverage is measured on Linux x86_64.
 
 ### Key Features
 

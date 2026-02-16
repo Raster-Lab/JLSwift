@@ -386,15 +386,16 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 - [x] Test boundary conditions (MAXVAL limits, extreme dimensions)
 - [x] Test memory pressure scenarios
 - [ ] Implement fuzz testing for decoder robustness (deferred - requires specialized infrastructure)
-- [x] Achieve >95% overall test coverage (97.18%)
+- [x] Achieve >95% overall test coverage (95.80% on Linux x86_64)
 
 **Implementation Details:**
 - Created comprehensive edge case test suite (`EdgeCasesTests.swift`) with 38 tests
 - Tests cover preset parameters, context model, bitstream reader/writer, frame/scan headers, buffer pool, tile processor, and cache-friendly buffer edge cases
 - Validates handling of boundary values: MAXVAL (2-65535), NEAR (0-255), dimensions (1x1 to 65535x65535)
 - Tests invalid parameter combinations and error handling
-- All 627 tests passing with 97.18% coverage (exceeds 95% threshold)
+- All 645 tests passing with 95.80% coverage on Linux x86_64 (exceeds 95% threshold)
 - **Note**: Fuzz testing for decoder robustness deferred to post-release as it requires specialized infrastructure
+- **Note**: Coverage may vary by platform due to conditional compilation (e.g., ARM64, Accelerate framework code)
 
 ### Milestone 9: Documentation & Release ⏳
 **Target**: Production-ready release  
