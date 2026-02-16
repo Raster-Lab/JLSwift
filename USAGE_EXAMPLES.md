@@ -231,8 +231,8 @@ func decodeJPEGLSFile(from path: String) throws {
         print("  Interleave mode: \(scanHeader.interleaveMode)")
     }
     
-    // TODO: Full decoding requires bitstream reader integration (Phase 7.1 - encode/decode commands)
-    // See MILESTONES.md Phase 7.1 for status of bitstream I/O integration
+    // TODO: Full decoding requires bitstream reader integration
+    // See MILESTONES.md Phase 7.1 (Core CLI Commands) for status
     // For now, we can validate the file structure
 }
 
@@ -254,7 +254,7 @@ func processMedicalImage() throws {
     let width = 2048
     let height = 2048
     let bitsPerSample = 12
-    let maxValue = (1 << bitsPerSample) - 1  // Example: 4095 when bitsPerSample is 12
+    let maxValue = (1 << bitsPerSample) - 1  // Calculated maximum value (e.g., 4095 for 12-bit)
     
     // Load medical image data (example: CT scan)
     let pixels = loadMedicalImageData(width: width, height: height)
