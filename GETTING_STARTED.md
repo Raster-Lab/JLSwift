@@ -492,6 +492,14 @@ swift test --filter JPEGLSPerformanceBenchmarks
 - **Issues**: [GitHub Issues](https://github.com/Raster-Lab/JLSwift/issues)
 - **Contributing**: See [Copilot Instructions](.github/copilot-instructions.md)
 
+### Related Documentation
+
+- **[USAGE_EXAMPLES.md](USAGE_EXAMPLES.md)** - Comprehensive real-world usage examples
+- **[SWIFTUI_EXAMPLES.md](SWIFTUI_EXAMPLES.md)** - SwiftUI integration guide with image loading examples
+- **[APPKIT_EXAMPLES.md](APPKIT_EXAMPLES.md)** - AppKit integration guide for macOS applications
+- **[PERFORMANCE_TUNING.md](PERFORMANCE_TUNING.md)** - Performance optimization and benchmarking
+- **[TROUBLESHOOTING.md](TROUBLESHOOTING.md)** - Common issues and solutions
+
 ## Requirements
 
 - Swift 6.2 or later

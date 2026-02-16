@@ -1325,6 +1325,14 @@ swift test --filter JPEGLSPerformanceBenchmarks
 
 See [Copilot Instructions](.github/copilot-instructions.md) for coding guidelines and contribution requirements.
 
+### Related Documentation
+
+- **[GETTING_STARTED.md](GETTING_STARTED.md)** - Quick start guide with basic examples
+- **[SWIFTUI_EXAMPLES.md](SWIFTUI_EXAMPLES.md)** - SwiftUI integration guide for iOS/macOS apps
+- **[APPKIT_EXAMPLES.md](APPKIT_EXAMPLES.md)** - AppKit integration guide for macOS applications
+- **[PERFORMANCE_TUNING.md](PERFORMANCE_TUNING.md)** - Performance optimization and benchmarking
+- **[TROUBLESHOOTING.md](TROUBLESHOOTING.md)** - Common issues and solutions
+
 ---
 
 For questions or issues, please visit the [GitHub repository](https://github.com/Raster-Lab/JLSwift).

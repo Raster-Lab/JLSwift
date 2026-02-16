@@ -418,7 +418,7 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 #### Phase 9.2: Integration Guides
 - [ ] Create DICOMkit integration guide
 - [x] Create standalone usage examples
-- [ ] Create SwiftUI/AppKit image loading examples
+- [x] Create SwiftUI/AppKit image loading examples
 - [ ] Create server-side Swift usage examples
 
 **Implementation Details:**
@@ -432,6 +432,26 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 - All examples are self-contained and can be run independently
 - Updated README.md and GETTING_STARTED.md to link to new documentation
 - Examples demonstrate best practices for using JLSwift in production scenarios
+- Created comprehensive `SWIFTUI_EXAMPLES.md` with SwiftUI integration patterns for iOS/macOS
+  - Image loading utilities with CGImage conversion
+  - Async image loading with progress indicators
+  - Image gallery and thumbnail views
+  - Medical image viewer with zoom/pan/window-level controls
+  - RGB component viewer for multi-component images
+  - Image inspector with comprehensive metadata display
+  - Performance optimization: caching, background decoding, tile-based loading
+  - Platform-specific considerations for iOS, iPadOS, and macOS
+- Created comprehensive `APPKIT_EXAMPLES.md` with AppKit integration patterns for macOS
+  - NSImage/NSImageView integration
+  - Document-based application architecture (NSDocument subclass)
+  - Custom NSView with direct rendering and mouse interaction
+  - Batch processor with progress tracking
+  - Professional medical image viewer with DICOM-style controls
+  - Window/level adjustment for medical imaging
+  - Measurement and annotation tools
+  - Quick Look preview support
+  - Performance optimization: background loading, thumbnail generation, memory management
+- Updated README.md documentation table with links to new guides
 
 #### Phase 9.3: Release Preparation
 - [ ] Create semantic versioning strategy
