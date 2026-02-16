@@ -396,16 +396,24 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 - All 627 tests passing with 97.18% coverage (exceeds 95% threshold)
 - **Note**: Fuzz testing for decoder robustness deferred to post-release as it requires specialized infrastructure
 
-### Milestone 9: Documentation & Release 📋
+### Milestone 9: Documentation & Release ⏳
 **Target**: Production-ready release  
-**Status**: Planned
+**Status**: In Progress
 
-#### Phase 9.1: API Documentation
-- [ ] Complete DocC documentation for all public APIs
-- [ ] Create getting started guide
-- [ ] Create migration guide for CharLS users
-- [ ] Create performance tuning guide
-- [ ] Create troubleshooting guide
+#### Phase 9.1: API Documentation ✅
+- [x] Complete DocC documentation for all public APIs
+- [x] Create getting started guide
+- [ ] Create migration guide for CharLS users (deferred - requires full decoder integration)
+- [x] Create performance tuning guide
+- [x] Create troubleshooting guide
+
+**Implementation Details:**
+- Added comprehensive documentation comments to all public APIs (properties, methods, and types)
+- Created `GETTING_STARTED.md` with installation, quick start examples, core concepts, and common patterns
+- Created `PERFORMANCE_TUNING.md` covering hardware acceleration, memory optimization, profiling, and best practices
+- Created `TROUBLESHOOTING.md` with solutions for common issues across installation, compilation, runtime, performance, and platform-specific problems
+- Updated README.md with links to new documentation guides
+- All 645 tests passing, build successful with no errors
 
 #### Phase 9.2: Integration Guides
 - [ ] Create DICOMkit integration guide
