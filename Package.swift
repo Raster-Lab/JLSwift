@@ -34,7 +34,10 @@ let package = Package(
         ),
         .testTarget(
             name: "JPEGLSTests",
-            dependencies: ["JPEGLS"],
+            dependencies: [
+                "JPEGLS",
+                .product(name: "ArgumentParser", package: "swift-argument-parser"),
+            ],
             resources: [
                 .copy("TestFixtures")
             ]
