@@ -671,7 +671,6 @@ func encodeUSImage(
         return try encoder.encodeScan(buffer: buffer)
     } else {
         // Color Doppler — requires separate R, G, B channels
-        // Caller must provide interleaved pixel data split into channels
         let frameHeader = try JPEGLSFrameHeader.rgb(
             bitsPerSample: 8,
             width: columns,
@@ -687,8 +686,12 @@ func encodeUSImage(
             pointTransform: 0
         )
 
-        let imageData = try MultiComponentImageData.grayscale(
-            pixels: pixelData,
+        // For color images, split interleaved pixel data into separate channels
+        // or use MultiComponentImageData.rgb() with separate R, G, B arrays
+        let imageData = try MultiComponentImageData.rgb(
+            red: pixelData,
+            green: pixelData,
+            blue: pixelData,
             bitsPerSample: 8
         )
         let buffer = JPEGLSPixelBuffer(imageData: imageData)
@@ -776,8 +779,10 @@ struct JPEGLSCodecProvider {
                 interleaveMode: .line,
                 pointTransform: 0
             )
-            let imageData = try MultiComponentImageData.grayscale(
-                pixels: pixelData,
+            let imageData = try MultiComponentImageData.rgb(
+                red: pixelData,
+                green: pixelData,
+                blue: pixelData,
                 bitsPerSample: bitsStored
             )
             let buffer = JPEGLSPixelBuffer(imageData: imageData)
