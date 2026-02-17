@@ -236,9 +236,9 @@ struct CharLSConformanceTests {
         TestCase(filename: "t8sse0.jls", width: 256, height: 256, bitsPerSample: 8, components: 3, near: 0, description: "8-bit sub-sampled, lossless"),
         TestCase(filename: "t8sse3.jls", width: 256, height: 256, bitsPerSample: 8, components: 3, near: 3, description: "8-bit sub-sampled, near=3"),
         
-        // Non-default parameters
-        TestCase(filename: "t8nde0.jls", width: 256, height: 256, bitsPerSample: 8, components: 3, near: 0, description: "8-bit non-default params, lossless"),
-        TestCase(filename: "t8nde3.jls", width: 256, height: 256, bitsPerSample: 8, components: 3, near: 3, description: "8-bit non-default params, near=3"),
+        // Non-default parameters (note: these are 128x128 grayscale, not full 256x256 color)
+        TestCase(filename: "t8nde0.jls", width: 128, height: 128, bitsPerSample: 8, components: 1, near: 0, description: "8-bit non-default params, lossless"),
+        TestCase(filename: "t8nde3.jls", width: 128, height: 128, bitsPerSample: 8, components: 1, near: 3, description: "8-bit non-default params, near=3"),
     ]
     
     /// Test that all fixture files exist
@@ -373,4 +373,211 @@ struct JPEGLSDecoderConfiguration {
     let near: Int
     let interleaveMode: JPEGLSInterleaveMode
     let colorTransformation: JPEGLSColorTransformation
+}
+
+/// CharLS Bit-Exact Comparison Test Suite
+/// Tests decoder output against CharLS reference pixel data
+@Suite("CharLS Bit-Exact Comparison Tests")
+struct CharLSBitExactComparisonTests {
+    
+    /// Test case with reference image mapping
+    struct ComparisonTestCase {
+        let jlsFile: String
+        let referenceFile: String
+        let width: Int
+        let height: Int
+        let components: Int
+        let maxVal: Int
+        let near: Int
+        let description: String
+        let isSubSampled: Bool
+    }
+    
+    /// Test cases for bit-exact comparison
+    /// Note: sub-sampled files (t8sse0.jls, t8sse3.jls) are deferred as they require
+    /// special handling for different component dimensions
+    static let comparisonTestCases: [ComparisonTestCase] = [
+        // 8-bit color tests (modes 0, 1, 2)
+        ComparisonTestCase(
+            jlsFile: "t8c0e0.jls",
+            referenceFile: "test8.ppm",
+            width: 256, height: 256, components: 3, maxVal: 255, near: 0,
+            description: "8-bit color mode 0, lossless",
+            isSubSampled: false
+        ),
+        ComparisonTestCase(
+            jlsFile: "t8c0e3.jls",
+            referenceFile: "test8.ppm",
+            width: 256, height: 256, components: 3, maxVal: 255, near: 3,
+            description: "8-bit color mode 0, near=3",
+            isSubSampled: false
+        ),
+        ComparisonTestCase(
+            jlsFile: "t8c1e0.jls",
+            referenceFile: "test8.ppm",
+            width: 256, height: 256, components: 3, maxVal: 255, near: 0,
+            description: "8-bit color mode 1, lossless",
+            isSubSampled: false
+        ),
+        ComparisonTestCase(
+            jlsFile: "t8c1e3.jls",
+            referenceFile: "test8.ppm",
+            width: 256, height: 256, components: 3, maxVal: 255, near: 3,
+            description: "8-bit color mode 1, near=3",
+            isSubSampled: false
+        ),
+        ComparisonTestCase(
+            jlsFile: "t8c2e0.jls",
+            referenceFile: "test8.ppm",
+            width: 256, height: 256, components: 3, maxVal: 255, near: 0,
+            description: "8-bit color mode 2, lossless",
+            isSubSampled: false
+        ),
+        ComparisonTestCase(
+            jlsFile: "t8c2e3.jls",
+            referenceFile: "test8.ppm",
+            width: 256, height: 256, components: 3, maxVal: 255, near: 3,
+            description: "8-bit color mode 2, near=3",
+            isSubSampled: false
+        ),
+        
+        // 16-bit grayscale tests
+        ComparisonTestCase(
+            jlsFile: "t16e0.jls",
+            referenceFile: "test16.pgm",
+            width: 256, height: 256, components: 1, maxVal: 4095, near: 0,
+            description: "16-bit (12-bit) grayscale, lossless",
+            isSubSampled: false
+        ),
+        ComparisonTestCase(
+            jlsFile: "t16e3.jls",
+            referenceFile: "test16.pgm",
+            width: 256, height: 256, components: 1, maxVal: 4095, near: 3,
+            description: "16-bit (12-bit) grayscale, near=3",
+            isSubSampled: false
+        ),
+        
+        // Non-default parameters tests
+        // Note: These files are 128x128 grayscale but we don't have matching reference images
+        // They should be compared against a 128x128 grayscale reference, but test8.ppm is 256x256 RGB
+        // Marking as sub-sampled to skip for now until we identify the correct reference
+        ComparisonTestCase(
+            jlsFile: "t8nde0.jls",
+            referenceFile: "test8.ppm",
+            width: 128, height: 128, components: 1, maxVal: 255, near: 0,
+            description: "8-bit non-default params, lossless",
+            isSubSampled: true  // Skip - no matching reference image
+        ),
+        ComparisonTestCase(
+            jlsFile: "t8nde3.jls",
+            referenceFile: "test8.ppm",
+            width: 128, height: 128, components: 1, maxVal: 255, near: 3,
+            description: "8-bit non-default params, near=3",
+            isSubSampled: true  // Skip - no matching reference image
+        ),
+        
+        // Note: Sub-sampled files deferred for now as they require special handling
+        // ComparisonTestCase for t8sse0.jls and t8sse3.jls would go here
+    ]
+    
+    /// Test bit-exact comparison between decoded JPEG-LS and reference image
+    @Test("Bit-exact comparison with CharLS reference", arguments: comparisonTestCases)
+    func testBitExactComparison(testCase: ComparisonTestCase) throws {
+        // Skip sub-sampled tests for now
+        guard !testCase.isSubSampled else {
+            print("Skipping sub-sampled test case: \(testCase.description)")
+            return
+        }
+        
+        // Load and decode JPEG-LS file
+        let jlsData = try TestFixtureLoader.loadFixture(named: testCase.jlsFile)
+        let decoder = JPEGLSDecoder()
+        let decodedImage = try decoder.decode(jlsData)
+        
+        // Load reference image
+        let referencePixels: [UInt16]
+        if testCase.referenceFile.hasSuffix(".ppm") {
+            let (_, _, _, pixels) = try TestFixtureLoader.loadPPM(named: testCase.referenceFile)
+            referencePixels = pixels
+        } else {
+            let (_, _, _, pixels) = try TestFixtureLoader.loadPGM(named: testCase.referenceFile)
+            referencePixels = pixels
+        }
+        
+        // Verify dimensions match
+        #expect(decodedImage.frameHeader.width == testCase.width,
+               "Width mismatch for \(testCase.jlsFile): expected \(testCase.width), got \(decodedImage.frameHeader.width)")
+        #expect(decodedImage.frameHeader.height == testCase.height,
+               "Height mismatch for \(testCase.jlsFile): expected \(testCase.height), got \(decodedImage.frameHeader.height)")
+        #expect(decodedImage.components.count == testCase.components,
+               "Component count mismatch for \(testCase.jlsFile): expected \(testCase.components), got \(decodedImage.components.count)")
+        
+        // Compare pixels component by component
+        for componentIndex in 0..<testCase.components {
+            let decodedComponent = decodedImage.components[componentIndex]
+            
+            // Verify component dimensions
+            #expect(decodedComponent.pixels.count == testCase.height,
+                   "Component \(componentIndex) row count mismatch: expected \(testCase.height), got \(decodedComponent.pixels.count)")
+            
+            // Extract reference pixels for this component
+            let componentReferencePixels: [UInt16]
+            if testCase.components == 1 {
+                // Grayscale: all reference pixels belong to single component
+                componentReferencePixels = referencePixels
+            } else {
+                // Multi-component: extract interleaved component data
+                // Reference data is stored as interleaved (R0G0B0, R1G1B1, ...)
+                componentReferencePixels = stride(from: componentIndex, to: referencePixels.count, by: testCase.components)
+                    .map { referencePixels[$0] }
+            }
+            
+            // Compare pixels row by row
+            var refPixelIndex = 0
+            for row in 0..<testCase.height {
+                #expect(decodedComponent.pixels[row].count == testCase.width,
+                       "Component \(componentIndex) row \(row) width mismatch: expected \(testCase.width), got \(decodedComponent.pixels[row].count)")
+                
+                for col in 0..<testCase.width {
+                    let decoded = decodedComponent.pixels[row][col]
+                    let reference = Int(componentReferencePixels[refPixelIndex])
+                    refPixelIndex += 1
+                    
+                    // For lossless (near=0), expect exact match
+                    // For near-lossless (near>0), expect difference <= near
+                    if testCase.near == 0 {
+                        // Lossless: bit-exact comparison
+                        #expect(decoded == reference,
+                               "Component \(componentIndex) pixel [\(row), \(col)] mismatch in \(testCase.jlsFile): decoded=\(decoded), reference=\(reference)")
+                    } else {
+                        // Near-lossless: difference must be <= near
+                        let diff = abs(decoded - reference)
+                        #expect(diff <= testCase.near,
+                               "Component \(componentIndex) pixel [\(row), \(col)] error exceeds NEAR in \(testCase.jlsFile): decoded=\(decoded), reference=\(reference), diff=\(diff), near=\(testCase.near)")
+                    }
+                }
+            }
+        }
+    }
+    
+    /// Test that we can decode all CharLS reference files without errors
+    @Test("Decode all CharLS reference files")
+    func testDecodeAllReferenceFiles() throws {
+        let decoder = JPEGLSDecoder()
+        
+        // Test files that we should be able to decode
+        let decodeableFiles = Self.comparisonTestCases.filter { !$0.isSubSampled }
+        
+        for testCase in decodeableFiles {
+            let jlsData = try TestFixtureLoader.loadFixture(named: testCase.jlsFile)
+            
+            // Attempt to decode - should not throw
+            let decodedImage = try decoder.decode(jlsData)
+            
+            // Verify basic properties
+            #expect(decodedImage.frameHeader.width > 0, "Invalid width for \(testCase.jlsFile)")
+            #expect(decodedImage.frameHeader.height > 0, "Invalid height for \(testCase.jlsFile)")
+            #expect(!decodedImage.components.isEmpty, "No components decoded from \(testCase.jlsFile)")
+        }
+    }
 }

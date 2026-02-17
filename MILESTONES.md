@@ -357,14 +357,17 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 **Target**: CharLS compatibility and standards compliance  
 **Status**: In Progress
 
-#### Phase 8.1: CharLS Reference Integration ✅
+#### Phase 8.1: CharLS Reference Integration ⏳
 - [x] Set up CharLS test fixtures (downloaded from GitHub conformance directory)
 - [x] Create test image corpus (12 JPEG-LS files + 7 reference images: various sizes, bit depths, component counts)
 - [x] Implement test fixture loading utilities (PGM/PPM parsers, JPEG-LS file loaders)
 - [x] Create automated conformance test suite (5 test groups, 589 total tests)
 - [x] Validate JPEG-LS file structure (SOI/EOI markers)
 - [x] Add support for CharLS extension markers (0xFF60-0xFF7F) to JPEGLSParser
-- [ ] Implement bit-exact comparison with CharLS reference output (requires full decoder integration)
+- [x] **NEW**: Implement bit-exact comparison test infrastructure (10 test cases ready)
+- [x] **NEW**: Extend parser to handle CharLS byte stuffing (`FF XX` where XX is not a valid marker)
+- [x] **NEW**: Fix LSE preset parameters length validation (changed from 11 to 13 bytes)
+- [ ] Complete decoder support for CharLS encoding patterns (in progress)
 - [x] Document CharLS compatibility in parser code comments
 
 **Implementation Details:**
@@ -373,13 +376,18 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 - 7 reference images (PGM/PPM format) for encoder validation
 - TestFixtureLoader utility for loading and parsing reference images
 - CharLSConformanceTests suite validates file structure and markers - all tests pass
-- **CharLS Extension Marker Support**: Parser now handles CharLS-specific extension markers (0xFF60-0xFF7F)
-  - These markers are used as escape sequences within scan data (similar to standard 0xFF00 byte stuffing)
-  - Parser gracefully skips unknown markers in the 0xFF60-0xFF7F range when encountered outside scan data
-  - Within scan data, these markers are treated as escape sequences and the parser continues reading
-  - This allows the parser to correctly handle CharLS-encoded files while maintaining standard JPEG-LS compatibility
-- All 12 CharLS reference files can now be parsed without errors
-- Overall project coverage maintained at 97.11% (exceeds 95% threshold)
+- **CharLS Byte Stuffing Support**: Parser now handles extended byte stuffing rules
+  - Standard JPEG-LS: `FF 00` (byte stuffing)
+  - CharLS escape sequences: `FF 60-7F` (treated like byte stuffing)
+  - CharLS extended: `FF XX` where XX is not a valid marker (used for scan boundary detection in parser)
+  - Bitstream reader handles `FF 00` and `FF 60-7F` stuffing during decoding
+- **Bit-Exact Comparison Infrastructure**: Complete test suite ready for validation
+  - `CharLSBitExactComparisonTests` with 10 test cases
+  - Compares decoded pixels against reference PGM/PPM files
+  - Supports lossless (exact match) and near-lossless (error ≤ NEAR) validation
+  - Tests currently fail with "Premature end of bitstream" - decoder needs CharLS pattern support
+- All 12 CharLS reference files now parse successfully
+- Overall project coverage maintained at >95% (682 total tests, 673 passing, 9 CharLS decoder tests pending)
 
 #### Phase 8.2: Performance Benchmarking ✅
 - [x] Create comprehensive benchmark suite (18 benchmarks)

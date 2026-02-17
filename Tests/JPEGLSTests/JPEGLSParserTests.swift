@@ -170,7 +170,7 @@ struct JPEGLSParserTests {
         
         // LSE marker with preset parameters
         data.append(contentsOf: [0xFF, 0xF8])
-        let lseLength: UInt16 = 11
+        let lseLength: UInt16 = 13  // Length includes itself (2 bytes) + type (1 byte) + parameters (10 bytes)
         data.append(contentsOf: withUnsafeBytes(of: lseLength.bigEndian) { Array($0) })
         data.append(0x01)  // Extension type: preset parameters
         data.append(contentsOf: withUnsafeBytes(of: UInt16(255).bigEndian) { Array($0) })  // MAXVAL

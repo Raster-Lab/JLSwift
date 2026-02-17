@@ -125,7 +125,9 @@ public final class JPEGLSBitstreamReader {
     
     /// Read bits from the bitstream
     ///
-    /// Handles byte stuffing (0xFF 0x00 sequences)
+    /// Handles byte stuffing including CharLS extensions:
+    /// - 0xFF 0x00: Standard JPEG-LS byte stuffing
+    /// - 0xFF 0x60-0x7F: CharLS escape sequences
     ///
     /// - Parameter count: Number of bits to read (1-32)
     /// - Returns: The bits as a UInt32
@@ -139,10 +141,15 @@ public final class JPEGLSBitstreamReader {
         while bitsInBuffer < count && !isAtEnd {
             let byte = try readByte()
             
-            // Handle byte stuffing: 0xFF 0x00 -> 0xFF
+            // Handle byte stuffing (standard and CharLS extensions)
             if byte == 0xFF {
-                if let next = peekByte(), next == 0x00 {
-                    _ = try readByte()  // Skip the 0x00
+                if let next = peekByte() {
+                    // Check if this is stuffing
+                    if next == 0x00 || (next >= 0x60 && next <= 0x7F) {
+                        _ = try readByte()  // Skip the stuffed byte
+                        // Continue with FF in buffer
+                    }
+                    // If next byte is anything else, FF is part of the data and will be added to buffer
                 }
             }
             
