@@ -156,4 +156,76 @@ struct JPEGLSEncoderTests {
         #expect(jpegLSData.count > 0)
         #expect(jpegLSData.starts(with: [0xFF, 0xD8]))
     }
+    
+    @Test("Encode RGB image with sample interleaving")
+    func testEncodeRGBSampleInterleaved() throws {
+        // Small 2x2 RGB image
+        let redPixels: [[Int]] = [
+            [255, 200],
+            [180, 220]
+        ]
+        let greenPixels: [[Int]] = [
+            [100, 150],
+            [120, 140]
+        ]
+        let bluePixels: [[Int]] = [
+            [50, 80],
+            [60, 90]
+        ]
+        
+        let imageData = try MultiComponentImageData.rgb(
+            redPixels: redPixels,
+            greenPixels: greenPixels,
+            bluePixels: bluePixels,
+            bitsPerSample: 8
+        )
+        
+        let encoder = JPEGLSEncoder()
+        let jpegLSData = try encoder.encode(imageData, near: 0, interleaveMode: .sample)
+        
+        #expect(jpegLSData.count > 0)
+        #expect(jpegLSData.starts(with: [0xFF, 0xD8]))
+        #expect(jpegLSData.suffix(2).elementsEqual([0xFF, 0xD9]))
+    }
+    
+    @Test("Encode RGB image with line interleaving")
+    func testEncodeRGBLineInterleaved() throws {
+        // Small 2x2 RGB image
+        let redPixels: [[Int]] = [
+            [100, 110],
+            [105, 115]
+        ]
+        let greenPixels: [[Int]] = [
+            [150, 160],
+            [155, 165]
+        ]
+        let bluePixels: [[Int]] = [
+            [200, 210],
+            [205, 215]
+        ]
+        
+        let imageData = try MultiComponentImageData.rgb(
+            redPixels: redPixels,
+            greenPixels: greenPixels,
+            bluePixels: bluePixels,
+            bitsPerSample: 8
+        )
+        
+        let encoder = JPEGLSEncoder()
+        let jpegLSData = try encoder.encode(imageData, near: 0, interleaveMode: .line)
+        
+        #expect(jpegLSData.count > 0)
+        #expect(jpegLSData.starts(with: [0xFF, 0xD8]))
+    }
+    
+    @Test("Invalid NEAR parameter throws error")
+    func testInvalidNEARParameter() throws {
+        #expect(throws: JPEGLSError.self) {
+            _ = try JPEGLSEncoder.Configuration(near: 256)  // NEAR must be 0-255
+        }
+        
+        #expect(throws: JPEGLSError.self) {
+            _ = try JPEGLSEncoder.Configuration(near: -1)  // NEAR must be non-negative
+        }
+    }
 }
