@@ -69,10 +69,10 @@ struct JPEGLSRegularModeTests {
         // Test with typical neighbor values:
         //   c=100  b=105
         //   a=102  x=?
-        let (d1, d2, d3) = regularMode.computeGradients(a: 102, b: 105, c: 100)
+        let (d1, d2, d3) = regularMode.computeGradients(a: 102, b: 105, c: 100, d: 105)
         
-        #expect(d1 == 3)   // D1 = b - a = 105 - 102
-        #expect(d2 == -5)  // D2 = c - b = 100 - 105
+        #expect(d1 == 0)   // D1 = d - b = 105 - 105
+        #expect(d2 == 5)   // D2 = b - c = 105 - 100
         #expect(d3 == -2)  // D3 = c - a = 100 - 102
     }
     
@@ -82,7 +82,7 @@ struct JPEGLSRegularModeTests {
         let regularMode = try JPEGLSRegularMode(parameters: params, near: 0)
         
         // All neighbors have same value (flat region)
-        let (d1, d2, d3) = regularMode.computeGradients(a: 128, b: 128, c: 128)
+        let (d1, d2, d3) = regularMode.computeGradients(a: 128, b: 128, c: 128, d: 128)
         
         #expect(d1 == 0)
         #expect(d2 == 0)
@@ -97,10 +97,10 @@ struct JPEGLSRegularModeTests {
         // Sharp edge:
         //   c=50   b=50
         //   a=200  x=?
-        let (d1, d2, d3) = regularMode.computeGradients(a: 200, b: 50, c: 50)
+        let (d1, d2, d3) = regularMode.computeGradients(a: 200, b: 50, c: 50, d: 50)
         
-        #expect(d1 == -150)  // D1 = b - a = 50 - 200
-        #expect(d2 == 0)     // D2 = c - b = 50 - 50
+        #expect(d1 == 0)     // D1 = d - b = 50 - 50
+        #expect(d2 == 0)     // D2 = b - c = 50 - 50
         #expect(d3 == -150)  // D3 = c - a = 50 - 200
     }
     
@@ -400,6 +400,7 @@ struct JPEGLSRegularModeTests {
             a: 128,
             b: 128,
             c: 128,
+            d: 128,
             context: context
         )
         
@@ -427,6 +428,7 @@ struct JPEGLSRegularModeTests {
             a: 120,
             b: 122,
             c: 118,
+            d: 122,
             context: context
         )
         
@@ -454,6 +456,7 @@ struct JPEGLSRegularModeTests {
             a: 105,
             b: 100,
             c: 100,
+            d: 100,
             context: context
         )
         
@@ -478,6 +481,7 @@ struct JPEGLSRegularModeTests {
             a: 120,
             b: 122,
             c: 118,
+            d: 122,
             context: context
         )
         
@@ -497,6 +501,7 @@ struct JPEGLSRegularModeTests {
         var a = 100  // Initial left neighbor
         var b = 100  // Initial top neighbor
         var c = 100  // Initial diagonal neighbor
+        var d = 100  // Initial top-right neighbor
         
         for pixel in pixels {
             let result = regularMode.encodePixel(
@@ -504,6 +509,7 @@ struct JPEGLSRegularModeTests {
                 a: a,
                 b: b,
                 c: c,
+                d: d,
                 context: context
             )
             
@@ -518,6 +524,7 @@ struct JPEGLSRegularModeTests {
             c = b
             b = pixel
             a = pixel
+            d = pixel
             
             // Should have valid encoding
             #expect(result.contextIndex >= 0)
@@ -538,6 +545,7 @@ struct JPEGLSRegularModeTests {
             a: 120,
             b: 122,
             c: 118,
+            d: 122,
             context: context
         )
         
@@ -560,6 +568,7 @@ struct JPEGLSRegularModeTests {
             a: 255,
             b: 255,
             c: 255,
+            d: 255,
             context: context
         )
         
@@ -580,6 +589,7 @@ struct JPEGLSRegularModeTests {
             a: 0,
             b: 0,
             c: 0,
+            d: 0,
             context: context
         )
         

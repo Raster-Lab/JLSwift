@@ -93,13 +93,13 @@ public struct JPEGLSContextModel: Sendable {
     /// Initialize all context statistics to their default values.
     ///
     /// Per ITU-T.87 Section 4.3, contexts are initialized with:
-    /// - A[i] = 0
-    /// - B[i] = 0 (will be incremented on first use)
+    /// - A[i] = max(2, floor((RANGE + 2^5) / 2^6))
+    /// - B[i] = 0
     /// - C[i] = 0
     /// - N[i] = 1
     private mutating func initializeContexts() {
         for i in 0..<Self.regularContextCount {
-            contextA[i] = 0
+            contextA[i] = 2  // Per ITU-T.87: max(2, floor((RANGE + 2^5) / 2^6))
             contextB[i] = 0
             contextC[i] = 0
             contextN[i] = 1
@@ -228,32 +228,33 @@ public struct JPEGLSContextModel: Sendable {
             return
         }
         
-        // Update B (occurrence counter)
-        contextB[contextIndex] += 1
-        
-        // Update A (accumulated error)
+        // Update A (accumulated absolute error) per ITU-T.87
         contextA[contextIndex] += abs(predictionError)
         
-        // Update C (bias correction) per ITU-T.87 Section 4.3.3
-        if predictionError * sign > 0 {
-            contextC[contextIndex] += 1
-        } else if predictionError * sign < 0 {
-            contextC[contextIndex] -= 1
-        }
+        // Update B (bias accumulator with signed error) per ITU-T.87
+        contextB[contextIndex] += predictionError
         
-        // Update N and check for reset
+        // Update N (occurrence counter)
         contextN[contextIndex] += 1
         
-        if contextN[contextIndex] == parameters.reset {
-            // Halve all statistics per ITU-T.87 Section 4.3.4
+        // Bias correction per ITU-T.87 Section 4.3.3
+        if contextB[contextIndex] >= contextN[contextIndex] {
+            contextC[contextIndex] += 1
+            contextB[contextIndex] -= contextN[contextIndex]
+        } else if contextB[contextIndex] < -contextN[contextIndex] {
+            contextC[contextIndex] -= 1
+            contextB[contextIndex] += contextN[contextIndex]
+        }
+        
+        // Reset when N reaches RESET value per ITU-T.87 Section 4.3.4
+        if contextN[contextIndex] >= parameters.reset {
             contextA[contextIndex] = contextA[contextIndex] >> 1
             contextB[contextIndex] = contextB[contextIndex] >> 1
-            contextC[contextIndex] = contextC[contextIndex] >> 1
             contextN[contextIndex] = contextN[contextIndex] >> 1
             
-            // Ensure B doesn't become zero
-            if contextB[contextIndex] == 0 {
-                contextB[contextIndex] = 1
+            // Ensure N doesn't become zero
+            if contextN[contextIndex] == 0 {
+                contextN[contextIndex] = 1
             }
         }
     }
@@ -273,20 +274,17 @@ public struct JPEGLSContextModel: Sendable {
         }
         
         let a = contextA[contextIndex]
-        let b = contextB[contextIndex]
+        let n = contextN[contextIndex]  // Use N (occurrence counter), not B
         
-        // Avoid division by zero
-        guard b > 0 else {
+        guard n > 0 else {
             return 0
         }
         
-        // Compute k such that N[k] <= A < N[k+1]
-        // where N[k] = 2^k * B
         var k = 0
-        var n = b
+        var threshold = n
         
-        while n < a && k < 16 {
-            n = n << 1  // n = 2^(k+1) * B
+        while threshold < a && k < 16 {
+            threshold = threshold << 1
             k += 1
         }
         

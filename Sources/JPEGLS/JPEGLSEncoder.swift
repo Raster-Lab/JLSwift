@@ -183,8 +183,8 @@ public struct JPEGLSEncoder: Sendable {
     ) throws {
         writer.writeMarker(.jpegLSExtension)
         
-        // Length: 11 bytes (marker type + parameters)
-        writer.writeUInt16(11)
+        // Length: 13 bytes (marker type + parameters)
+        writer.writeUInt16(13)
         
         // LSE marker type: 1 (preset parameters)
         writer.writeByte(1)
@@ -456,6 +456,7 @@ public struct JPEGLSEncoder: Sendable {
             a: neighbors.left,
             b: neighbors.top,
             c: neighbors.topLeft,
+            d: neighbors.topRight,
             context: context
         )
         
