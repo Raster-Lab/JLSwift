@@ -150,7 +150,7 @@ public struct JPEGLSEncoder: Sendable {
         _ frameHeader: JPEGLSFrameHeader,
         to writer: JPEGLSBitstreamWriter
     ) throws {
-        writer.writeMarker(.startOfFrame55)
+        writer.writeMarker(.startOfFrameJPEGLS)
         
         // Length: 8 + 3 * componentCount
         let length = UInt16(8 + 3 * frameHeader.componentCount)
@@ -169,8 +169,10 @@ public struct JPEGLSEncoder: Sendable {
         // Component specifications
         for component in frameHeader.components {
             writer.writeByte(component.id)
-            writer.writeByte(component.samplingFactor)
-            writer.writeByte(component.quantizationTable)
+            // Sampling factors combined into single byte: (H << 4) | V
+            let samplingByte = (component.horizontalSamplingFactor << 4) | component.verticalSamplingFactor
+            writer.writeByte(samplingByte)
+            writer.writeByte(0)  // Quantization table ID (unused in JPEG-LS, always 0)
         }
     }
     
@@ -196,7 +198,7 @@ public struct JPEGLSEncoder: Sendable {
         writer.writeUInt16(UInt16(parameters.threshold3))
         
         // RESET
-        writer.writeUInt16(UInt16(parameters.resetValue))
+        writer.writeUInt16(UInt16(parameters.reset))
     }
     
     /// Encode a single scan
@@ -211,13 +213,10 @@ public struct JPEGLSEncoder: Sendable {
         let scanHeader = try JPEGLSScanHeader(
             componentCount: componentIDs.count,
             components: componentIDs.map { id in
-                JPEGLSScanHeader.ComponentSelector(id: id, mappingTableSelector: 0)
+                JPEGLSScanHeader.ComponentSelector(id: id)
             },
-            spectralSelectionStart: 0,
-            spectralSelectionEnd: 0,
-            successiveApproximation: 0,
-            interleaveMode: configuration.interleaveMode,
             near: configuration.near,
+            interleaveMode: configuration.interleaveMode,
             pointTransform: 0
         )
         
@@ -250,7 +249,7 @@ public struct JPEGLSEncoder: Sendable {
         // Component selectors
         for component in scanHeader.components {
             writer.writeByte(component.id)
-            writer.writeByte(component.mappingTableSelector)
+            writer.writeByte(0)  // Mapping table selector (unused in JPEG-LS)
         }
         
         // NEAR parameter
@@ -279,7 +278,7 @@ public struct JPEGLSEncoder: Sendable {
         let buffer = JPEGLSPixelBuffer(imageData: imageData)
         
         // Create context model
-        var context = JPEGLSContextModel(parameters: parameters)
+        var context = try JPEGLSContextModel(parameters: parameters)
         
         // Create regular mode encoder
         let regularMode = try JPEGLSRegularMode(
@@ -450,10 +449,10 @@ public struct JPEGLSEncoder: Sendable {
         
         // Regular mode encoding
         let encodedPixel = regularMode.encodePixel(
-            actual: neighbors.current,
-            a: neighbors.a,
-            b: neighbors.b,
-            c: neighbors.c,
+            actual: neighbors.actual,
+            a: neighbors.left,
+            b: neighbors.top,
+            c: neighbors.topLeft,
             context: context
         )
         
@@ -463,8 +462,8 @@ public struct JPEGLSEncoder: Sendable {
         // Update context
         context.updateContext(
             contextIndex: encodedPixel.contextIndex,
-            error: encodedPixel.error,
-            near: near
+            predictionError: encodedPixel.error,
+            sign: encodedPixel.sign
         )
     }
     
