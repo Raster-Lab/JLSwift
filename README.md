@@ -533,6 +533,7 @@ Performance will vary significantly based on hardware (Apple Silicon with ARM NE
 JLSwift includes comprehensive conformance testing using reference files from the [CharLS](https://github.com/team-charls/charls) project. The test suite validates:
 
 - **File Structure**: SOI/EOI markers and basic JPEG-LS file format
+- **CharLS Byte Stuffing**: Extended support for CharLS escape sequences (`FF 60-7F`) and scan boundary detection
 - **Reference Images**: 12 JPEG-LS files covering various configurations:
   - 8-bit and 16-bit samples
   - Grayscale and RGB color images
@@ -541,8 +542,12 @@ JLSwift includes comprehensive conformance testing using reference files from th
   - Sub-sampling and interleaving modes
   - Non-default parameters
 - **Image Loading**: PGM (grayscale) and PPM (color) reference image parsing
+- **Bit-Exact Comparison**: Infrastructure ready to validate decoded output against CharLS reference images
+  - Test suite with 10 comparison test cases
+  - Pixel-by-pixel validation (lossless and near-lossless modes)
+  - Pending: Full decoder support for CharLS encoding patterns
 
-The conformance tests are located in `Tests/JPEGLSTests/CharLSConformanceTests.swift` with reference fixtures in `Tests/JPEGLSTests/TestFixtures/`. These tests ensure compatibility with the JPEG-LS standard (ISO/IEC 14495-1:1999 / ITU-T.87) and provide a foundation for bit-exact comparison with CharLS output.
+The conformance tests are located in `Tests/JPEGLSTests/CharLSConformanceTests.swift` with reference fixtures in `Tests/JPEGLSTests/TestFixtures/`. These tests ensure compatibility with the JPEG-LS standard (ISO/IEC 14495-1:1999 / ITU-T.87) and provide a foundation for bit-exact comparison with CharLS output. The parser successfully handles all 12 CharLS reference files; decoder integration is in progress.
 
 ### Code Coverage Requirement
 
