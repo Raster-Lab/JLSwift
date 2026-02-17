@@ -98,7 +98,7 @@ public struct JPEGLSDecoder: Sendable {
     
     /// Extract compressed scan data from JPEG-LS file
     ///
-    /// Locates and extracts the bitstream data between SOS and marker/EOI for each scan.
+    /// Locates and extracts the bitstream data between SOS marker content and next marker/EOI for each scan.
     ///
     /// - Parameters:
     ///   - data: Complete JPEG-LS file data
@@ -108,54 +108,64 @@ public struct JPEGLSDecoder: Sendable {
     private func extractScanData(from data: Data, parseResult: JPEGLSParseResult) throws -> [Data] {
         var scanDataList: [Data] = []
         var position = 0
+        let expectedScans = parseResult.scanHeaders.count
         
-        // Skip to first SOS marker
-        while position < data.count - 1 {
-            if data[position] == 0xFF && data[position + 1] == JPEGLSMarker.startOfScan.rawValue {
-                break
-            }
-            position += 1
-        }
-        
-        // Extract data for each scan
-        for _ in 0..<parseResult.scanHeaders.count {
-            // Find SOS marker
-            while position < data.count - 1 {
-                if data[position] == 0xFF && data[position + 1] == JPEGLSMarker.startOfScan.rawValue {
+        // Parse through the file looking for SOS markers
+        while position < data.count - 1 && scanDataList.count < expectedScans {
+            // Look for marker prefix
+            if data[position] == 0xFF {
+                let markerCode = data[position + 1]
+                
+                // Check if this is a SOS marker
+                if markerCode == JPEGLSMarker.startOfScan.rawValue {
+                    // Skip marker (2 bytes)
                     position += 2
-                    break
+                    
+                    // Read and skip SOS segment length and content
+                    guard position + 2 <= data.count else {
+                        throw JPEGLSError.prematureEndOfStream
+                    }
+                    let sosLength = Int(data[position]) << 8 | Int(data[position + 1])
+                    position += sosLength
+                    
+                    // Now at start of scan data
+                    let scanDataStart = position
+                    
+                    // Find end of scan data (next real marker, not byte stuffing)
+                    var scanDataEnd = position
+                    while scanDataEnd < data.count - 1 {
+                        if data[scanDataEnd] == 0xFF {
+                            let nextByte = data[scanDataEnd + 1]
+                            // Check if this is stuffing (0x00) or CharLS escape (0x60-0x7F)
+                            if nextByte != 0x00 && !(nextByte >= 0x60 && nextByte <= 0x7F) {
+                                // Real marker - scan data ends here
+                                break
+                            }
+                            // Skip stuffing byte
+                            scanDataEnd += 2
+                        } else {
+                            scanDataEnd += 1
+                        }
+                    }
+                    
+                    // Extract scan data (including byte stuffing - decoder will handle it)
+                    let scanData = data[scanDataStart..<scanDataEnd]
+                    scanDataList.append(Data(scanData))
+                    
+                    position = scanDataEnd
+                } else {
+                    // Some other marker - skip it
+                    position += 1
                 }
+            } else {
                 position += 1
             }
-            
-            // Read SOS marker length
-            guard position + 2 <= data.count else {
-                throw JPEGLSError.prematureEndOfStream
-            }
-            let sosLength = Int(data[position]) << 8 | Int(data[position + 1])
-            position += sosLength
-            
-            // Find end of scan data (next marker that's not 0xFF00 stuffing)
-            let scanDataStart = position
-            var scanDataEnd = position
-            
-            while scanDataEnd < data.count - 1 {
-                if data[scanDataEnd] == 0xFF {
-                    let nextByte = data[scanDataEnd + 1]
-                    // Check if this is a marker (not 0x00 stuffing)
-                    if nextByte != 0x00 {
-                        // Found next marker
-                        break
-                    }
-                }
-                scanDataEnd += 1
-            }
-            
-            // Extract scan data
-            let scanData = data[scanDataStart..<scanDataEnd]
-            scanDataList.append(Data(scanData))
-            
-            position = scanDataEnd
+        }
+        
+        guard scanDataList.count == expectedScans else {
+            throw JPEGLSError.invalidBitstreamStructure(
+                reason: "Expected \(expectedScans) scans, found \(scanDataList.count)"
+            )
         }
         
         return scanDataList
