@@ -262,7 +262,7 @@ The verify command checks:
 - Preset parameter validity and threshold ordering
 - Component ID consistency
 
-#### `jpegls encode` - Encode Raw Image Data (Planned)
+#### `jpegls encode` - Encode Raw Image Data
 
 Encode raw pixel data to JPEG-LS format:
 
@@ -319,7 +319,7 @@ jpegls decode input.jls output.raw --quiet
 - `--verbose`: Enable verbose output
 - `--quiet`: Suppress non-essential output
 
-**Note:** Full encode and decode functionality requires bitstream I/O integration, which is currently in development. The `info` and `verify` commands are fully functional.
+**Note:** The `encode`, `info`, and `verify` commands are fully functional. The `decode` command requires implementation of the high-level `JPEGLSDecoder` API (see `DECODER_IMPLEMENTATION_SPEC.md` for details).
 
 #### `jpegls batch` - Batch Process Multiple Files
 

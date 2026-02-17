@@ -272,7 +272,7 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
   - [x] `--bits-per-sample` specification
   - [x] `--preset` for custom T1, T2, T3, RESET parameters (parser ready, encoder integration pending)
   - [x] `--verbose` output mode
-  - [ ] Complete bitstream writer integration for full encode functionality
+  - [x] Complete bitstream writer integration for full encode functionality
 - [x] Implement `jpegls decode` command
   - [x] Input JPEG-LS file path
   - [x] Output file path
@@ -295,9 +295,15 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 **Implementation Details:**
 - All four CLI commands implemented using Swift ArgumentParser
 - `info` and `verify` commands are fully functional and tested
-- `encode` and `decode` commands have complete argument parsing and validation, but require bitstream I/O integration with the encoder/decoder to be fully operational
+- `encode` command is **fully functional** with complete bitstream integration (end-to-end encoding works)
+- `decode` command has complete argument parsing but requires high-level `JPEGLSDecoder` API implementation (see `DECODER_IMPLEMENTATION_SPEC.md`)
 - Comprehensive help messages for all commands with examples
 - Full support for --verbose and --json output modes where applicable
+
+**Decoder Status:**
+- All low-level decoder components are complete and tested (JPEGLSParser, RegularModeDecoder, RunModeDecoder)
+- Missing: High-level orchestration layer to perform end-to-end decoding
+- See `DECODER_IMPLEMENTATION_SPEC.md` for detailed implementation roadmap (estimated 17-24 hours)
 
 #### Phase 7.2: CLI Utilities ✅
 - [x] Implement `--verbose` output with progress indication (completed in Phase 7.1)
