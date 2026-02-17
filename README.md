@@ -513,6 +513,12 @@ swift test --filter JPEGLSPerformanceBenchmarks
 
 # Run a specific benchmark
 swift test --filter "benchmarkEncode512x512Grayscale8bit"
+
+# Run performance regression tests
+swift test --filter JPEGLSPerformanceRegressionTests
+
+# Run CharLS comparison benchmarks (currently disabled, requires CharLS integration)
+swift test --filter JPEGLSCharLSComparisonBenchmarks
 ```
 
 **Sample Results (x86_64 Linux, scalar implementation):**
@@ -528,6 +534,29 @@ Encode 512x512 8-bit grayscale (lossless):
 ```
 
 Performance will vary significantly based on hardware (Apple Silicon with ARM NEON vs x86_64) and image content characteristics.
+
+### Performance Regression Testing
+
+JLSwift includes automated performance regression tests that detect catastrophic performance regressions in CI. The `JPEGLSPerformanceRegressionTests` suite verifies:
+
+- **Encoding time** stays within baseline thresholds (256x256, 512x512 grayscale; 512x512 16-bit; 512x512 RGB)
+- **Decoding time** stays within baseline thresholds (256x256, 512x512 grayscale; 512x512 RGB)
+- **Round-trip time** (encode + decode) stays within baseline threshold
+- **Throughput** remains above minimum Mpixels/s baseline
+- **Compression ratio** doesn't degrade below minimum threshold
+- **Linear scaling** is maintained (512x512 time < 8x of 256x256 time)
+
+Baselines are established from x86_64 Linux CI with a 10x regression multiplier to avoid flaky failures while still catching algorithmic regressions. Precise regression detection (e.g., 1.2x threshold) requires dedicated benchmark hardware.
+
+### CharLS Comparison Benchmarks
+
+Head-to-head performance comparison with [CharLS](https://github.com/team-charls/charls) (the reference C++ JPEG-LS implementation) is available as a test suite with disabled tests. The `JPEGLSCharLSComparisonBenchmarks` suite includes stubs for:
+
+- **Encoding speed**: grayscale, RGB, near-lossless comparison
+- **Decoding speed**: grayscale, RGB, near-lossless comparison
+- **Memory usage**: encoding and decoding memory comparison
+
+These tests are currently disabled pending CharLS C library integration. JLSwift measurement infrastructure is in place; CharLS wrapper functions will be added when the C library is available as a Swift Package Manager dependency.
 
 ### CharLS Conformance Testing
 
