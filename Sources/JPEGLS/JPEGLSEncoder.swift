@@ -397,10 +397,7 @@ public struct JPEGLSEncoder: Sendable {
                     
                     if actualRunLength < remainingInLine {
                         // Run was interrupted - write termination and remainder
-                        writer.writeBits(0, count: 1)  // Termination bit
-                        if encoded.j > 0 {
-                            writer.writeBits(UInt32(encoded.remainder), count: encoded.j)
-                        }
+                        writeRunTermination(encoded: encoded, writer: writer)
                         
                         // Encode the interruption pixel
                         let interruptionCol = col + actualRunLength
@@ -420,18 +417,11 @@ public struct JPEGLSEncoder: Sendable {
                                 runValue: runValue
                             )
                             
-                            // Encode interruption error with Golomb-Rice (k=0 simplified)
-                            let k = 0
-                            let (unaryLength, remainder) = regularMode.golombEncode(
-                                value: interruption.mappedError, k: k
+                            writeRunInterruptionBits(
+                                mappedError: interruption.mappedError,
+                                regularMode: regularMode,
+                                writer: writer
                             )
-                            for _ in 0..<unaryLength {
-                                writer.writeBits(0, count: 1)
-                            }
-                            writer.writeBits(1, count: 1)
-                            if k > 0 {
-                                writer.writeBits(UInt32(remainder), count: k)
-                            }
                             
                             col = interruptionCol + 1
                         } else {
@@ -439,10 +429,7 @@ public struct JPEGLSEncoder: Sendable {
                         }
                     } else {
                         // Run reaches end of line - write termination with remainder
-                        writer.writeBits(0, count: 1)  // Termination bit
-                        if encoded.j > 0 {
-                            writer.writeBits(UInt32(encoded.remainder), count: encoded.j)
-                        }
+                        writeRunTermination(encoded: encoded, writer: writer)
                         col += actualRunLength
                     }
                     
@@ -524,10 +511,7 @@ public struct JPEGLSEncoder: Sendable {
                         }
                         
                         if actualRunLength < remainingInLine {
-                            writer.writeBits(0, count: 1)
-                            if encoded.j > 0 {
-                                writer.writeBits(UInt32(encoded.remainder), count: encoded.j)
-                            }
+                            writeRunTermination(encoded: encoded, writer: writer)
                             
                             let interruptionCol = col + actualRunLength
                             if interruptionCol < buffer.width {
@@ -546,17 +530,11 @@ public struct JPEGLSEncoder: Sendable {
                                     runValue: runValue
                                 )
                                 
-                                let k = 0
-                                let (unaryLength, remainder) = regularMode.golombEncode(
-                                    value: interruption.mappedError, k: k
+                                writeRunInterruptionBits(
+                                    mappedError: interruption.mappedError,
+                                    regularMode: regularMode,
+                                    writer: writer
                                 )
-                                for _ in 0..<unaryLength {
-                                    writer.writeBits(0, count: 1)
-                                }
-                                writer.writeBits(1, count: 1)
-                                if k > 0 {
-                                    writer.writeBits(UInt32(remainder), count: k)
-                                }
                                 
                                 col = interruptionCol + 1
                             } else {
@@ -564,10 +542,7 @@ public struct JPEGLSEncoder: Sendable {
                             }
                         } else {
                             // Run reaches end of line - write termination with remainder
-                            writer.writeBits(0, count: 1)
-                            if encoded.j > 0 {
-                                writer.writeBits(UInt32(encoded.remainder), count: encoded.j)
-                            }
+                            writeRunTermination(encoded: encoded, writer: writer)
                             col += actualRunLength
                         }
                         
@@ -643,13 +618,7 @@ public struct JPEGLSEncoder: Sendable {
             )
         }
         
-        // NOTE: Run mode encoding not yet implemented
-        // This MVP version uses regular mode for all pixels, which is simpler
-        // and still produces valid JPEG-LS output. Run mode optimization can
-        // be added in a future enhancement for better compression of flat regions.
-        // See: MILESTONES.md Phase 7.1 - Encoder Implementation Notes
-        
-        // Regular mode encoding
+        // Regular mode encoding (run mode is handled at the scan level)
         let encodedPixel = regularMode.encodePixel(
             actual: neighbors.actual,
             a: neighbors.left,
@@ -684,6 +653,37 @@ public struct JPEGLSEncoder: Sendable {
         // Write remainder (k bits)
         if encoded.golombK > 0 {
             writer.writeBits(UInt32(encoded.remainder), count: encoded.golombK)
+        }
+    }
+    
+    /// Golomb parameter k for run interruption encoding per ITU-T.87
+    private static let runInterruptionK = 0
+    
+    /// Write run interruption error to bitstream using Golomb-Rice encoding
+    private func writeRunInterruptionBits(
+        mappedError: Int,
+        regularMode: JPEGLSRegularMode,
+        writer: JPEGLSBitstreamWriter
+    ) {
+        let k = Self.runInterruptionK
+        let (unaryLength, remainder) = regularMode.golombEncode(value: mappedError, k: k)
+        for _ in 0..<unaryLength {
+            writer.writeBits(0, count: 1)
+        }
+        writer.writeBits(1, count: 1)
+        if k > 0 {
+            writer.writeBits(UInt32(remainder), count: k)
+        }
+    }
+    
+    /// Write run termination and remainder bits to bitstream
+    private func writeRunTermination(
+        encoded: EncodedRun,
+        writer: JPEGLSBitstreamWriter
+    ) {
+        writer.writeBits(0, count: 1)  // Termination bit
+        if encoded.j > 0 {
+            writer.writeBits(UInt32(encoded.remainder), count: encoded.j)
         }
     }
 }

@@ -364,21 +364,15 @@ public struct JPEGLSDecoder: Sendable {
                         near: scanHeader.near
                     )
                     
-                    // Fill in run pixels
-                    for i in 0..<runResult.runLength {
-                        if col + i < width {
-                            pixels[row][col + i] = a
-                        }
-                    }
-                    col += runResult.runLength
-                    
-                    // If there was an interruption pixel, add it
-                    if let interruptionPixel = runResult.interruptionPixel {
-                        if col < width {
-                            pixels[row][col] = interruptionPixel
-                            col += 1
-                        }
-                    }
+                    // Fill in run result
+                    col = fillRunResult(
+                        runResult: runResult,
+                        pixels: &pixels,
+                        row: row,
+                        col: col,
+                        width: width,
+                        runValue: a
+                    )
                 } else {
                     // Regular mode
                     let pixel = try decodeSinglePixel(
@@ -434,21 +428,15 @@ public struct JPEGLSDecoder: Sendable {
                     near: scanHeader.near
                 )
                 
-                // Fill in run pixels
-                for i in 0..<runResult.runLength {
-                    if col + i < width {
-                        pixels[row][col + i] = a
-                    }
-                }
-                col += runResult.runLength
-                
-                // If there was an interruption pixel, add it
-                if let interruptionPixel = runResult.interruptionPixel {
-                    if col < width {
-                        pixels[row][col] = interruptionPixel
-                        col += 1
-                    }
-                }
+                // Fill in run result
+                col = fillRunResult(
+                    runResult: runResult,
+                    pixels: &pixels,
+                    row: row,
+                    col: col,
+                    width: width,
+                    runValue: a
+                )
             } else {
                 // Regular mode
                 let pixel = try decodeSinglePixel(
@@ -468,6 +456,36 @@ public struct JPEGLSDecoder: Sendable {
     }
     
     // MARK: - Pixel Decoding
+    
+    /// Fill decoded run result into pixel buffer, returning the new column position
+    private func fillRunResult(
+        runResult: (runLength: Int, interruptionPixel: Int?),
+        pixels: inout [[Int]],
+        row: Int,
+        col: Int,
+        width: Int,
+        runValue: Int
+    ) -> Int {
+        var newCol = col
+        
+        // Fill in run pixels
+        for i in 0..<runResult.runLength {
+            if newCol + i < width {
+                pixels[row][newCol + i] = runValue
+            }
+        }
+        newCol += runResult.runLength
+        
+        // If there was an interruption pixel, add it
+        if let interruptionPixel = runResult.interruptionPixel {
+            if newCol < width {
+                pixels[row][newCol] = interruptionPixel
+                newCol += 1
+            }
+        }
+        
+        return newCol
+    }
     
     /// Decode a single pixel in regular mode
     private func decodeSinglePixel(
