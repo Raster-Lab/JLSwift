@@ -166,8 +166,8 @@ struct DICOMIntegrationTests {
             for i in 0..<echoPixelData.count {
                 // Simulate MR signal decay with echo time
                 let baseIntensity = 3000
-                let decay = Double(echoIndex) * 0.3
-                echoPixelData[i] = UInt16(max(0, Double(baseIntensity) * exp(-decay)))
+                let decayFactor = Double(echoIndex) * 0.3
+                echoPixelData[i] = UInt16(max(0, Double(baseIntensity) * exp(-decayFactor)))
             }
             
             // Each echo should use lossless compression
@@ -314,8 +314,8 @@ struct DICOMIntegrationTests {
             var phasePixelData = [UInt16](repeating: 0, count: width * height)
             for i in 0..<phasePixelData.count {
                 // Simulate cardiac motion
-                let motionFactor = sin(Double(phase) / Double(numberOfPhases) * 2.0 * .pi)
-                let intensity = 2000 + Int(500 * motionFactor)
+                let cardiacMotionFactor = sin(Double(phase) / Double(numberOfPhases) * 2.0 * .pi)
+                let intensity = 2000 + Int(500 * cardiacMotionFactor)
                 phasePixelData[i] = UInt16(max(0, min(65535, intensity)))
             }
             
