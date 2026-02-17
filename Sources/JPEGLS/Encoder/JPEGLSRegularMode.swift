@@ -237,8 +237,9 @@ public struct JPEGLSRegularMode: Sendable {
         let quotient = value >> k
         let remainder = value & ((1 << k) - 1)
         
-        // Unary code length is quotient + 1 (q zeros + one 1-bit)
-        let unaryLength = quotient + 1
+        // Unary prefix length is the number of zeros (quotient)
+        // The terminating 1-bit is written separately by the bitstream writer
+        let unaryLength = quotient
         
         return (unaryLength, remainder)
     }
@@ -365,6 +366,6 @@ public struct EncodedPixel: Sendable {
     
     /// Total encoded bit length
     public var totalBitLength: Int {
-        return unaryLength + golombK
+        return unaryLength + 1 + golombK
     }
 }

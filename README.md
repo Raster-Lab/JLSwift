@@ -299,7 +299,7 @@ jpegls encode input.raw output.jls \
 - `--verbose`: Enable verbose output
 - `--quiet`: Suppress non-essential output
 
-#### `jpegls decode` - Decode JPEG-LS File (Planned)
+#### `jpegls decode` - Decode JPEG-LS File
 
 Decode JPEG-LS file to raw pixel data:
 
@@ -319,7 +319,7 @@ jpegls decode input.jls output.raw --quiet
 - `--verbose`: Enable verbose output
 - `--quiet`: Suppress non-essential output
 
-**Note:** The `encode`, `info`, and `verify` commands are fully functional. The `decode` command requires implementation of the high-level `JPEGLSDecoder` API (see `DECODER_IMPLEMENTATION_SPEC.md` for details).
+**Note:** All four commands (`encode`, `decode`, `info`, `verify`) are fully functional. Lossless decoding supports 8-bit and 16-bit images in all interleaving modes (none, line, sample).
 
 #### `jpegls batch` - Batch Process Multiple Files
 

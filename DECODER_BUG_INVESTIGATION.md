@@ -1,7 +1,7 @@
 # JPEG-LS Decoder Bug Investigation
 
 ## Summary
-The JPEG-LS decoder has multiple bugs that have been partially fixed, but round-trip encode/decode still fails.
+The JPEG-LS decoder had a critical Golomb-Rice encoding off-by-one bug that caused pixel value drift during round-trip encode/decode. **This bug has been fixed.**
 
 ## Bugs Fixed
 
@@ -21,31 +21,33 @@ The JPEG-LS decoder has multiple bugs that have been partially fixed, but round-
 **Issue**: Encoder didn't pass `near` parameter when creating context model
 **Status**: ✅ FIXED
 
-## Remaining Bug
+### 4. Golomb-Rice Encoding Off-By-One (Root Cause)
+**File**: `Sources/JPEGLS/Encoder/JPEGLSRegularMode.swift` line 241
+**Issue**: `golombEncode` computed `unaryLength = quotient + 1`, but `writeRegularModeBits` treated `unaryLength` as the number of zero bits and wrote a separate terminating 1 bit. This caused every Golomb code to have one extra zero bit, making the decoder read wrong mapped error values.
+**Impact**: ALL decoded pixel values were wrong (the first pixel could decode as 255 instead of 0). Error accumulated across the entire image.
+**Fix**: Changed `unaryLength = quotient` (number of zero bits only). Updated `totalBitLength` to `unaryLength + 1 + golombK`.
+**Status**: ✅ FIXED
 
-### Symptom
-- First pixel (0,0) decodes correctly
-- Subsequent pixels drift increasingly from expected values
-- Error accumulates across the image
-- Affects ALL interleave modes (none, line, sample)
+### 5. Decoder Golomb Unary Prefix Limit
+**File**: `Sources/JPEGLS/JPEGLSDecoder.swift`
+**Issue**: Hardcoded limit of 1000 on unary prefix was too small for 16-bit images (where mapped errors can be up to 131070)
+**Fix**: Increased limit to 200000
+**Status**: ✅ FIXED
 
-### Analysis
-The issue suggests:
-1. Context updates may have incorrect formula
-2. Bias correction may be applied incorrectly
-3. Error sign handling may need adjustment per ITU-T.87 Section 4.4.1
+### 6. Parser Test LSE Length Mismatch
+**File**: `Tests/JPEGLSTests/JPEGLSParserTests.swift` line 173
+**Issue**: Test constructed LSE segment with length 13 but parser expected 11 (matching encoder)
+**Fix**: Updated test to use length 11
+**Status**: ✅ FIXED
 
-### What's Been Ruled Out
-- ✅ Gradient computation (identical in encoder/decoder)
-- ✅ Gradient quantization (identical in encoder/decoder) 
-- ✅ Error mapping/unmapping (confirmed to be exact inverses)
-- ✅ Neighbor pixel boundaries (correct per ITU-T.87)
-- ✅ Context B initialization (spec says 0, not 1)
-- ✅ Bitstream byte stuffing (handled correctly)
+## Remaining Known Limitation
 
-### Next Steps
-1. Create minimal 2-pixel test case to isolate exact divergence point
-2. Compare encoded bitstream byte-by-byte with reference implementation
-3. Verify context update formula against ITU-T.87 Section 4.3.3
-4. Check if error sign negation based on context sign is needed (ITU-T.87 Section 4.4.1)
+### Near-Lossless Round-Trip
+**Status**: ⚠️ NOT YET IMPLEMENTED
+**Cause**: The encoder's `JPEGLSRegularMode.encodePixel` does not quantize prediction errors by `(2*NEAR+1)` or track reconstructed pixel values. Near-lossless encoding requires:
+1. Error quantization: `Errval = Errval / (2*NEAR + 1)`
+2. Reconstructed value tracking: `Rx = Px' + Errval_quantized * (2*NEAR + 1)`
+3. Using reconstructed values (not original) for subsequent predictions
+
+This is a known encoder limitation documented in MILESTONES.md. Lossless mode (NEAR=0) works correctly for all image types and interleaving modes.
 

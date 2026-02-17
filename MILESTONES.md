@@ -278,7 +278,7 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
   - [x] Output file path
   - [x] `--format` output format selection (raw only, PNG/TIFF planned)
   - [x] `--verbose` output mode
-  - [ ] Complete bitstream reader integration for full decode functionality
+  - [x] Complete bitstream reader integration for full decode functionality
 - [x] Implement `jpegls info` command for file analysis
   - [x] Display frame header information (dimensions, bits per sample, components)
   - [x] Display scan header information (interleave mode, NEAR, components)
@@ -296,14 +296,15 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 - All four CLI commands implemented using Swift ArgumentParser
 - `info` and `verify` commands are fully functional and tested
 - `encode` command is **fully functional** with complete bitstream integration (end-to-end encoding works)
-- `decode` command has complete argument parsing but requires high-level `JPEGLSDecoder` API implementation (see `DECODER_IMPLEMENTATION_SPEC.md`)
+- `decode` command is **fully functional** for lossless mode with complete bitstream reader integration (end-to-end decoding works for all interleaving modes: none, line, sample)
 - Comprehensive help messages for all commands with examples
 - Full support for --verbose and --json output modes where applicable
 
 **Decoder Status:**
-- All low-level decoder components are complete and tested (JPEGLSParser, RegularModeDecoder, RunModeDecoder)
-- Missing: High-level orchestration layer to perform end-to-end decoding
-- See `DECODER_IMPLEMENTATION_SPEC.md` for detailed implementation roadmap (estimated 17-24 hours)
+- Lossless decoding fully functional for 8-bit and 16-bit images in all interleaving modes
+- Round-trip encode/decode verified for grayscale, RGB, checkerboard, flat, and gradient patterns
+- Near-lossless round-trip deferred (requires encoder to implement error quantization and reconstructed value tracking)
+- Fixed Golomb-Rice encoding off-by-one bug that caused pixel value drift during decoding
 
 #### Phase 7.2: CLI Utilities ✅
 - [x] Implement `--verbose` output with progress indication (completed in Phase 7.1)
@@ -580,7 +581,7 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 | **4** | Decoder | Parsing, regular mode, run mode, multi-component ✅ |
 | **5** | Apple Silicon | NEON/SIMD ✅, Accelerate ✅, Metal ✅, memory optimization ✅ |
 | **6** | x86-64 | Removable x86-64 support with clear boundaries ✅ |
-| **7** | CLI | Core commands (info ✅, verify ✅, encode/decode ⏳), utilities ✅, help & docs ✅ |
+| **7** | CLI | Core commands (info ✅, verify ✅, encode ✅, decode ✅), utilities ✅, help & docs ✅ |
 | **8** | Validation | CharLS conformance ✅, benchmarks ✅, DICOM testing ✅, edge cases ✅ |
 | **9** | Release | API docs ✅, integration guides ✅, versioning ✅, changelog ✅, release template ✅ |
 
