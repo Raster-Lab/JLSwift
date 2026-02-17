@@ -249,17 +249,10 @@ struct JPEGLSRunModeTests {
         let runMode = try JPEGLSRunMode(parameters: params, near: 0)
         
         // With runIndex=1, J[1]=0, blockSize=1
-        // Run of 5: 4 blocks (1+1+1+1) consuming indices 1→4, then J[5]=1, blockSize=2
-        // remaining=1 < 2, so 4 continuation bits, j=J[5]=1, remainder=1
-        // BUT: actually after 4 blocks at bs=1, idx=5, remaining=1
-        // Then J[5]=1, bs=2, 1<2 → break. j=J[5]=1, remainder=1
-        // Wait, let me retrace: initially rem=5
-        // iter1: J(1)=0, bs=1, rem=4, cont=1, idx=2
-        // iter2: J(2)=0, bs=1, rem=3, cont=2, idx=3
-        // iter3: J(3)=0, bs=1, rem=2, cont=3, idx=4
-        // iter4: J(4)=1, bs=2, rem=0, cont=4, idx=5
-        // loop ends (rem=0)
-        // j = J(5)=1, remainder=0
+        // The encoder increments runIndex after each full block per ITU-T.87:
+        // 3 blocks at blockSize=1 (indices 1-3), then 1 block at blockSize=2 (index 4)
+        // Total consumed: 3 + 2 = 5, remainder = 0
+        // Final j = J[5] = 1
         let encoded = runMode.encodeRunLength(runLength: 5, runIndex: 1)
         
         #expect(encoded.j == 1)
@@ -274,8 +267,8 @@ struct JPEGLSRunModeTests {
         let runMode = try JPEGLSRunMode(parameters: params, near: 0)
         
         // With runIndex=2, J[2]=0, blockSize=1
-        // Tracing through: indices increment each block
-        // After consuming all 10, j=J[8]=2, continuationBits=6, remainder=0
+        // Per ITU-T.87, runIndex increments after each full block
+        // After consuming all 10 pixels across increasing block sizes: j=J[8]=2
         let encoded = runMode.encodeRunLength(runLength: 10, runIndex: 2)
         
         #expect(encoded.j == 2)
@@ -290,8 +283,8 @@ struct JPEGLSRunModeTests {
         let runMode = try JPEGLSRunMode(parameters: params, near: 0)
         
         // With runIndex=3, J[3]=0, blockSize=1
-        // Tracing: 4 continuation bits at bs=1 (idx 3→6), then bs=2 at idx 7
-        // After consuming 8: j=J[7]=1, continuationBits=4, remainder=1
+        // Per ITU-T.87, runIndex increments after each block
+        // After 4 continuation blocks: final j=J[7]=1, remainder=1
         let encoded = runMode.encodeRunLength(runLength: 8, runIndex: 3)
         
         #expect(encoded.j == 1)
@@ -305,8 +298,8 @@ struct JPEGLSRunModeTests {
         let runMode = try JPEGLSRunMode(parameters: params, near: 0)
         
         // With runIndex=4, J[4]=1, blockSize=2
-        // Tracing through 100 pixels with incrementing indices
-        // Result: j=J[18]=5, continuationBits=14, remainder=12
+        // Per ITU-T.87, runIndex increments after each block
+        // After 14 continuation blocks with increasing block sizes: j=J[18]=5, remainder=12
         let encoded = runMode.encodeRunLength(runLength: 100, runIndex: 4)
         
         #expect(encoded.j == 5)
@@ -333,8 +326,9 @@ struct JPEGLSRunModeTests {
         let runMode = try JPEGLSRunMode(parameters: params, near: 0)
         
         // With runIndex=3, run of 20
-        // Tracing: 7 continuation bits, j=J[10]=2, remainder=3
-        // Bits: 7 continuation '1's + 1 terminating '0' + 2 bits for remainder = 10
+        // Per ITU-T.87, runIndex increments during encoding
+        // After 7 continuation blocks: j=J[10]=2, remainder=3
+        // Total bits: 7 continuation '1's + 1 terminating '0' + 2 remainder bits = 10
         let encoded = runMode.encodeRunLength(runLength: 20, runIndex: 3)
         
         #expect(encoded.totalBitLength == 10)

@@ -652,8 +652,9 @@ struct JPEGLSRunModeDecoderTests {
         let encoder = try JPEGLSRunMode(parameters: params, near: 0)
         let decoder = try JPEGLSRunModeDecoder(parameters: params, near: 0)
         
-        // Test run lengths that stay within the same J-group
-        // so the decoder's simplified single-J decoding matches the encoder
+        // Per ITU-T.87 Annex J, the J table maps run indices to J values in groups.
+        // Test run lengths that stay within a single J-group (same block size)
+        // so the decoder's simplified single-J decoding matches the encoder.
         let testCases: [(runLength: Int, runIndex: Int)] = [
             (0, 0),     // J[0]=0, blockSize=1
             (1, 0),     // stays in J=0 group
@@ -760,10 +761,12 @@ struct JPEGLSRunModeDecoderTests {
         let encoder = try JPEGLSRunMode(parameters: params, near: 0)
         let decoder = try JPEGLSRunModeDecoder(parameters: params, near: 0)
         
-        // Simulate encoding a run that stays within J-group
-        // runIndex=12, J[12]=3, blockSize=8, group 12-15 has 4 entries
+        // Simulate encoding a run within the same J-group per ITU-T.87 Annex J
+        // runIndex=12, J[12]=3, blockSize=8
+        // When all continuation bits use the same block size, the simplified
+        // decoder (single J lookup) produces correct results
         let runValue = 100
-        let runLength = 16  // 2 blocks of 8 stays within J=3 group
+        let runLength = 16  // 2 blocks of 8 stays within J=3 group (indices 12-15)
         let interruptionValue = 150
         
         // Encode run
