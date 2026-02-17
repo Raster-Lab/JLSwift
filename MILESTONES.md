@@ -387,7 +387,7 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
   - Supports lossless (exact match) and near-lossless (error ≤ NEAR) validation
   - Tests currently fail with "Premature end of bitstream" - decoder needs CharLS pattern support
 - All 12 CharLS reference files now parse successfully
-- Overall project coverage maintained at >95% (682 total tests, 671 passing, 11 CharLS decoder tests pending)
+- Overall project coverage maintained at >95% (682 total tests, 673 passing, 9 CharLS decoder tests pending)
 
 #### Phase 8.2: Performance Benchmarking ✅
 - [x] Create comprehensive benchmark suite (18 benchmarks)
