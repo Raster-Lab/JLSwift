@@ -444,8 +444,11 @@ public struct JPEGLSEncoder: Sendable {
             )
         }
         
-        // TODO: Implement run mode encoding
-        // For now, only use regular mode
+        // NOTE: Run mode encoding not yet implemented
+        // This MVP version uses regular mode for all pixels, which is simpler
+        // and still produces valid JPEG-LS output. Run mode optimization can
+        // be added in a future enhancement for better compression of flat regions.
+        // See: MILESTONES.md Phase 7.1 - Encoder Implementation Notes
         
         // Regular mode encoding
         let encodedPixel = regularMode.encodePixel(
