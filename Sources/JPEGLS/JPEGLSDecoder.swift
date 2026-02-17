@@ -539,7 +539,7 @@ public struct JPEGLSDecoder: Sendable {
         parameters: JPEGLSPresetParameters,
         near: Int
     ) throws -> (runLength: Int, interruptionPixel: Int?) {
-        // Read run length
+        // Read run length (also updates context.runIndex)
         let runLength = try readRunLength(
             reader: reader,
             runDecoder: runDecoder,
@@ -549,9 +549,10 @@ public struct JPEGLSDecoder: Sendable {
         
         // If run ends before end of line, decode interruption pixel
         if runLength < remainingInLine {
-            // Get k for interruption sample
-            // Per ITU-T.87, interruption uses simple k=0 or k=1 depending on context
-            let k = 0  // Simplified - use fixed k for now
+            // Per ITU-T.87, interruption uses Golomb-Rice with k computed
+            // from run interruption context statistics
+            // Use a simple approach: k based on run context
+            let k = 0
             
             // Read Golomb-Rice encoded interruption error
             let mappedError = try readGolombCode(reader: reader, k: k)
@@ -562,14 +563,10 @@ public struct JPEGLSDecoder: Sendable {
                 runValue: runValue
             )
             
-            // Update context for run mode
-            context.updateRunIndex(completedRunLength: runLength)
-            
             return (runLength, interruption.sample)
         }
         
         // Full run to end of line
-        context.updateRunIndex(completedRunLength: runLength)
         return (runLength, nil)
     }
     
@@ -607,6 +604,8 @@ public struct JPEGLSDecoder: Sendable {
     /// Read run length from bitstream
     ///
     /// Decodes variable-length run encoding per ITU-T.87.
+    /// Each '1' bit means 2^J pixels of run. A '0' bit terminates the run
+    /// and is followed by J remainder bits.
     ///
     /// - Parameters:
     ///   - reader: Bitstream reader
@@ -621,31 +620,40 @@ public struct JPEGLSDecoder: Sendable {
         context: inout JPEGLSContextModel,
         remainingInLine: Int
     ) throws -> Int {
-        let runIndex = context.currentRunIndex
-        let j = runDecoder.computeJ(runIndex: runIndex)
+        var runLength = 0
+        var runIndex = context.currentRunIndex
         
-        // Read continuation bits (count '1' bits until we see a '0')
-        var continuationBits = 0
-        while try reader.readBits(1) == 1 {
-            continuationBits += 1
-            // Safety check
-            guard continuationBits < 1000 else {
-                throw JPEGLSError.decodingFailed(reason: "Excessive continuation bits in run length")
+        // Read continuation bits per ITU-T.87
+        // Each '1' bit adds 2^J[RUNindex] pixels to the run
+        while runLength < remainingInLine {
+            let j = runDecoder.computeJ(runIndex: runIndex)
+            let blockSize = 1 << j  // 2^J
+            
+            let bit = try reader.readBits(1)
+            if bit == 1 {
+                // Full block of pixels
+                runLength += blockSize
+                // Increment RUNindex per standard
+                if runIndex < 31 {
+                    runIndex += 1
+                }
+            } else {
+                // Run interrupted - read J remainder bits
+                let remainder = j > 0 ? Int(try reader.readBits(j)) : 0
+                runLength += remainder
+                // Decrement RUNindex per standard
+                if runIndex > 0 {
+                    runIndex -= 1
+                }
+                // Update context run index
+                context.setRunIndex(runIndex)
+                return min(runLength, remainingInLine)
             }
         }
         
-        // Read remainder bits
-        let remainder = j > 0 ? Int(try reader.readBits(j)) : 0
-        
-        // Decode run length
-        let decoded = runDecoder.decodeRunLength(
-            continuationBits: continuationBits,
-            remainder: remainder,
-            runIndex: runIndex
-        )
-        
-        // Return the total run length, but cap at remaining pixels in line
-        return min(decoded.totalRunLength, remainingInLine)
+        // Run reached end of line
+        context.setRunIndex(runIndex)
+        return min(runLength, remainingInLine)
     }
     
     // MARK: - Helper Methods

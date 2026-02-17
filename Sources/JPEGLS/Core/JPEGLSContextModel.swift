@@ -338,6 +338,15 @@ public struct JPEGLSContextModel: Sendable {
         }
     }
     
+    /// Set the run index directly.
+    ///
+    /// Used by the decoder when the run index is updated during run length decoding.
+    ///
+    /// - Parameter index: New run index value (0 to 31)
+    public mutating func setRunIndex(_ index: Int) {
+        runIndex = max(0, min(31, index))
+    }
+    
     /// Get run interruption index value.
     ///
     /// - Parameter index: Run context index (0 or 1)
