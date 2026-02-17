@@ -165,22 +165,28 @@ public final class JPEGLSParser {
                 scanHeaders.append(scanHeader)
                 
                 // Skip scan data until we hit a marker
-                // Scan data ends when we encounter a marker (0xFF followed by non-stuffing byte)
-                // Byte stuffing rules:
+                // Scan data ends when we encounter a VALID marker (0xFF followed by known marker byte)
+                // Byte stuffing rules (extended for CharLS compatibility):
                 //   - FF 00: Standard JPEG-LS byte stuffing (0x00 is removed during decoding)
-                //   - FF 60-FF 7F: CharLS escape sequences (treated like byte stuffing for compatibility)
-                //   - FF XX (other): Real marker - terminates scan data
+                //   - FF 60-FF 7F: CharLS escape sequences (treated like byte stuffing)
+                //   - FF XX where XX is not a recognized marker: treated as stuffing (CharLS extension)
+                //   - FF XX where XX is a recognized marker: Real marker - terminates scan data
                 while !reader.isAtEnd {
                     let byte = try reader.readByte()
                     if byte == JPEGLSMarker.markerPrefix {
                         // Check next byte to determine if it's stuffing or a real marker
                         if let nextByte = reader.peekByte() {
-                            if nextByte == 0x00 || (nextByte >= 0x60 && nextByte <= 0x7F) {
-                                // Byte stuffing or CharLS escape - skip and continue reading scan data
+                            // Check if this is stuffing or a valid marker
+                            let isStuffing = nextByte == 0x00 || 
+                                           (nextByte >= 0x60 && nextByte <= 0x7F) ||
+                                           JPEGLSMarker(rawValue: nextByte) == nil
+                            
+                            if isStuffing {
+                                // Byte stuffing - skip the stuffed byte and continue reading scan data
                                 _ = try reader.readByte()
                                 continue
                             } else {
-                                // Real marker - back up to re-read the FF byte in the outer loop
+                                // Valid marker - back up to re-read the FF byte in the outer loop
                                 try reader.seek(to: reader.currentPosition - 1)
                                 break
                             }
@@ -376,7 +382,8 @@ public final class JPEGLSParser {
         switch extensionType {
         case .presetCodingParameters:
             // Parse preset parameters
-            guard length == 11 else {
+            // Length should be 13: 2 (length field) + 1 (type) + 10 (5 x 2-byte params)
+            guard length == 13 else {
                 throw JPEGLSError.invalidBitstreamStructure(
                     reason: "Invalid LSE preset parameters length: \(length)"
                 )
