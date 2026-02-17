@@ -69,10 +69,10 @@ struct JPEGLSRegularModeDecoderTests {
         // Test with typical neighbor values:
         //   c=100  b=105
         //   a=102  x=?
-        let (d1, d2, d3) = decoder.computeGradients(a: 102, b: 105, c: 100)
+        let (d1, d2, d3) = decoder.computeGradients(a: 102, b: 105, c: 100, d: 105)
         
-        #expect(d1 == 3)   // D1 = b - a = 105 - 102
-        #expect(d2 == -5)  // D2 = c - b = 100 - 105
+        #expect(d1 == 0)   // D1 = d - b = 105 - 105
+        #expect(d2 == 5)   // D2 = b - c = 105 - 100
         #expect(d3 == -2)  // D3 = c - a = 100 - 102
     }
     
@@ -82,7 +82,7 @@ struct JPEGLSRegularModeDecoderTests {
         let decoder = try JPEGLSRegularModeDecoder(parameters: params, near: 0)
         
         // All neighbors have same value (flat region)
-        let (d1, d2, d3) = decoder.computeGradients(a: 128, b: 128, c: 128)
+        let (d1, d2, d3) = decoder.computeGradients(a: 128, b: 128, c: 128, d: 128)
         
         #expect(d1 == 0)
         #expect(d2 == 0)
@@ -95,10 +95,10 @@ struct JPEGLSRegularModeDecoderTests {
         let decoder = try JPEGLSRegularModeDecoder(parameters: params, near: 0)
         
         // Sharp edge
-        let (d1, d2, d3) = decoder.computeGradients(a: 200, b: 50, c: 50)
+        let (d1, d2, d3) = decoder.computeGradients(a: 200, b: 50, c: 50, d: 50)
         
-        #expect(d1 == -150)  // D1 = b - a = 50 - 200
-        #expect(d2 == 0)     // D2 = c - b = 50 - 50
+        #expect(d1 == 0)     // D1 = d - b = 50 - 50
+        #expect(d2 == 0)     // D2 = b - c = 50 - 50
         #expect(d3 == -150)  // D3 = c - a = 50 - 200
     }
     
@@ -427,6 +427,7 @@ struct JPEGLSRegularModeDecoderTests {
             a: 128,
             b: 128,
             c: 128,
+            d: 128,
             context: context
         )
         
@@ -447,6 +448,7 @@ struct JPEGLSRegularModeDecoderTests {
             a: 120,
             b: 120,
             c: 120,
+            d: 120,
             context: context
         )
         
@@ -466,6 +468,7 @@ struct JPEGLSRegularModeDecoderTests {
             a: 120,
             b: 120,
             c: 120,
+            d: 120,
             context: context
         )
         
@@ -484,6 +487,7 @@ struct JPEGLSRegularModeDecoderTests {
             a: 100,
             b: 105,
             c: 102,
+            d: 105,
             context: context
         )
         
@@ -513,6 +517,7 @@ struct JPEGLSRegularModeDecoderTests {
             a: a,
             b: b,
             c: c,
+            d: b,
             context: context
         )
         
@@ -522,6 +527,7 @@ struct JPEGLSRegularModeDecoderTests {
             a: a,
             b: b,
             c: c,
+            d: b,
             context: context
         )
         
@@ -550,6 +556,7 @@ struct JPEGLSRegularModeDecoderTests {
         var a = 100  // Initial neighbors
         var b = 100
         var c = 100
+        var d = 100
         
         for actualPixel in pixels {
             // Encode
@@ -558,6 +565,7 @@ struct JPEGLSRegularModeDecoderTests {
                 a: a,
                 b: b,
                 c: c,
+                d: d,
                 context: encodeContext
             )
             
@@ -567,6 +575,7 @@ struct JPEGLSRegularModeDecoderTests {
                 a: a,
                 b: b,
                 c: c,
+                d: d,
                 context: decodeContext
             )
             
@@ -589,6 +598,7 @@ struct JPEGLSRegularModeDecoderTests {
             c = b
             b = actualPixel
             a = actualPixel
+            d = actualPixel
         }
     }
     
@@ -600,18 +610,18 @@ struct JPEGLSRegularModeDecoderTests {
         let context = try createContextModel()
         
         // Test boundary values
-        let boundaryTests: [(actual: Int, a: Int, b: Int, c: Int)] = [
-            (0, 0, 0, 0),       // All zero
-            (255, 255, 255, 255), // All max
-            (0, 128, 128, 128),   // Zero in middle region
-            (255, 128, 128, 128), // Max in middle region
-            (128, 0, 0, 0),       // Middle from zero
-            (128, 255, 255, 255), // Middle from max
+        let boundaryTests: [(actual: Int, a: Int, b: Int, c: Int, d: Int)] = [
+            (0, 0, 0, 0, 0),           // All zero
+            (255, 255, 255, 255, 255),  // All max
+            (0, 128, 128, 128, 128),    // Zero in middle region
+            (255, 128, 128, 128, 128),  // Max in middle region
+            (128, 0, 0, 0, 0),          // Middle from zero
+            (128, 255, 255, 255, 255),  // Middle from max
         ]
         
-        for (actual, a, b, c) in boundaryTests {
-            let encoded = encoder.encodePixel(actual: actual, a: a, b: b, c: c, context: context)
-            let decoded = decoder.decodePixel(mappedError: encoded.mappedError, a: a, b: b, c: c, context: context)
+        for (actual, a, b, c, d) in boundaryTests {
+            let encoded = encoder.encodePixel(actual: actual, a: a, b: b, c: c, d: d, context: context)
+            let decoded = decoder.decodePixel(mappedError: encoded.mappedError, a: a, b: b, c: c, d: d, context: context)
             
             #expect(decoded.sample == actual, "Boundary test failed: expected \(actual), got \(decoded.sample)")
         }
@@ -625,7 +635,7 @@ struct JPEGLSRegularModeDecoderTests {
         let decoder = try JPEGLSRegularModeDecoder(parameters: params, near: 0)
         let context = try createContextModel()
         
-        let k = decoder.getGolombParameter(a: 120, b: 120, c: 120, context: context)
+        let k = decoder.getGolombParameter(a: 120, b: 120, c: 120, d: 120, context: context)
         
         // Should return non-negative Golomb parameter
         #expect(k >= 0)
@@ -637,7 +647,7 @@ struct JPEGLSRegularModeDecoderTests {
         let decoder = try JPEGLSRegularModeDecoder(parameters: params, near: 0)
         let context = try createContextModel()
         
-        let index = decoder.getContextIndex(a: 120, b: 120, c: 120, context: context)
+        let index = decoder.getContextIndex(a: 120, b: 120, c: 120, d: 120, context: context)
         
         // Should return valid context index
         #expect(index >= 0)
@@ -650,7 +660,7 @@ struct JPEGLSRegularModeDecoderTests {
         let decoder = try JPEGLSRegularModeDecoder(parameters: params, near: 0)
         let context = try createContextModel()
         
-        let sign = decoder.getContextSign(a: 120, b: 120, c: 120, context: context)
+        let sign = decoder.getContextSign(a: 120, b: 120, c: 120, d: 120, context: context)
         
         // Should return +1 or -1
         #expect(sign == 1 || sign == -1)
@@ -669,7 +679,7 @@ struct JPEGLSRegularModeDecoderTests {
         let c = 118
         
         // Encode to get unary and remainder
-        let encoded = encoder.encodePixel(actual: actual, a: a, b: b, c: c, context: context)
+        let encoded = encoder.encodePixel(actual: actual, a: a, b: b, c: c, d: b, context: context)
         
         // Decode using unary count (quotient) and remainder
         let decoded = decoder.decodePixelFromBits(
@@ -678,6 +688,7 @@ struct JPEGLSRegularModeDecoderTests {
             a: a,
             b: b,
             c: c,
+            d: b,
             context: context
         )
         
@@ -697,6 +708,7 @@ struct JPEGLSRegularModeDecoderTests {
             a: 120,
             b: 122,
             c: 118,
+            d: 122,
             context: context
         )
         
@@ -720,10 +732,10 @@ struct JPEGLSRegularModeDecoderTests {
         let c = 118
         
         // Encode
-        let encoded = encoder.encodePixel(actual: actual, a: a, b: b, c: c, context: context)
+        let encoded = encoder.encodePixel(actual: actual, a: a, b: b, c: c, d: b, context: context)
         
         // Decode
-        let decoded = decoder.decodePixel(mappedError: encoded.mappedError, a: a, b: b, c: c, context: context)
+        let decoded = decoder.decodePixel(mappedError: encoded.mappedError, a: a, b: b, c: c, d: b, context: context)
         
         // In near-lossless, decoded should be within NEAR of actual
         let diff = abs(decoded.sample - actual)
@@ -744,6 +756,7 @@ struct JPEGLSRegularModeDecoderTests {
             a: 255,
             b: 255,
             c: 255,
+            d: 255,
             context: context
         )
         
@@ -763,6 +776,7 @@ struct JPEGLSRegularModeDecoderTests {
             a: 0,
             b: 0,
             c: 0,
+            d: 0,
             context: context
         )
         

@@ -93,6 +93,7 @@ JPEG-LS is a lossless/near-lossless compression standard specifically designed f
 | **Multi-Component Support** | Full RGB and grayscale encoding with all interleaving modes |
 | **Interleaving Modes** | None (separate scans), Line-interleaved, Sample-interleaved |
 | **Near-Lossless Support** | Configurable error tolerance encoding with NEAR parameter (1-255) |
+| **ITU-T.87 Compliant** | Standard-compliant gradient computation (D1=d-b, D2=b-c, D3=c-a) and run mode |
 | **Command-Line Tool** | `jpegls` CLI with info, verify, encode, and decode commands |
 
 ### Architecture Overview

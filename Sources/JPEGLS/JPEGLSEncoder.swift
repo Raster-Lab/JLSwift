@@ -183,8 +183,8 @@ public struct JPEGLSEncoder: Sendable {
     ) throws {
         writer.writeMarker(.jpegLSExtension)
         
-        // Length: 11 bytes (marker type + parameters)
-        writer.writeUInt16(11)
+        // Length: 13 bytes (marker type + parameters)
+        writer.writeUInt16(13)
         
         // LSE marker type: 1 (preset parameters)
         writer.writeByte(1)
@@ -346,20 +346,109 @@ public struct JPEGLSEncoder: Sendable {
         
         let componentId = scanHeader.components[0].id
         
-        // Encode pixels in raster order
+        // Encode pixels in raster order with run mode support
         for row in 0..<buffer.height {
-            for col in 0..<buffer.width {
-                try encodePixel(
-                    buffer: buffer,
+            var col = 0
+            while col < buffer.width {
+                guard let neighbors = buffer.getNeighbors(
                     componentId: componentId,
                     row: row,
-                    column: col,
-                    regularMode: regularMode,
-                    runMode: runMode,
-                    context: &context,
-                    writer: writer,
-                    near: scanHeader.near
+                    column: col
+                ) else {
+                    throw JPEGLSError.encodingFailed(
+                        reason: "Failed to get neighbors for pixel at (\(row), \(col))"
+                    )
+                }
+                
+                // Check for run mode: all quantized gradients are zero
+                let (d1, d2, d3) = regularMode.computeGradients(
+                    a: neighbors.left, b: neighbors.top, c: neighbors.topLeft, d: neighbors.topRight
                 )
+                let q1 = regularMode.quantizeGradient(d1)
+                let q2 = regularMode.quantizeGradient(d2)
+                let q3 = regularMode.quantizeGradient(d3)
+                
+                if q1 == 0 && q2 == 0 && q3 == 0 {
+                    // Run mode: scan ahead for matching pixels
+                    let runValue = neighbors.left
+                    guard let componentPixels = buffer.getComponentPixels(componentId: componentId) else {
+                        throw JPEGLSError.encodingFailed(reason: "Failed to get component pixels")
+                    }
+                    let linePixels = componentPixels[row]
+                    let runLength = runMode.detectRunLength(
+                        pixels: linePixels,
+                        startIndex: col,
+                        runValue: runValue
+                    )
+                    
+                    let remainingInLine = buffer.width - col
+                    let actualRunLength = min(runLength, remainingInLine)
+                    
+                    // Encode run length
+                    let encoded = runMode.encodeRunLength(
+                        runLength: actualRunLength,
+                        runIndex: context.currentRunIndex
+                    )
+                    
+                    // Write continuation bits (1s)
+                    for _ in 0..<encoded.continuationBits {
+                        writer.writeBits(1, count: 1)
+                    }
+                    
+                    if actualRunLength < remainingInLine {
+                        // Run was interrupted - write termination and remainder
+                        writeRunTermination(encoded: encoded, writer: writer)
+                        
+                        // Encode the interruption pixel
+                        let interruptionCol = col + actualRunLength
+                        if interruptionCol < buffer.width {
+                            guard let interruptionNeighbors = buffer.getNeighbors(
+                                componentId: componentId,
+                                row: row,
+                                column: interruptionCol
+                            ) else {
+                                throw JPEGLSError.encodingFailed(
+                                    reason: "Failed to get neighbors for interruption pixel at (\(row), \(interruptionCol))"
+                                )
+                            }
+                            
+                            let interruption = runMode.encodeRunInterruption(
+                                interruptionValue: interruptionNeighbors.actual,
+                                runValue: runValue
+                            )
+                            
+                            writeRunInterruptionBits(
+                                mappedError: interruption.mappedError,
+                                regularMode: regularMode,
+                                writer: writer
+                            )
+                            
+                            col = interruptionCol + 1
+                        } else {
+                            col = interruptionCol
+                        }
+                    } else {
+                        // Run reaches end of line - write termination with remainder
+                        writeRunTermination(encoded: encoded, writer: writer)
+                        col += actualRunLength
+                    }
+                    
+                    context.updateRunIndex(completedRunLength: actualRunLength)
+                } else {
+                    // Regular mode
+                    try encodePixel(
+                        buffer: buffer,
+                        componentId: componentId,
+                        row: row,
+                        column: col,
+                        regularMode: regularMode,
+                        runMode: runMode,
+                        context: &context,
+                        writer: writer,
+                        near: scanHeader.near
+                    )
+                    col += 1
+                }
             }
         }
     }
@@ -376,18 +465,103 @@ public struct JPEGLSEncoder: Sendable {
         // Encode line by line, all components per line
         for row in 0..<buffer.height {
             for component in scanHeader.components {
-                for col in 0..<buffer.width {
-                    try encodePixel(
-                        buffer: buffer,
+                var col = 0
+                while col < buffer.width {
+                    guard let neighbors = buffer.getNeighbors(
                         componentId: component.id,
                         row: row,
-                        column: col,
-                        regularMode: regularMode,
-                        runMode: runMode,
-                        context: &context,
-                        writer: writer,
-                        near: scanHeader.near
+                        column: col
+                    ) else {
+                        throw JPEGLSError.encodingFailed(
+                            reason: "Failed to get neighbors for pixel at (\(row), \(col))"
+                        )
+                    }
+                    
+                    // Check for run mode
+                    let (d1, d2, d3) = regularMode.computeGradients(
+                        a: neighbors.left, b: neighbors.top, c: neighbors.topLeft, d: neighbors.topRight
                     )
+                    let q1 = regularMode.quantizeGradient(d1)
+                    let q2 = regularMode.quantizeGradient(d2)
+                    let q3 = regularMode.quantizeGradient(d3)
+                    
+                    if q1 == 0 && q2 == 0 && q3 == 0 {
+                        // Run mode
+                        let runValue = neighbors.left
+                        guard let componentPixels = buffer.getComponentPixels(componentId: component.id) else {
+                            throw JPEGLSError.encodingFailed(reason: "Failed to get component pixels")
+                        }
+                        let linePixels = componentPixels[row]
+                        let runLength = runMode.detectRunLength(
+                            pixels: linePixels,
+                            startIndex: col,
+                            runValue: runValue
+                        )
+                        
+                        let remainingInLine = buffer.width - col
+                        let actualRunLength = min(runLength, remainingInLine)
+                        
+                        let encoded = runMode.encodeRunLength(
+                            runLength: actualRunLength,
+                            runIndex: context.currentRunIndex
+                        )
+                        
+                        for _ in 0..<encoded.continuationBits {
+                            writer.writeBits(1, count: 1)
+                        }
+                        
+                        if actualRunLength < remainingInLine {
+                            writeRunTermination(encoded: encoded, writer: writer)
+                            
+                            let interruptionCol = col + actualRunLength
+                            if interruptionCol < buffer.width {
+                                guard let interruptionNeighbors = buffer.getNeighbors(
+                                    componentId: component.id,
+                                    row: row,
+                                    column: interruptionCol
+                                ) else {
+                                    throw JPEGLSError.encodingFailed(
+                                        reason: "Failed to get neighbors for interruption pixel"
+                                    )
+                                }
+                                
+                                let interruption = runMode.encodeRunInterruption(
+                                    interruptionValue: interruptionNeighbors.actual,
+                                    runValue: runValue
+                                )
+                                
+                                writeRunInterruptionBits(
+                                    mappedError: interruption.mappedError,
+                                    regularMode: regularMode,
+                                    writer: writer
+                                )
+                                
+                                col = interruptionCol + 1
+                            } else {
+                                col = interruptionCol
+                            }
+                        } else {
+                            // Run reaches end of line - write termination with remainder
+                            writeRunTermination(encoded: encoded, writer: writer)
+                            col += actualRunLength
+                        }
+                        
+                        context.updateRunIndex(completedRunLength: actualRunLength)
+                    } else {
+                        // Regular mode
+                        try encodePixel(
+                            buffer: buffer,
+                            componentId: component.id,
+                            row: row,
+                            column: col,
+                            regularMode: regularMode,
+                            runMode: runMode,
+                            context: &context,
+                            writer: writer,
+                            near: scanHeader.near
+                        )
+                        col += 1
+                    }
                 }
             }
         }
@@ -444,18 +618,13 @@ public struct JPEGLSEncoder: Sendable {
             )
         }
         
-        // NOTE: Run mode encoding not yet implemented
-        // This MVP version uses regular mode for all pixels, which is simpler
-        // and still produces valid JPEG-LS output. Run mode optimization can
-        // be added in a future enhancement for better compression of flat regions.
-        // See: MILESTONES.md Phase 7.1 - Encoder Implementation Notes
-        
-        // Regular mode encoding
+        // Regular mode encoding (run mode is handled at the scan level)
         let encodedPixel = regularMode.encodePixel(
             actual: neighbors.actual,
             a: neighbors.left,
             b: neighbors.top,
             c: neighbors.topLeft,
+            d: neighbors.topRight,
             context: context
         )
         
@@ -484,6 +653,37 @@ public struct JPEGLSEncoder: Sendable {
         // Write remainder (k bits)
         if encoded.golombK > 0 {
             writer.writeBits(UInt32(encoded.remainder), count: encoded.golombK)
+        }
+    }
+    
+    /// Golomb parameter k for run interruption encoding per ITU-T.87
+    private static let runInterruptionK = 0
+    
+    /// Write run interruption error to bitstream using Golomb-Rice encoding
+    private func writeRunInterruptionBits(
+        mappedError: Int,
+        regularMode: JPEGLSRegularMode,
+        writer: JPEGLSBitstreamWriter
+    ) {
+        let k = Self.runInterruptionK
+        let (unaryLength, remainder) = regularMode.golombEncode(value: mappedError, k: k)
+        for _ in 0..<unaryLength {
+            writer.writeBits(0, count: 1)
+        }
+        writer.writeBits(1, count: 1)
+        if k > 0 {
+            writer.writeBits(UInt32(remainder), count: k)
+        }
+    }
+    
+    /// Write run termination and remainder bits to bitstream
+    private func writeRunTermination(
+        encoded: EncodedRun,
+        writer: JPEGLSBitstreamWriter
+    ) {
+        writer.writeBits(0, count: 1)  // Termination bit
+        if encoded.j > 0 {
+            writer.writeBits(UInt32(encoded.remainder), count: encoded.j)
         }
     }
 }

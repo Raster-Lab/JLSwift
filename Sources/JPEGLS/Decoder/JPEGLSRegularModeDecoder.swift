@@ -68,13 +68,13 @@ public struct JPEGLSRegularModeDecoder: Sendable {
     /// Compute local gradients for context determination.
     ///
     /// Per ITU-T.87 Section 4.1.1, three gradients are computed:
-    /// - D1 = d(b, a) = b - a  (horizontal gradient)
-    /// - D2 = d(c, b) = c - b  (vertical gradient)
-    /// - D3 = d(c, a) = c - a  (diagonal gradient)
+    /// - D1 = d - b  (top-right minus top)
+    /// - D2 = b - c  (top minus top-left)
+    /// - D3 = c - a  (top-left minus left)
     ///
     /// where the pixel arrangement is:
     /// ```
-    ///   c b
+    ///   c b d
     ///   a x  (x is current pixel being decoded)
     /// ```
     ///
@@ -82,11 +82,12 @@ public struct JPEGLSRegularModeDecoder: Sendable {
     ///   - a: Left neighbor pixel value
     ///   - b: Top neighbor pixel value
     ///   - c: Top-left diagonal neighbor pixel value
+    ///   - d: Top-right diagonal neighbor pixel value
     /// - Returns: Tuple of (D1, D2, D3) gradients
-    public func computeGradients(a: Int, b: Int, c: Int) -> (d1: Int, d2: Int, d3: Int) {
-        let d1 = b - a  // Horizontal gradient
-        let d2 = c - b  // Vertical gradient
-        let d3 = c - a  // Diagonal gradient
+    public func computeGradients(a: Int, b: Int, c: Int, d: Int) -> (d1: Int, d2: Int, d3: Int) {
+        let d1 = d - b  // Top-right minus top
+        let d2 = b - c  // Top minus top-left
+        let d3 = c - a  // Top-left minus left
         
         return (d1, d2, d3)
     }
@@ -284,10 +285,11 @@ public struct JPEGLSRegularModeDecoder: Sendable {
         a: Int,
         b: Int,
         c: Int,
+        d: Int,
         context: JPEGLSContextModel
     ) -> DecodedPixel {
         // Step 1: Compute local gradients
-        let (d1, d2, d3) = computeGradients(a: a, b: b, c: c)
+        let (d1, d2, d3) = computeGradients(a: a, b: b, c: c, d: d)
         
         // Step 2: Quantize gradients
         let q1 = quantizeGradient(d1)
@@ -344,10 +346,11 @@ public struct JPEGLSRegularModeDecoder: Sendable {
         a: Int,
         b: Int,
         c: Int,
+        d: Int,
         context: JPEGLSContextModel
     ) -> DecodedPixel {
         // Compute gradients and context to get k
-        let (d1, d2, d3) = computeGradients(a: a, b: b, c: c)
+        let (d1, d2, d3) = computeGradients(a: a, b: b, c: c, d: d)
         let q1 = quantizeGradient(d1)
         let q2 = quantizeGradient(d2)
         let q3 = quantizeGradient(d3)
@@ -360,7 +363,7 @@ public struct JPEGLSRegularModeDecoder: Sendable {
         let mappedError = golombDecode(unaryCount: unaryCount, remainder: remainder, k: k)
         
         // Use the main decode method
-        return decodePixel(mappedError: mappedError, a: a, b: b, c: c, context: context)
+        return decodePixel(mappedError: mappedError, a: a, b: b, c: c, d: d, context: context)
     }
     
     /// Get the Golomb parameter k for a given context.
@@ -378,9 +381,10 @@ public struct JPEGLSRegularModeDecoder: Sendable {
         a: Int,
         b: Int,
         c: Int,
+        d: Int,
         context: JPEGLSContextModel
     ) -> Int {
-        let (d1, d2, d3) = computeGradients(a: a, b: b, c: c)
+        let (d1, d2, d3) = computeGradients(a: a, b: b, c: c, d: d)
         let q1 = quantizeGradient(d1)
         let q2 = quantizeGradient(d2)
         let q3 = quantizeGradient(d3)
@@ -400,9 +404,10 @@ public struct JPEGLSRegularModeDecoder: Sendable {
         a: Int,
         b: Int,
         c: Int,
+        d: Int,
         context: JPEGLSContextModel
     ) -> Int {
-        let (d1, d2, d3) = computeGradients(a: a, b: b, c: c)
+        let (d1, d2, d3) = computeGradients(a: a, b: b, c: c, d: d)
         let q1 = quantizeGradient(d1)
         let q2 = quantizeGradient(d2)
         let q3 = quantizeGradient(d3)
@@ -421,9 +426,10 @@ public struct JPEGLSRegularModeDecoder: Sendable {
         a: Int,
         b: Int,
         c: Int,
+        d: Int,
         context: JPEGLSContextModel
     ) -> Int {
-        let (d1, d2, d3) = computeGradients(a: a, b: b, c: c)
+        let (d1, d2, d3) = computeGradients(a: a, b: b, c: c, d: d)
         let q1 = quantizeGradient(d1)
         let q2 = quantizeGradient(d2)
         let q3 = quantizeGradient(d3)

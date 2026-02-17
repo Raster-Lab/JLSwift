@@ -57,12 +57,12 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 **Status**: Complete
 
 #### Phase 3.1: Regular Mode Encoding ✅
-- [x] Implement gradient computation for regular mode detection
+- [x] Implement gradient computation for regular mode detection (ITU-T.87: D1=d-b, D2=b-c, D3=c-a)
 - [x] Implement prediction using MED (Median Edge Detector)
 - [x] Implement prediction error computation and modular reduction
-- [x] Implement Golomb-Rice parameter estimation (k calculation)
+- [x] Implement Golomb-Rice parameter estimation (k calculation using N)
 - [x] Implement Golomb-Rice encoding of prediction errors
-- [x] Implement context-based bias correction
+- [x] Implement context-based bias correction (B accumulates signed error per ITU-T.87)
 - [x] Achieve >95% test coverage for regular mode (100.00%)
 
 #### Phase 3.2: Run Mode Encoding ✅
@@ -71,6 +71,7 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 - [x] Implement J[RUNindex] mapping table
 - [x] Implement run mode context updates
 - [x] Implement run-length limit handling
+- [x] Enable run mode in encoder pipeline (triggered by zero quantized gradients)
 - [x] Achieve >95% test coverage for run mode (100.00%)
 
 #### Phase 3.3: Near-Lossless Encoding ✅
@@ -108,7 +109,7 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 - [x] Implement prediction reconstruction
 - [x] Implement Golomb-Rice decoding
 - [x] Implement prediction error recovery with bias correction
-- [x] Implement context state reconstruction
+- [x] Implement context state reconstruction (A initialized to 2 per ITU-T.87)
 - [x] Implement sample value computation with clamping
 - [x] Achieve >95% test coverage for regular mode decoding (96.90%)
 
@@ -116,6 +117,7 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 - [x] Implement run-length decoding logic
 - [x] Implement run interruption sample decoding
 - [x] Implement run mode context reconstruction
+- [x] Enable run mode in decoder pipeline (triggered by zero quantized gradients)
 - [x] Achieve >95% test coverage for run mode decoding (100.00%)
 
 #### Phase 4.4: Multi-Component Decoding ✅

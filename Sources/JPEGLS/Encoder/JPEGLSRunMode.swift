@@ -105,30 +105,22 @@ public struct JPEGLSRunMode: Sendable {
     
     // MARK: - J[RUNindex] Mapping
     
+    /// Standard J table per ITU-T.87 Annex J (Table J.1)
+    private static let jTable: [Int] = [
+        0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3,
+        4, 4, 5, 5, 6, 6, 7, 7, 8, 9, 10, 11, 12, 13, 14, 15
+    ]
+    
     /// Compute the number of bits required to encode a run length.
     ///
-    /// Per ITU-T.87 Section 4.5.2, J[RUNindex] determines the bit allocation:
-    /// - J[0] = 0 (very short runs use 0 bits for the count part)
-    /// - J[1] = 1
-    /// - J[2] = 2
-    /// - J[i] = min(i, 32) for i > 2
-    ///
-    /// The J array adapts to the typical run length patterns in the image.
+    /// Per ITU-T.87 Annex J, J[RUNindex] determines the run length
+    /// block size as 2^J[RUNindex].
     ///
     /// - Parameter runIndex: Current run index (0 to 31)
     /// - Returns: Number of bits for encoding run length
     public func computeJ(runIndex: Int) -> Int {
-        // J[RUNindex] mapping per ITU-T.87 Section 4.5.2
-        switch runIndex {
-        case 0:
-            return 0
-        case 1:
-            return 1
-        case 2:
-            return 2
-        default:
-            return min(runIndex, 32)
-        }
+        let idx = max(0, min(runIndex, Self.jTable.count - 1))
+        return Self.jTable[idx]
     }
     
     // MARK: - Run-Length Encoding
@@ -147,21 +139,34 @@ public struct JPEGLSRunMode: Sendable {
     /// - Parameters:
     ///   - runLength: Total length of the run
     ///   - runIndex: Current run index (determines J value)
+    ///   - remainingInLine: Pixels remaining in line (for end-of-line detection)
     /// - Returns: Encoded run result with bit sequences
-    public func encodeRunLength(runLength: Int, runIndex: Int) -> EncodedRun {
-        let j = computeJ(runIndex: runIndex)
-        let blockSize = 1 << j  // 2^J
-        
+    public func encodeRunLength(runLength: Int, runIndex: Int, remainingInLine: Int = Int.max) -> EncodedRun {
+        var currentRunIndex = runIndex
         var remainingLength = runLength
         var continuationBits = 0
+        var accumulatedLength = 0
         
-        // Count how many blocks of 2^J we can encode
-        while remainingLength >= blockSize && j > 0 {
-            continuationBits += 1
-            remainingLength -= blockSize
+        // Count blocks, incrementing RUNindex after each full block
+        while remainingLength > 0 {
+            let j = computeJ(runIndex: currentRunIndex)
+            let blockSize = 1 << j
+            
+            if remainingLength >= blockSize && accumulatedLength + blockSize <= remainingInLine {
+                continuationBits += 1
+                remainingLength -= blockSize
+                accumulatedLength += blockSize
+                // Increment RUNindex per standard
+                if currentRunIndex < 31 {
+                    currentRunIndex += 1
+                }
+            } else {
+                break
+            }
         }
         
-        // The remainder is encoded in J bits
+        // The remainder is encoded in J bits (using current J after increments)
+        let j = computeJ(runIndex: currentRunIndex)
         let remainder = remainingLength
         
         return EncodedRun(
