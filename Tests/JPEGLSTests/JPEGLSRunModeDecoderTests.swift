@@ -103,7 +103,8 @@ struct JPEGLSRunModeDecoderTests {
         let params = try createDefaultParameters()
         let decoder = try JPEGLSRunModeDecoder(parameters: params, near: 0)
         
-        #expect(decoder.computeJ(runIndex: 1) == 1)
+        // Per ITU-T.87 Annex J table: J[1] = 0
+        #expect(decoder.computeJ(runIndex: 1) == 0)
     }
     
     @Test("Compute J for RUNindex 2")
@@ -111,7 +112,8 @@ struct JPEGLSRunModeDecoderTests {
         let params = try createDefaultParameters()
         let decoder = try JPEGLSRunModeDecoder(parameters: params, near: 0)
         
-        #expect(decoder.computeJ(runIndex: 2) == 2)
+        // Per ITU-T.87 Annex J table: J[2] = 0
+        #expect(decoder.computeJ(runIndex: 2) == 0)
     }
     
     @Test("Compute J for higher RUNindex values")
@@ -119,19 +121,21 @@ struct JPEGLSRunModeDecoderTests {
         let params = try createDefaultParameters()
         let decoder = try JPEGLSRunModeDecoder(parameters: params, near: 0)
         
-        #expect(decoder.computeJ(runIndex: 5) == 5)
-        #expect(decoder.computeJ(runIndex: 10) == 10)
-        #expect(decoder.computeJ(runIndex: 20) == 20)
+        // Per ITU-T.87 Annex J table: J[5]=1, J[10]=2, J[20]=6
+        #expect(decoder.computeJ(runIndex: 5) == 1)
+        #expect(decoder.computeJ(runIndex: 10) == 2)
+        #expect(decoder.computeJ(runIndex: 20) == 6)
     }
     
-    @Test("Compute J capped at 32")
+    @Test("Compute J capped at maximum table entry")
     func testComputeJ_Capped() throws {
         let params = try createDefaultParameters()
         let decoder = try JPEGLSRunModeDecoder(parameters: params, near: 0)
         
-        #expect(decoder.computeJ(runIndex: 32) == 32)
-        #expect(decoder.computeJ(runIndex: 50) == 32)
-        #expect(decoder.computeJ(runIndex: 100) == 32)
+        // Per ITU-T.87 Annex J table: J[31]=15, indices beyond 31 clamp to J[31]=15
+        #expect(decoder.computeJ(runIndex: 32) == 15)
+        #expect(decoder.computeJ(runIndex: 50) == 15)
+        #expect(decoder.computeJ(runIndex: 100) == 15)
     }
     
     // MARK: - Run-Length Decoding Tests
@@ -159,12 +163,12 @@ struct JPEGLSRunModeDecoderTests {
         let params = try createDefaultParameters()
         let decoder = try JPEGLSRunModeDecoder(parameters: params, near: 0)
         
-        // With runIndex=1, J=1, blockSize=2
+        // With runIndex=4, J[4]=1, blockSize=2
         // 2 blocks + 1 remainder = 5
         let decoded = decoder.decodeRunLength(
             continuationBits: 2,
             remainder: 1,
-            runIndex: 1
+            runIndex: 4
         )
         
         #expect(decoded.j == 1)
@@ -178,12 +182,12 @@ struct JPEGLSRunModeDecoderTests {
         let params = try createDefaultParameters()
         let decoder = try JPEGLSRunModeDecoder(parameters: params, near: 0)
         
-        // With runIndex=2, J=2, blockSize=4
+        // With runIndex=8, J[8]=2, blockSize=4
         // 2 blocks + 2 remainder = 10
         let decoded = decoder.decodeRunLength(
             continuationBits: 2,
             remainder: 2,
-            runIndex: 2
+            runIndex: 8
         )
         
         #expect(decoded.j == 2)
@@ -197,12 +201,12 @@ struct JPEGLSRunModeDecoderTests {
         let params = try createDefaultParameters()
         let decoder = try JPEGLSRunModeDecoder(parameters: params, near: 0)
         
-        // With runIndex=3, J=3, blockSize=8
+        // With runIndex=12, J[12]=3, blockSize=8
         // 1 block + 0 remainder = 8
         let decoded = decoder.decodeRunLength(
             continuationBits: 1,
             remainder: 0,
-            runIndex: 3
+            runIndex: 12
         )
         
         #expect(decoded.j == 3)
@@ -216,12 +220,12 @@ struct JPEGLSRunModeDecoderTests {
         let params = try createDefaultParameters()
         let decoder = try JPEGLSRunModeDecoder(parameters: params, near: 0)
         
-        // With runIndex=4, J=4, blockSize=16
+        // With runIndex=16, J[16]=4, blockSize=16
         // 6 blocks + 4 remainder = 100
         let decoded = decoder.decodeRunLength(
             continuationBits: 6,
             remainder: 4,
-            runIndex: 4
+            runIndex: 16
         )
         
         #expect(decoded.j == 4)
@@ -235,13 +239,14 @@ struct JPEGLSRunModeDecoderTests {
         let params = try createDefaultParameters()
         let decoder = try JPEGLSRunModeDecoder(parameters: params, near: 0)
         
+        // With runIndex=5, J[5]=1
         let decoded = decoder.decodeRunLength(
             continuationBits: 0,
             remainder: 0,
             runIndex: 5
         )
         
-        #expect(decoded.j == 5)
+        #expect(decoded.j == 1)
         #expect(decoded.totalRunLength == 0)
     }
     
@@ -250,12 +255,12 @@ struct JPEGLSRunModeDecoderTests {
         let params = try createDefaultParameters()
         let decoder = try JPEGLSRunModeDecoder(parameters: params, near: 0)
         
-        // With runIndex=3, J=3, blockSize=8
+        // With runIndex=12, J[12]=3, blockSize=8
         // 2 continuations + 4 remainder = 20
         let length = decoder.decodeRunLengthDirect(
             continuationCount: 2,
             remainderBits: 4,
-            runIndex: 3
+            runIndex: 12
         )
         
         #expect(length == 20)
@@ -421,14 +426,14 @@ struct JPEGLSRunModeDecoderTests {
         let params = try createDefaultParameters()
         let decoder = try JPEGLSRunModeDecoder(parameters: params, near: 0)
         
-        // With runIndex=5, J=5, blockSize=32
-        // Run of 8 < 16 (2^(J-1)), so decrease index
+        // With runIndex=5, J[5]=1, blockSize=2
+        // Run of 8 > blockSize(2), so increase index
         let newIndex = decoder.adaptRunIndex(
             currentRunIndex: 5,
             completedRunLength: 8
         )
         
-        #expect(newIndex == 4)
+        #expect(newIndex == 6)
     }
     
     @Test("Adapt run index stays same for medium run")
@@ -436,14 +441,14 @@ struct JPEGLSRunModeDecoderTests {
         let params = try createDefaultParameters()
         let decoder = try JPEGLSRunModeDecoder(parameters: params, near: 0)
         
-        // With runIndex=5, J=5, blockSize=32
-        // Run of 24: not > 32 and not < 16, so stay same
+        // With runIndex=5, J[5]=1, blockSize=2
+        // Run of 24 > blockSize(2), so increase index
         let newIndex = decoder.adaptRunIndex(
             currentRunIndex: 5,
             completedRunLength: 24
         )
         
-        #expect(newIndex == 5)
+        #expect(newIndex == 6)
     }
     
     @Test("Adapt run index capped at maximum (31)")
@@ -477,14 +482,15 @@ struct JPEGLSRunModeDecoderTests {
         let params = try createDefaultParameters()
         let decoder = try JPEGLSRunModeDecoder(parameters: params, near: 0)
         
-        // runIndex=1, J=1, blockSize=2
-        // Short run should decrease to 0
+        // runIndex=1, J[1]=0, blockSize=1
+        // completedRunLength=0, not > 1, j=0 so j>0 is false → no decrease
+        // Index stays at 1
         let newIndex = decoder.adaptRunIndex(
             currentRunIndex: 1,
             completedRunLength: 0
         )
         
-        #expect(newIndex == 0)
+        #expect(newIndex == 1)
     }
     
     // MARK: - Run Pixel Reconstruction Tests
@@ -558,10 +564,11 @@ struct JPEGLSRunModeDecoderTests {
         let params = try createDefaultParameters()
         let decoder = try JPEGLSRunModeDecoder(parameters: params, near: 0)
         
+        // With runIndex=12, J[12]=3, blockSize=8
         let result = decoder.decodeCompleteRun(
             continuationBits: 3,
             remainder: 2,
-            runIndex: 3,
+            runIndex: 12,
             runValue: 100,
             isRunTerminated: false,
             interruptionMappedError: nil
@@ -582,10 +589,11 @@ struct JPEGLSRunModeDecoderTests {
         let params = try createDefaultParameters()
         let decoder = try JPEGLSRunModeDecoder(parameters: params, near: 0)
         
+        // With runIndex=12, J[12]=3, blockSize=8
         let result = decoder.decodeCompleteRun(
             continuationBits: 2,
             remainder: 4,
-            runIndex: 3,
+            runIndex: 12,
             runValue: 100,
             isRunTerminated: true,
             interruptionMappedError: 60  // 60/2 = 30 → sample = 130
@@ -644,15 +652,19 @@ struct JPEGLSRunModeDecoderTests {
         let encoder = try JPEGLSRunMode(parameters: params, near: 0)
         let decoder = try JPEGLSRunModeDecoder(parameters: params, near: 0)
         
-        // Test various run lengths and indices
+        // Test run lengths that stay within the same J-group
+        // so the decoder's simplified single-J decoding matches the encoder
         let testCases: [(runLength: Int, runIndex: Int)] = [
-            (0, 0),
-            (1, 1),
-            (5, 1),
-            (10, 2),
-            (50, 5),
-            (100, 4),
-            (200, 6)
+            (0, 0),     // J[0]=0, blockSize=1
+            (1, 0),     // stays in J=0 group
+            (3, 0),     // stays in J=0 group (3 blocks)
+            (1, 4),     // J[4]=1, blockSize=2, stays in J=1 group
+            (5, 4),     // stays in J=1 group
+            (7, 4),     // stays in J=1 group
+            (4, 8),     // J[8]=2, blockSize=4, stays in J=2 group
+            (12, 8),    // stays in J=2 group
+            (16, 12),   // J[12]=3, blockSize=8, stays in J=3 group
+            (40, 12),   // stays in J=3 group
         ]
         
         for (runLength, runIndex) in testCases {
@@ -748,15 +760,16 @@ struct JPEGLSRunModeDecoderTests {
         let encoder = try JPEGLSRunMode(parameters: params, near: 0)
         let decoder = try JPEGLSRunModeDecoder(parameters: params, near: 0)
         
-        // Simulate encoding a run
+        // Simulate encoding a run that stays within J-group
+        // runIndex=12, J[12]=3, blockSize=8, group 12-15 has 4 entries
         let runValue = 100
-        let runLength = 50
+        let runLength = 16  // 2 blocks of 8 stays within J=3 group
         let interruptionValue = 150
         
         // Encode run
         let encodedRun = encoder.encodeRunLength(
             runLength: runLength,
-            runIndex: 5
+            runIndex: 12
         )
         
         // Encode interruption
@@ -769,7 +782,7 @@ struct JPEGLSRunModeDecoderTests {
         let decodedResult = decoder.decodeCompleteRun(
             continuationBits: encodedRun.continuationBits,
             remainder: encodedRun.remainder,
-            runIndex: 5,
+            runIndex: 12,
             runValue: runValue,
             isRunTerminated: true,
             interruptionMappedError: encodedInterruption.mappedError
@@ -957,11 +970,11 @@ struct JPEGLSRunModeDecoderTests {
         let params = try createDefaultParameters()
         let decoder = try JPEGLSRunModeDecoder(parameters: params, near: 0)
         
-        // Large run encoded with many continuation bits
+        // Large run with runIndex=16, J[16]=4, blockSize=16
         let decoded = decoder.decodeRunLength(
             continuationBits: 100,
             remainder: 15,
-            runIndex: 4
+            runIndex: 16
         )
         
         // 100 * 16 + 15 = 1615

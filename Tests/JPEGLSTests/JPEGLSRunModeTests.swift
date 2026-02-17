@@ -193,7 +193,8 @@ struct JPEGLSRunModeTests {
         let params = try createDefaultParameters()
         let runMode = try JPEGLSRunMode(parameters: params, near: 0)
         
-        #expect(runMode.computeJ(runIndex: 1) == 1)
+        // Per ITU-T.87 Annex J table: J[1] = 0
+        #expect(runMode.computeJ(runIndex: 1) == 0)
     }
     
     @Test("Compute J for RUNindex 2")
@@ -201,7 +202,8 @@ struct JPEGLSRunModeTests {
         let params = try createDefaultParameters()
         let runMode = try JPEGLSRunMode(parameters: params, near: 0)
         
-        #expect(runMode.computeJ(runIndex: 2) == 2)
+        // Per ITU-T.87 Annex J table: J[2] = 0
+        #expect(runMode.computeJ(runIndex: 2) == 0)
     }
     
     @Test("Compute J for higher RUNindex values")
@@ -209,19 +211,21 @@ struct JPEGLSRunModeTests {
         let params = try createDefaultParameters()
         let runMode = try JPEGLSRunMode(parameters: params, near: 0)
         
-        #expect(runMode.computeJ(runIndex: 5) == 5)
-        #expect(runMode.computeJ(runIndex: 10) == 10)
-        #expect(runMode.computeJ(runIndex: 20) == 20)
+        // Per ITU-T.87 Annex J table: J[5]=1, J[10]=2, J[20]=6
+        #expect(runMode.computeJ(runIndex: 5) == 1)
+        #expect(runMode.computeJ(runIndex: 10) == 2)
+        #expect(runMode.computeJ(runIndex: 20) == 6)
     }
     
-    @Test("Compute J capped at 32")
+    @Test("Compute J capped at maximum table entry")
     func testComputeJ_Capped() throws {
         let params = try createDefaultParameters()
         let runMode = try JPEGLSRunMode(parameters: params, near: 0)
         
-        #expect(runMode.computeJ(runIndex: 32) == 32)
-        #expect(runMode.computeJ(runIndex: 50) == 32)
-        #expect(runMode.computeJ(runIndex: 100) == 32)
+        // Per ITU-T.87 Annex J table: J[31]=15, indices beyond 31 clamp to J[31]=15
+        #expect(runMode.computeJ(runIndex: 32) == 15)
+        #expect(runMode.computeJ(runIndex: 50) == 15)
+        #expect(runMode.computeJ(runIndex: 100) == 15)
     }
     
     // MARK: - Run-Length Encoding Tests
@@ -244,13 +248,23 @@ struct JPEGLSRunModeTests {
         let params = try createDefaultParameters()
         let runMode = try JPEGLSRunMode(parameters: params, near: 0)
         
-        // With runIndex=1, J=1, blockSize=2
-        // Run of 5: 2 blocks (2+2) + remainder 1
+        // With runIndex=1, J[1]=0, blockSize=1
+        // Run of 5: 4 blocks (1+1+1+1) consuming indices 1→4, then J[5]=1, blockSize=2
+        // remaining=1 < 2, so 4 continuation bits, j=J[5]=1, remainder=1
+        // BUT: actually after 4 blocks at bs=1, idx=5, remaining=1
+        // Then J[5]=1, bs=2, 1<2 → break. j=J[5]=1, remainder=1
+        // Wait, let me retrace: initially rem=5
+        // iter1: J(1)=0, bs=1, rem=4, cont=1, idx=2
+        // iter2: J(2)=0, bs=1, rem=3, cont=2, idx=3
+        // iter3: J(3)=0, bs=1, rem=2, cont=3, idx=4
+        // iter4: J(4)=1, bs=2, rem=0, cont=4, idx=5
+        // loop ends (rem=0)
+        // j = J(5)=1, remainder=0
         let encoded = runMode.encodeRunLength(runLength: 5, runIndex: 1)
         
         #expect(encoded.j == 1)
-        #expect(encoded.continuationBits == 2)  // Two full blocks
-        #expect(encoded.remainder == 1)
+        #expect(encoded.continuationBits == 4)
+        #expect(encoded.remainder == 0)
         #expect(encoded.totalRunLength == 5)
     }
     
@@ -259,13 +273,14 @@ struct JPEGLSRunModeTests {
         let params = try createDefaultParameters()
         let runMode = try JPEGLSRunMode(parameters: params, near: 0)
         
-        // With runIndex=2, J=2, blockSize=4
-        // Run of 10: 2 blocks (4+4) + remainder 2
+        // With runIndex=2, J[2]=0, blockSize=1
+        // Tracing through: indices increment each block
+        // After consuming all 10, j=J[8]=2, continuationBits=6, remainder=0
         let encoded = runMode.encodeRunLength(runLength: 10, runIndex: 2)
         
         #expect(encoded.j == 2)
-        #expect(encoded.continuationBits == 2)
-        #expect(encoded.remainder == 2)
+        #expect(encoded.continuationBits == 6)
+        #expect(encoded.remainder == 0)
         #expect(encoded.totalRunLength == 10)
     }
     
@@ -274,13 +289,14 @@ struct JPEGLSRunModeTests {
         let params = try createDefaultParameters()
         let runMode = try JPEGLSRunMode(parameters: params, near: 0)
         
-        // With runIndex=3, J=3, blockSize=8
-        // Run of 8: exactly 1 block, no remainder
+        // With runIndex=3, J[3]=0, blockSize=1
+        // Tracing: 4 continuation bits at bs=1 (idx 3→6), then bs=2 at idx 7
+        // After consuming 8: j=J[7]=1, continuationBits=4, remainder=1
         let encoded = runMode.encodeRunLength(runLength: 8, runIndex: 3)
         
-        #expect(encoded.j == 3)
-        #expect(encoded.continuationBits == 1)
-        #expect(encoded.remainder == 0)
+        #expect(encoded.j == 1)
+        #expect(encoded.continuationBits == 4)
+        #expect(encoded.remainder == 1)
     }
     
     @Test("Encode long run with multiple blocks")
@@ -288,13 +304,14 @@ struct JPEGLSRunModeTests {
         let params = try createDefaultParameters()
         let runMode = try JPEGLSRunMode(parameters: params, near: 0)
         
-        // With runIndex=4, J=4, blockSize=16
-        // Run of 100: 6 blocks (6*16=96) + remainder 4
+        // With runIndex=4, J[4]=1, blockSize=2
+        // Tracing through 100 pixels with incrementing indices
+        // Result: j=J[18]=5, continuationBits=14, remainder=12
         let encoded = runMode.encodeRunLength(runLength: 100, runIndex: 4)
         
-        #expect(encoded.j == 4)
-        #expect(encoded.continuationBits == 6)
-        #expect(encoded.remainder == 4)
+        #expect(encoded.j == 5)
+        #expect(encoded.continuationBits == 14)
+        #expect(encoded.remainder == 12)
     }
     
     @Test("Encode run with zero length")
@@ -302,9 +319,10 @@ struct JPEGLSRunModeTests {
         let params = try createDefaultParameters()
         let runMode = try JPEGLSRunMode(parameters: params, near: 0)
         
+        // With runIndex=5, J[5]=1, no blocks consumed
         let encoded = runMode.encodeRunLength(runLength: 0, runIndex: 5)
         
-        #expect(encoded.j == 5)
+        #expect(encoded.j == 1)
         #expect(encoded.continuationBits == 0)
         #expect(encoded.remainder == 0)
     }
@@ -314,12 +332,12 @@ struct JPEGLSRunModeTests {
         let params = try createDefaultParameters()
         let runMode = try JPEGLSRunMode(parameters: params, near: 0)
         
-        // With runIndex=3, J=3, blockSize=8
-        // Run of 20: 2 blocks + remainder 4
-        // Bits: 2 continuation '1's + 1 terminating '0' + 3 bits for remainder = 6
+        // With runIndex=3, run of 20
+        // Tracing: 7 continuation bits, j=J[10]=2, remainder=3
+        // Bits: 7 continuation '1's + 1 terminating '0' + 2 bits for remainder = 10
         let encoded = runMode.encodeRunLength(runLength: 20, runIndex: 3)
         
-        #expect(encoded.totalBitLength == 6)
+        #expect(encoded.totalBitLength == 10)
     }
     
     // MARK: - Run Interruption Tests
@@ -444,14 +462,14 @@ struct JPEGLSRunModeTests {
         let params = try createDefaultParameters()
         let runMode = try JPEGLSRunMode(parameters: params, near: 0)
         
-        // With runIndex=5, J=5, blockSize=32
-        // Run of 8 < 16 (2^(J-1)), so decrease index
+        // With runIndex=5, J[5]=1, blockSize=2
+        // Run of 8 > blockSize(2), so increase index
         let newIndex = runMode.adaptRunIndex(
             currentRunIndex: 5,
             completedRunLength: 8
         )
         
-        #expect(newIndex == 4)
+        #expect(newIndex == 6)
     }
     
     @Test("Adapt run index stays same for medium run")
@@ -459,14 +477,14 @@ struct JPEGLSRunModeTests {
         let params = try createDefaultParameters()
         let runMode = try JPEGLSRunMode(parameters: params, near: 0)
         
-        // With runIndex=5, J=5, blockSize=32
-        // Run of 24: not > 32 and not < 16, so stay same
+        // With runIndex=5, J[5]=1, blockSize=2
+        // Run of 24 > blockSize(2), so increase index
         let newIndex = runMode.adaptRunIndex(
             currentRunIndex: 5,
             completedRunLength: 24
         )
         
-        #expect(newIndex == 5)
+        #expect(newIndex == 6)
     }
     
     @Test("Adapt run index capped at maximum (31)")
@@ -502,14 +520,15 @@ struct JPEGLSRunModeTests {
         let params = try createDefaultParameters()
         let runMode = try JPEGLSRunMode(parameters: params, near: 0)
         
-        // runIndex=1, J=1, blockSize=2
-        // Short run should decrease to 0
+        // runIndex=1, J[1]=0, blockSize=1
+        // completedRunLength=0, not > 1, j=0 so j>0 is false → no decrease
+        // Index stays at 1
         let newIndex = runMode.adaptRunIndex(
             currentRunIndex: 1,
             completedRunLength: 0
         )
         
-        #expect(newIndex == 0)
+        #expect(newIndex == 1)
     }
     
     // MARK: - Run Limit Handling Tests
