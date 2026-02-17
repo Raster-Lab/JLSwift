@@ -671,9 +671,9 @@ struct JPEGLSRegularModeDecoderTests {
         // Encode to get unary and remainder
         let encoded = encoder.encodePixel(actual: actual, a: a, b: b, c: c, context: context)
         
-        // Decode using unary count (unaryLength - 1) and remainder
+        // Decode using unary count (quotient) and remainder
         let decoded = decoder.decodePixelFromBits(
-            unaryCount: encoded.unaryLength - 1,  // quotient
+            unaryCount: encoded.unaryLength,  // quotient
             remainder: encoded.remainder,
             a: a,
             b: b,

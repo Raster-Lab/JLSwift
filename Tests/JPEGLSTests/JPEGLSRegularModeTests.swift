@@ -345,7 +345,7 @@ struct JPEGLSRegularModeTests {
         let regularMode = try JPEGLSRegularMode(parameters: params, near: 0)
         
         let (unaryLength, remainder) = regularMode.golombEncode(value: 5, k: 0)
-        #expect(unaryLength == 6)  // value >> 0 = 5, unary = 5 + 1
+        #expect(unaryLength == 5)  // value >> 0 = 5, unary = 5 zeros
         #expect(remainder == 0)    // value & 0 = 0
     }
     
@@ -358,7 +358,7 @@ struct JPEGLSRegularModeTests {
         // quotient = 13 >> 2 = 3 (binary: 11)
         // remainder = 13 & 3 = 1 (binary: 01)
         let (unaryLength, remainder) = regularMode.golombEncode(value: 13, k: 2)
-        #expect(unaryLength == 4)  // quotient + 1 = 3 + 1
+        #expect(unaryLength == 3)  // quotient = 3, unary = 3 zeros
         #expect(remainder == 1)    // last 2 bits
     }
     
@@ -371,7 +371,7 @@ struct JPEGLSRegularModeTests {
         // quotient = 25 >> 4 = 1 (binary: 1)
         // remainder = 25 & 15 = 9 (binary: 1001)
         let (unaryLength, remainder) = regularMode.golombEncode(value: 25, k: 4)
-        #expect(unaryLength == 2)  // quotient + 1 = 1 + 1
+        #expect(unaryLength == 1)  // quotient = 1, unary = 1 zero
         #expect(remainder == 9)    // last 4 bits
     }
     
@@ -435,7 +435,7 @@ struct JPEGLSRegularModeTests {
         #expect(result.contextIndex < JPEGLSContextModel.regularContextCount)
         
         // Should have encoded bits
-        #expect(result.unaryLength > 0)
+        #expect(result.unaryLength >= 0)
         #expect(result.golombK >= 0)
     }
     
@@ -481,8 +481,8 @@ struct JPEGLSRegularModeTests {
             context: context
         )
         
-        // Total bit length should equal unary + k
-        #expect(result.totalBitLength == result.unaryLength + result.golombK)
+        // Total bit length should equal unary zeros + 1 stop bit + k remainder bits
+        #expect(result.totalBitLength == result.unaryLength + 1 + result.golombK)
     }
     
     @Test("Encode multiple pixels and verify context adaptation")
@@ -521,7 +521,7 @@ struct JPEGLSRegularModeTests {
             
             // Should have valid encoding
             #expect(result.contextIndex >= 0)
-            #expect(result.unaryLength > 0)
+            #expect(result.unaryLength >= 0)
         }
     }
     
@@ -543,7 +543,7 @@ struct JPEGLSRegularModeTests {
         
         // Should encode successfully in near-lossless mode
         #expect(result.contextIndex >= 0)
-        #expect(result.unaryLength > 0)
+        #expect(result.unaryLength >= 0)
     }
     
     // MARK: - Edge Case Tests

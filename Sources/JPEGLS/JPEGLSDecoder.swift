@@ -495,7 +495,8 @@ public struct JPEGLSDecoder: Sendable {
         while try reader.readBits(1) == 0 {
             unaryCount += 1
             // Limit check to prevent infinite loop on corrupted data
-            guard unaryCount < 1000 else {
+            // For 16-bit images, mapped error can be up to 2*MAXVAL = 131070
+            guard unaryCount < 200000 else {
                 throw JPEGLSError.decodingFailed(reason: "Excessive unary prefix in Golomb code")
             }
         }
