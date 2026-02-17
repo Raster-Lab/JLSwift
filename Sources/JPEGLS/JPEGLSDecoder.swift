@@ -338,6 +338,10 @@ public struct JPEGLSDecoder: Sendable {
                 // Compute gradients
                 let (d1, d2, d3) = decoder.computeGradients(a: a, b: b, c: c)
                 
+                // NOTE: Run mode decoding not yet enabled to match encoder
+                // The encoder uses regular mode for all pixels (see JPEGLSEncoder.swift line 447-451)
+                // Once encoder implements run mode, uncomment this check:
+                /*
                 // Check for run mode
                 if d1 == 0 && d2 == 0 && d3 == 0 {
                     // Run mode: decode run length
@@ -364,6 +368,7 @@ public struct JPEGLSDecoder: Sendable {
                         col += 1
                     }
                 } else {
+                */
                     // Regular mode: decode single pixel
                     let pixel = try decodeSinglePixel(
                         reader: reader,
@@ -377,7 +382,7 @@ public struct JPEGLSDecoder: Sendable {
                     
                     pixels[row][col] = pixel
                     col += 1
-                }
+                // }
             }
         }
         
@@ -404,6 +409,8 @@ public struct JPEGLSDecoder: Sendable {
             // Compute gradients
             let (d1, d2, d3) = decoder.computeGradients(a: a, b: b, c: c)
             
+            // NOTE: Run mode decoding disabled to match encoder (see decodeComponent)
+            /*
             // Check for run mode
             if d1 == 0 && d2 == 0 && d3 == 0 {
                 // Run mode
@@ -430,6 +437,7 @@ public struct JPEGLSDecoder: Sendable {
                     col += 1
                 }
             } else {
+            */
                 // Regular mode
                 let pixel = try decodeSinglePixel(
                     reader: reader,
@@ -443,7 +451,7 @@ public struct JPEGLSDecoder: Sendable {
                 
                 pixels[row][col] = pixel
                 col += 1
-            }
+            // }
         }
     }
     
