@@ -156,7 +156,7 @@ public struct JPEGLSRunMode: Sendable {
         var continuationBits = 0
         
         // Count how many blocks of 2^J we can encode
-        while remainingLength >= blockSize && j > 0 {
+        while remainingLength >= blockSize {
             continuationBits += 1
             remainingLength -= blockSize
         }
