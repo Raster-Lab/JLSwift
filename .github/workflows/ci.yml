@@ -6,6 +6,11 @@ on:
   pull_request:
     branches: [main]
 
+# Cancel in-progress runs for the same branch/PR to save resources
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
@@ -17,21 +22,31 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install Swift 6.2
-        run: |
-          wget -q https://download.swift.org/swift-6.2-release/ubuntu2204/swift-6.2-RELEASE/swift-6.2-RELEASE-ubuntu22.04.tar.gz
-          tar xzf swift-6.2-RELEASE-ubuntu22.04.tar.gz
-          rm swift-6.2-RELEASE-ubuntu22.04.tar.gz
-          echo "$PWD/swift-6.2-RELEASE-ubuntu22.04/usr/bin" >> $GITHUB_PATH
+      - name: Set up Swift
+        uses: swift-actions/setup-swift@v2
+        with:
+          swift-version: '6.2'
 
       - name: Verify Swift installation
         run: swift --version
 
+      - name: Cache SPM dependencies
+        uses: actions/cache@v4
+        with:
+          path: .build
+          key: ${{ runner.os }}-spm-${{ hashFiles('Package.swift', 'Package.resolved') }}
+          restore-keys: |
+            ${{ runner.os }}-spm-
+
       - name: Build
-        run: swift build 2>&1 | tee build.log
+        run: |
+          set -o pipefail
+          swift build 2>&1 | tee build.log
 
       - name: Run tests with coverage
-        run: swift test --enable-code-coverage
+        run: |
+          set -o pipefail
+          swift test --enable-code-coverage 2>&1 | tee test-output.log
 
       - name: Check code coverage
         run: |
@@ -67,3 +82,19 @@ jobs:
           else
             echo "PASS: Code coverage ${COVERAGE}% meets the ${THRESHOLD}% threshold."
           fi
+
+      - name: Upload build log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: build.log
+          retention-days: 7
+
+      - name: Upload test output
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-output
+          path: test-output.log
+          retention-days: 7

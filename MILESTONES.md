@@ -12,6 +12,7 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 - [x] Set up project structure (`Sources/`, `Tests/`)
 - [x] Create GitHub Copilot instructions (`.github/copilot-instructions.md`)
 - [x] Set up CI pipeline with GitHub Actions
+- [x] Improve CI pipeline with dependency caching, concurrency control, separate build/test jobs, and artifact uploads
 - [x] Enforce >95% test code coverage in CI
 - [x] Create initial documentation (`README.md`, `MILESTONES.md`)
 
