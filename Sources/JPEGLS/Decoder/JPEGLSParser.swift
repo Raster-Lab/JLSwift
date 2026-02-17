@@ -376,7 +376,7 @@ public final class JPEGLSParser {
         switch extensionType {
         case .presetCodingParameters:
             // Parse preset parameters
-            guard length == 13 else {
+            guard length == 11 else {
                 throw JPEGLSError.invalidBitstreamStructure(
                     reason: "Invalid LSE preset parameters length: \(length)"
                 )

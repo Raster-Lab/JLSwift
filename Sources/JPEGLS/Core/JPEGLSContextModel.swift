@@ -77,7 +77,7 @@ public struct JPEGLSContextModel: Sendable {
         
         // Initialize context arrays to default values per ITU-T.87 Section 4.3
         self.contextA = Array(repeating: 0, count: Self.regularContextCount)
-        self.contextB = Array(repeating: 0, count: Self.regularContextCount)
+        self.contextB = Array(repeating: 1, count: Self.regularContextCount)  // B starts at 1 per ITU-T.87
         self.contextC = Array(repeating: 0, count: Self.regularContextCount)
         self.contextN = Array(repeating: 1, count: Self.regularContextCount)
         
@@ -100,7 +100,7 @@ public struct JPEGLSContextModel: Sendable {
     private mutating func initializeContexts() {
         for i in 0..<Self.regularContextCount {
             contextA[i] = 0
-            contextB[i] = 0
+            contextB[i] = 1  // Per ITU-T.87 Section 4.3.2, B initializes to 1
             contextC[i] = 0
             contextN[i] = 1
         }

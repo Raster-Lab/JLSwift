@@ -221,6 +221,11 @@ public struct JPEGLSDecoder: Sendable {
             return Array(repeating: Array(repeating: 0, count: frameHeader.width), count: frameHeader.height)
         }
         
+        // Initialize shared decoder and context (one context shared across all components in interleaved mode)
+        let decoder = try JPEGLSRegularModeDecoder(parameters: parameters, near: scanHeader.near)
+        let runDecoder = try JPEGLSRunModeDecoder(parameters: parameters, near: scanHeader.near)
+        var context = try JPEGLSContextModel(parameters: parameters, near: scanHeader.near)
+        
         // Decode line by line, all components per line
         for row in 0..<frameHeader.height {
             for componentIndex in 0..<componentCount {
@@ -230,6 +235,9 @@ public struct JPEGLSDecoder: Sendable {
                     pixels: &componentPixels[componentIndex],
                     row: row,
                     width: frameHeader.width,
+                    decoder: decoder,
+                    runDecoder: runDecoder,
+                    context: &context,
                     scanHeader: scanHeader,
                     parameters: parameters
                 )
@@ -262,16 +270,10 @@ public struct JPEGLSDecoder: Sendable {
             return Array(repeating: Array(repeating: 0, count: frameHeader.width), count: frameHeader.height)
         }
         
-        // Initialize decoders and contexts for each component
-        var decoders = try (0..<componentCount).map { _ in
-            try JPEGLSRegularModeDecoder(parameters: parameters, near: scanHeader.near)
-        }
-        var runDecoders = try (0..<componentCount).map { _ in
-            try JPEGLSRunModeDecoder(parameters: parameters, near: scanHeader.near)
-        }
-        var contexts = try (0..<componentCount).map { _ in
-            try JPEGLSContextModel(parameters: parameters, near: scanHeader.near)
-        }
+        // Initialize shared decoder and context (one context shared across all components in interleaved mode)
+        let decoder = try JPEGLSRegularModeDecoder(parameters: parameters, near: scanHeader.near)
+        let runDecoder = try JPEGLSRunModeDecoder(parameters: parameters, near: scanHeader.near)
+        var context = try JPEGLSContextModel(parameters: parameters, near: scanHeader.near)
         
         // Decode pixel by pixel, cycling through components
         for row in 0..<frameHeader.height {
@@ -287,9 +289,9 @@ public struct JPEGLSDecoder: Sendable {
                     // Decode pixel
                     let pixel = try decodeSinglePixel(
                         reader: reader,
-                        decoder: decoders[componentIndex],
-                        runDecoder: runDecoders[componentIndex],
-                        context: &contexts[componentIndex],
+                        decoder: decoder,
+                        runDecoder: runDecoder,
+                        context: &context,
                         a: a, b: b, c: c,
                         parameters: parameters,
                         near: scanHeader.near
@@ -388,13 +390,12 @@ public struct JPEGLSDecoder: Sendable {
         pixels: inout [[Int]],
         row: Int,
         width: Int,
+        decoder: JPEGLSRegularModeDecoder,
+        runDecoder: JPEGLSRunModeDecoder,
+        context: inout JPEGLSContextModel,
         scanHeader: JPEGLSScanHeader,
         parameters: JPEGLSPresetParameters
     ) throws {
-        let decoder = try JPEGLSRegularModeDecoder(parameters: parameters, near: scanHeader.near)
-        let runDecoder = try JPEGLSRunModeDecoder(parameters: parameters, near: scanHeader.near)
-        var context = try JPEGLSContextModel(parameters: parameters, near: scanHeader.near)
-        
         var col = 0
         while col < width {
             // Get neighbor pixels

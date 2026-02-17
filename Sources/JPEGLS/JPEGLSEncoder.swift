@@ -278,7 +278,7 @@ public struct JPEGLSEncoder: Sendable {
         let buffer = JPEGLSPixelBuffer(imageData: imageData)
         
         // Create context model
-        var context = try JPEGLSContextModel(parameters: parameters)
+        var context = try JPEGLSContextModel(parameters: parameters, near: scanHeader.near)
         
         // Create regular mode encoder
         let regularMode = try JPEGLSRegularMode(
