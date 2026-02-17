@@ -335,49 +335,21 @@ public struct JPEGLSDecoder: Sendable {
                 // Get neighbor pixels
                 let (a, b, c) = getNeighbors(pixels: pixels, row: row, col: col)
                 
-                // Compute gradients
-                let (d1, d2, d3) = decoder.computeGradients(a: a, b: b, c: c)
+                // NOTE: Run mode decoding not yet enabled to match encoder
+                // The encoder uses regular mode for all pixels (see JPEGLSEncoder.swift line 447-451)
+                // Regular mode: decode single pixel
+                let pixel = try decodeSinglePixel(
+                    reader: reader,
+                    decoder: decoder,
+                    runDecoder: runDecoder,
+                    context: &context,
+                    a: a, b: b, c: c,
+                    parameters: parameters,
+                    near: scanHeader.near
+                )
                 
-                // Check for run mode
-                if d1 == 0 && d2 == 0 && d3 == 0 {
-                    // Run mode: decode run length
-                    let (runLength, interruptionPixel) = try decodeRun(
-                        reader: reader,
-                        runDecoder: runDecoder,
-                        context: &context,
-                        runValue: a,
-                        remainingInLine: width - col,
-                        parameters: parameters,
-                        near: scanHeader.near
-                    )
-                    
-                    // Fill run pixels
-                    for i in 0..<runLength {
-                        pixels[row][col + i] = a
-                    }
-                    
-                    col += runLength
-                    
-                    // Handle interruption pixel if within line
-                    if col < width, let interruptPixel = interruptionPixel {
-                        pixels[row][col] = interruptPixel
-                        col += 1
-                    }
-                } else {
-                    // Regular mode: decode single pixel
-                    let pixel = try decodeSinglePixel(
-                        reader: reader,
-                        decoder: decoder,
-                        runDecoder: runDecoder,
-                        context: &context,
-                        a: a, b: b, c: c,
-                        parameters: parameters,
-                        near: scanHeader.near
-                    )
-                    
-                    pixels[row][col] = pixel
-                    col += 1
-                }
+                pixels[row][col] = pixel
+                col += 1
             }
         }
         
@@ -401,49 +373,20 @@ public struct JPEGLSDecoder: Sendable {
             // Get neighbor pixels
             let (a, b, c) = getNeighbors(pixels: pixels, row: row, col: col)
             
-            // Compute gradients
-            let (d1, d2, d3) = decoder.computeGradients(a: a, b: b, c: c)
+            // NOTE: Run mode decoding disabled to match encoder (see decodeComponent)
+            // Regular mode
+            let pixel = try decodeSinglePixel(
+                reader: reader,
+                decoder: decoder,
+                runDecoder: runDecoder,
+                context: &context,
+                a: a, b: b, c: c,
+                parameters: parameters,
+                near: scanHeader.near
+            )
             
-            // Check for run mode
-            if d1 == 0 && d2 == 0 && d3 == 0 {
-                // Run mode
-                let (runLength, interruptionPixel) = try decodeRun(
-                    reader: reader,
-                    runDecoder: runDecoder,
-                    context: &context,
-                    runValue: a,
-                    remainingInLine: width - col,
-                    parameters: parameters,
-                    near: scanHeader.near
-                )
-                
-                // Fill run pixels
-                for i in 0..<runLength {
-                    pixels[row][col + i] = a
-                }
-                
-                col += runLength
-                
-                // Handle interruption pixel
-                if col < width, let interruptPixel = interruptionPixel {
-                    pixels[row][col] = interruptPixel
-                    col += 1
-                }
-            } else {
-                // Regular mode
-                let pixel = try decodeSinglePixel(
-                    reader: reader,
-                    decoder: decoder,
-                    runDecoder: runDecoder,
-                    context: &context,
-                    a: a, b: b, c: c,
-                    parameters: parameters,
-                    near: scanHeader.near
-                )
-                
-                pixels[row][col] = pixel
-                col += 1
-            }
+            pixels[row][col] = pixel
+            col += 1
         }
     }
     
