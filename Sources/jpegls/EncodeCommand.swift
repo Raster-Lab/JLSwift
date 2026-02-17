@@ -75,8 +75,8 @@ extension JPEGLSCLITool {
             // Parse interleave mode
             let interleaveMode = try parseInterleaveMode(interleave)
             
-            // Parse color transformation
-            let colorTransformation = try parseColorTransform(colorTransform)
+            // Parse color transformation (not yet used by encoder)
+            let _ = try parseColorTransform(colorTransform)
             
             if verbose {
                 print("JPEG-LS Encoder")
@@ -138,39 +138,24 @@ extension JPEGLSCLITool {
                 )
             }
             
-            // Create scan header with appropriate parameters
-            let scanHeader: JPEGLSScanHeader
+            // Determine interleave mode
+            let actualInterleaveMode: JPEGLSInterleaveMode
             if components == 1 {
-                // Grayscale - always use .none interleave mode
-                scanHeader = try JPEGLSScanHeader(
-                    componentCount: 1,
-                    components: [JPEGLSScanHeader.ComponentSelector(id: 1)],
-                    near: near,
-                    interleaveMode: .none
-                )
+                // Grayscale always uses .none
+                actualInterleaveMode = .none
             } else {
-                // RGB - use specified interleave mode
-                scanHeader = try JPEGLSScanHeader(
-                    componentCount: 3,
-                    components: [
-                        JPEGLSScanHeader.ComponentSelector(id: 1),  // R
-                        JPEGLSScanHeader.ComponentSelector(id: 2),  // G
-                        JPEGLSScanHeader.ComponentSelector(id: 3)   // B
-                    ],
-                    near: near,
-                    interleaveMode: interleaveMode
-                )
+                // RGB uses specified mode
+                actualInterleaveMode = interleaveMode
             }
             
-            // Create pixel buffer
-            let buffer = JPEGLSPixelBuffer(imageData: imageData)
-            
             // Create encoder
-            // Note: Custom preset parameters are not currently exposed in the encoder API
-            // The encoder uses default parameters based on bits per sample
-            let encoder = try JPEGLSMultiComponentEncoder(
-                frameHeader: imageData.frameHeader,
-                scanHeader: scanHeader
+            let encoder = JPEGLSEncoder()
+            
+            // Create configuration
+            let config = try JPEGLSEncoder.Configuration(
+                near: near,
+                interleaveMode: actualInterleaveMode,
+                presetParameters: nil  // Custom presets not yet supported
             )
             
             // Log warning if custom parameters were requested but not applied
@@ -186,18 +171,23 @@ extension JPEGLSCLITool {
                 print("Encoding...")
             }
             
-            let statistics = try encoder.encodeScan(buffer: buffer)
+            let jpegLSData = try encoder.encode(imageData, configuration: config)
+            
+            // Write output file
+            try jpegLSData.write(to: URL(fileURLWithPath: output))
             
             if verbose {
-                print("Encoded \(statistics.pixelsEncoded) pixels")
-                print("Components: \(statistics.componentCount)")
-                print("Interleave mode: \(statistics.interleaveMode)")
+                print("Encoded successfully")
+                print("Output file size: \(jpegLSData.count) bytes")
+                print("Uncompressed size: \(inputData.count) bytes")
+                let ratio = Double(inputData.count) / Double(jpegLSData.count)
+                print("Compression ratio: \(String(format: "%.2f", ratio)):1")
                 print()
             }
             
-            // Get encoded data (note: this would need to be implemented in the encoder)
-            // For now, we'll throw an error indicating this needs implementation
-            throw ValidationError("Encoder output collection not yet implemented - needs bitstream writer integration")
+            if !quiet {
+                print("✓ Encoding complete: \(output)")
+            }
         }
         
         private func parseInterleaveMode(_ mode: String) throws -> JPEGLSInterleaveMode {
