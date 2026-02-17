@@ -406,8 +406,8 @@ struct ParserCoverageTests {
 @Suite("Multi-Component Validation Coverage Tests")
 struct MultiComponentValidationCoverageTests {
 
-    @Test("Line interleaved encoder rejects single component")
-    func testLineInterleavedEncoderRejectsSingleComponent() throws {
+    @Test("None interleaved encoder works with single component")
+    func testNoneInterleavedEncoderSingleComponent() throws {
         let pixels = [[10, 20], [30, 40]]
 
         let imageData = try MultiComponentImageData.grayscale(
