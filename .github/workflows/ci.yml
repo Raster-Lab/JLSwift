@@ -39,10 +39,14 @@ jobs:
             ${{ runner.os }}-spm-
 
       - name: Build
-        run: swift build 2>&1 | tee build.log
+        run: |
+          set -o pipefail
+          swift build 2>&1 | tee build.log
 
       - name: Run tests with coverage
-        run: swift test --enable-code-coverage 2>&1 | tee test-output.log
+        run: |
+          set -o pipefail
+          swift test --enable-code-coverage 2>&1 | tee test-output.log
 
       - name: Check code coverage
         run: |
