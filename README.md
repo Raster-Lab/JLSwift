@@ -544,9 +544,9 @@ JLSwift includes comprehensive conformance testing using reference files from th
   - Non-default parameters
 - **Image Loading**: PGM (grayscale) and PPM (color) reference image parsing
 - **Bit-Exact Comparison**: Infrastructure ready to validate decoded output against CharLS reference images
-  - Test suite with 10 comparison test cases
+  - Test suite with 10 comparison test cases (currently disabled pending decoder improvements)
   - Pixel-by-pixel validation (lossless and near-lossless modes)
-  - Pending: Full decoder support for CharLS encoding patterns
+  - Pending: Full decoder support for CharLS encoding patterns (decoder pixel drift under investigation)
 
 The conformance tests are located in `Tests/JPEGLSTests/CharLSConformanceTests.swift` with reference fixtures in `Tests/JPEGLSTests/TestFixtures/`. These tests ensure compatibility with the JPEG-LS standard (ISO/IEC 14495-1:1999 / ITU-T.87) and provide a foundation for bit-exact comparison with CharLS output. The parser successfully handles all 12 CharLS reference files; decoder integration is in progress.
 
