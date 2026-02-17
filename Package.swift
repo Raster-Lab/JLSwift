@@ -23,7 +23,10 @@ let package = Package(
     ],
     targets: [
         .target(
-            name: "JPEGLS"
+            name: "JPEGLS",
+            resources: [
+                .process("Platform/Metal/JPEGLSShaders.metal")
+            ]
         ),
         .executableTarget(
             name: "jpegls",
