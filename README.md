@@ -572,7 +572,7 @@ JLSwift/
 ├── .github/
 │   ├── copilot-instructions.md # Coding guidelines
 │   └── workflows/
-│       └── ci.yml             # CI pipeline configuration
+│       └── ci.yml             # CI pipeline (build → test with caching & concurrency)
 ├── README.md                  # This file
 └── MILESTONES.md              # Project roadmap
 ```
