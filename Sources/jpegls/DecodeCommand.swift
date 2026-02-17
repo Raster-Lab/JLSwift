@@ -44,45 +44,55 @@ extension JPEGLSCLITool {
             if verbose {
                 print("Input file size: \(inputData.count) bytes")
                 print()
-                print("Parsing JPEG-LS file...")
+                print("Decoding JPEG-LS file...")
             }
             
-            // Parse JPEG-LS file
-            let parser = JPEGLSParser(data: inputData)
-            let parseResult = try parser.parse()
+            // Decode JPEG-LS file
+            let decoder = JPEGLSDecoder()
+            let imageData = try decoder.decode(inputData)
             
             if verbose {
-                print("Frame header:")
-                print("  Width: \(parseResult.frameHeader.width)")
-                print("  Height: \(parseResult.frameHeader.height)")
-                print("  Bits per sample: \(parseResult.frameHeader.bitsPerSample)")
-                print("  Components: \(parseResult.frameHeader.componentCount)")
+                print("Decoded successfully!")
+                print("  Width: \(imageData.frameHeader.width)")
+                print("  Height: \(imageData.frameHeader.height)")
+                print("  Bits per sample: \(imageData.frameHeader.bitsPerSample)")
+                print("  Components: \(imageData.frameHeader.componentCount)")
                 print()
-                
-                for (index, scanHeader) in parseResult.scanHeaders.enumerated() {
-                    print("Scan \(index + 1):")
-                    print("  Components: \(scanHeader.componentCount)")
-                    print("  Interleave mode: \(scanHeader.interleaveMode)")
-                    print("  NEAR: \(scanHeader.near) (\(scanHeader.near == 0 ? "lossless" : "near-lossless"))")
-                    print()
+            }
+            
+            // Write output based on format
+            switch format.lowercased() {
+            case "raw":
+                // Write raw pixel data
+                var outputData = Data()
+                for component in imageData.components {
+                    for row in component.pixels {
+                        for pixel in row {
+                            // Write pixel value in appropriate byte size
+                            if imageData.frameHeader.bitsPerSample <= 8 {
+                                outputData.append(UInt8(clamping: pixel))
+                            } else {
+                                // Write as 16-bit big-endian
+                                let value = UInt16(clamping: pixel)
+                                outputData.append(UInt8((value >> 8) & 0xFF))
+                                outputData.append(UInt8(value & 0xFF))
+                            }
+                        }
+                    }
                 }
+                
+                try outputData.write(to: URL(fileURLWithPath: output))
+                
+                if !quiet {
+                    print("Decoded \(imageData.frameHeader.width)x\(imageData.frameHeader.height) image to \(output) (\(outputData.count) bytes)")
+                }
+                
+            case "png", "tiff":
+                throw ValidationError("Format '\(format)' not yet implemented - use 'raw' format")
+                
+            default:
+                throw ValidationError("Unknown format '\(format)' - supported formats: raw, png, tiff")
             }
-            
-            // Validate we have at least one scan
-            guard let firstScanHeader = parseResult.scanHeaders.first else {
-                throw ValidationError("No scan headers found in JPEG-LS file")
-            }
-            
-            // Create decoder
-            let decoder = try JPEGLSMultiComponentDecoder(
-                frameHeader: parseResult.frameHeader,
-                scanHeader: firstScanHeader,
-                colorTransformation: .none  // TODO: Extract from file if available
-            )
-            
-            // Decode (note: this would need the actual encoded bitstream)
-            // For now, we'll throw an error indicating this needs implementation
-            throw ValidationError("Decoder bitstream extraction not yet implemented - needs parser integration")
         }
     }
 }
