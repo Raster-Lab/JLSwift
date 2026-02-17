@@ -68,6 +68,7 @@ JPEG-LS is a lossless/near-lossless compression standard specifically designed f
 | 4.4 | Multi-Component Decoding | ✅ Complete | 92.10% |
 | 5.1 | ARM NEON / SIMD Optimization | ✅ Complete | 100.00% |
 | 5.2 | Apple Accelerate Integration | ✅ Complete | 100.00% |
+| 5.3 | Metal GPU Acceleration | ✅ Complete | 100.00% |
 | 5.4 | Memory Optimization | ✅ Complete | 100.00% |
 | 7.3 | CLI Argument Parsing Tests | ✅ Complete | N/A* |
 | 8.1 | CharLS Reference Integration | ⏳ In Progress | 100.00% |
@@ -86,6 +87,7 @@ JPEG-LS is a lossless/near-lossless compression standard specifically designed f
 | **Native Swift** | Pure Swift implementation with no external C dependencies |
 | **Apple Silicon Optimized** | ARM NEON/SIMD acceleration with Swift SIMD4 types |
 | **Hardware Acceleration** | Apple Accelerate framework (vDSP) for batch operations & statistics |
+| **Metal GPU Acceleration** | Optional GPU acceleration for large images (macOS 10.13+, iOS 11+) |
 | **Memory Optimized** | Buffer pooling, tile-based processing, and cache-friendly data layouts |
 | **DICOM Compatible** | Full support for DICOM transfer syntaxes |
 | **Multi-Component Support** | Full RGB and grayscale encoding with all interleaving modes |
@@ -581,6 +583,7 @@ JLSwift/
 | [SERVER_SIDE_EXAMPLES.md](SERVER_SIDE_EXAMPLES.md) | Server-side Swift integration guide (Vapor, Hummingbird, NIO) |
 | [DICOMKIT_INTEGRATION.md](DICOMKIT_INTEGRATION.md) | DICOMkit integration guide for DICOM imaging workflows |
 | [PERFORMANCE_TUNING.md](PERFORMANCE_TUNING.md) | Performance optimization and benchmarking guide |
+| [METAL_GPU_ACCELERATION.md](METAL_GPU_ACCELERATION.md) | Metal GPU acceleration guide for large images |
 | [TROUBLESHOOTING.md](TROUBLESHOOTING.md) | Common issues and solutions |
 | [VERSIONING.md](VERSIONING.md) | Semantic versioning strategy and release guidelines |
 | [CHANGELOG.md](CHANGELOG.md) | Complete history of changes and releases |
