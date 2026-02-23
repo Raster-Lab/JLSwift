@@ -177,23 +177,38 @@ public struct JPEGLSRegularMode: Sendable {
     
     // MARK: - Prediction Error
     
-    /// Compute prediction error with modular reduction.
+    /// Quantise a raw prediction error for near-lossless mode.
     ///
-    /// Per ITU-T.87 Section 4.2.2, the prediction error is computed as:
-    /// - Errval = x - Px' (x is actual value, Px' is corrected prediction)
+    /// Per ITU-T.87 Section 4.2.2, for NEAR > 0:
+    /// - Errval' = sgn(e) × floor((|e| + NEAR) / (2·NEAR + 1))
     ///
-    /// For modular reduction (near-lossless mode):
-    /// - Errval is reduced modulo RANGE to ensure it falls in [-RANGE/2, RANGE/2)
+    /// For lossless (NEAR = 0) the raw error is returned unchanged.
+    ///
+    /// - Parameter rawError: Raw prediction error (actual − corrected prediction)
+    /// - Returns: Quantised error (equals rawError when NEAR = 0)
+    private func computeQuantizedError(_ rawError: Int) -> Int {
+        guard near > 0 else { return rawError }
+        let sign = rawError >= 0 ? 1 : -1
+        return sign * ((abs(rawError) + near) / qbpp)
+    }
+    
+    /// Compute prediction error with quantisation (near-lossless) and modular reduction.
+    ///
+    /// Per ITU-T.87 Section 4.2.2, the prediction error is:
+    /// - For lossless (NEAR = 0): Errval = x − Px' with modular reduction
+    /// - For near-lossless (NEAR > 0): Errval' = quantise(x − Px') with modular reduction
+    ///
+    /// Modular reduction ensures the error lies in [−(RANGE−1)/2, (RANGE−1)/2].
     ///
     /// - Parameters:
     ///   - actual: Actual pixel value
     ///   - prediction: Corrected prediction value
-    /// - Returns: Prediction error with modular reduction applied
+    /// - Returns: Quantised prediction error with modular reduction applied
     public func computePredictionError(actual: Int, prediction: Int) -> Int {
-        var error = actual - prediction
+        let rawError = actual - prediction
+        var error = computeQuantizedError(rawError)
         
         // Apply modular reduction per ITU-T.87 Section 4.2.2
-        // This ensures error is in the range [-(RANGE-1)/2, (RANGE-1)/2]
         if error > (range - 1) / 2 {
             error -= range
         } else if error < -(range / 2) {
@@ -201,6 +216,29 @@ public struct JPEGLSRegularMode: Sendable {
         }
         
         return error
+    }
+    
+    /// Compute the reconstructed sample value that the decoder will produce.
+    ///
+    /// Per ITU-T.87 Section 4.3.3, the encoder must track the reconstructed value
+    /// Rx to keep its context in sync with the decoder:
+    /// - For near-lossless: Rx = clamp(Px' + Errval' × (2·NEAR + 1), 0, MAXVAL)
+    /// - For lossless: Rx = actual (exact reconstruction)
+    ///
+    /// - Parameters:
+    ///   - prediction: Bias-corrected prediction value (Px')
+    ///   - quantizedError: Quantised prediction error after modular reduction
+    /// - Returns: Reconstructed sample value clamped to [0, MAXVAL]
+    public func computeReconstructedValue(prediction: Int, quantizedError: Int) -> Int {
+        let dequantized = near > 0 ? quantizedError * qbpp : quantizedError
+        var rv = prediction + dequantized
+        // Apply modular correction matching the decoder's reconstructSample
+        if rv < 0 {
+            rv += range
+        } else if rv > parameters.maxValue {
+            rv -= range
+        }
+        return max(0, min(parameters.maxValue, rv))
     }
     
     /// Map prediction error to non-negative value for Golomb coding.
@@ -310,13 +348,13 @@ public struct JPEGLSRegularMode: Sendable {
             sign: sign
         )
         
-        // Step 6: Compute prediction error with modular reduction
-        let rawError = computePredictionError(actual: actual, prediction: correctedPrediction)
+        // Step 6: Compute quantised (near-lossless) or exact (lossless) prediction error
+        let quantisedError = computePredictionError(actual: actual, prediction: correctedPrediction)
         
         // Step 6a: Apply sign to normalise the error per ITU-T.87 Section 4.3.3.
         // When the context sign is negative the error is negated so that the encoded
         // error is always relative to the normalised (positive-sign) context.
-        let error = sign * rawError
+        let error = sign * quantisedError
         
         // Step 7: Map to non-negative for Golomb coding
         let mappedError = mapErrorToNonNegative(error)
@@ -327,15 +365,22 @@ public struct JPEGLSRegularMode: Sendable {
         // Step 9: Encode using Golomb-Rice
         let (unaryLength, remainder) = golombEncode(value: mappedError, k: k)
         
+        // Compute reconstructed value for near-lossless neighbour tracking
+        let reconstructedValue = computeReconstructedValue(
+            prediction: correctedPrediction,
+            quantizedError: quantisedError
+        )
+        
         return EncodedPixel(
             contextIndex: contextIndex,
             sign: sign,
             prediction: correctedPrediction,
-            error: rawError,
+            error: quantisedError,
             mappedError: mappedError,
             golombK: k,
             unaryLength: unaryLength,
-            remainder: remainder
+            remainder: remainder,
+            reconstructedValue: reconstructedValue
         )
     }
 }
@@ -356,7 +401,7 @@ public struct EncodedPixel: Sendable {
     /// Bias-corrected prediction value
     public let prediction: Int
     
-    /// Signed prediction error
+    /// Quantised prediction error (equals raw error for lossless mode)
     public let error: Int
     
     /// Mapped non-negative error (MErrval)
@@ -370,6 +415,11 @@ public struct EncodedPixel: Sendable {
     
     /// Binary remainder (k bits)
     public let remainder: Int
+    
+    /// Reconstructed sample value (what the decoder will produce).
+    /// For lossless mode this equals the actual pixel value; for
+    /// near-lossless it is the dequantised approximation.
+    public let reconstructedValue: Int
     
     /// Total encoded bit length
     public var totalBitLength: Int {

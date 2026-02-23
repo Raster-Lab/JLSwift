@@ -617,14 +617,14 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 - Identified five critical and significant deviations from the standard (see Phase 10.2 below)
 - All 732 tests passed as baseline verification before any refactoring
 
-#### Phase 10.2: Core Coding System Refactoring ⏳
+#### Phase 10.2: Core Coding System Refactoring ✅
 - [x] Refactor gradient computation to match the standard exactly (D1=d−b, D2=b−c, D3=c−a) — was already correct
 - [x] Refactor context quantisation and index computation (365 regular contexts)
 - [x] Refactor bias correction logic (B accumulation, C correction per Section 4.3.3)
 - [x] Refactor Golomb-Rice sign-adjusted error encoding (encoder maps sign×Errval, decoder reconstructs Px'+sign×Errval)
-- [ ] Refactor Golomb-Rice parameter estimation and encoding/decoding
-- [ ] Refactor run mode encoder/decoder synchronisation (RUNindex, J table per Annex J)
-- [ ] Refactor near-lossless error quantisation and reconstructed value tracking
+- [x] Refactor Golomb-Rice parameter estimation and encoding/decoding (run mode RUNindex sync; adaptive k verified correct)
+- [x] Refactor run mode encoder/decoder synchronisation (RUNindex, J table per Annex J)
+- [x] Refactor near-lossless error quantisation and reconstructed value tracking
 - [x] Ensure all unit tests pass after each refactoring step — no regressions permitted
 - [x] Achieve >95% test coverage throughout the refactoring process
 
@@ -634,7 +634,14 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 - **Sign-adjusted B update** (`JPEGLSContextModel.updateContext`): B was updated with the raw prediction error. Fixed to `B += sign × predictionError` per ITU-T.87 §4.3.3 so that the bias correction adapts in the normalised context direction.
 - **Encoder sign-adjusted error** (`JPEGLSRegularMode.encodePixel`): The raw prediction error was mapped to MErrval directly. Fixed to first sign-adjust: `signAdjustedError = sign × rawError`, then map `signAdjustedError` to MErrval.
 - **Decoder sign-adjusted reconstruction** (`JPEGLSRegularModeDecoder.decodePixel`): The decoded error was added to the prediction without sign adjustment. Fixed to compute `rawError = sign × decodedSignAdjustedError` and reconstruct `sample = Px' + rawError`.
-- All 732 unit tests pass with no regressions; coverage remains at 95.95%
+- **Run mode EOL terminator** (`JPEGLSEncoder`): The encoder always wrote a '0' termination bit + J remainder bits after the run continuation '1' bits, even for exact-block end-of-line runs where the decoder exits the run-length loop without reading a terminator. Fixed: terminator is only written when there is a partial-block remainder (`encoded.remainder > 0`) for EOL runs; exact-block EOL runs produce only continuation '1' bits.
+- **Run mode RUNindex synchronisation** (`JPEGLSEncoder`): After encoding a run the encoder called `context.updateRunIndex(completedRunLength:)`, which used a simple heuristic that diverged from the decoder's incremental update (increment after each '1' bit, decrement at '0' terminator). Fixed: the encoder now computes `finalRunIndex = min(initialRunIndex + continuationBits, 31)` and sets `context.runIndex` to `max(finalRunIndex − 1, 0)` for interrupted/partial-EOL runs, or `finalRunIndex` for exact-block EOL runs — exactly matching the decoder's `readRunLength` behaviour.
+- **Run mode detectRunLength for near-lossless** (`JPEGLSRunMode`): Pixel-equality check replaced by `abs(pixel − runValue) ≤ NEAR`, enabling correct near-lossless run detection.
+- **Near-lossless error quantisation** (`JPEGLSRegularMode.computePredictionError`): For NEAR > 0 the raw prediction error is now quantised per ITU-T.87 §4.2.2 before modular reduction: `Errval' = sgn(e) × floor((|e| + NEAR) / (2·NEAR + 1))`.
+- **Near-lossless reconstructed value** (`JPEGLSRegularMode.encodePixel`, `EncodedPixel`): Each encoded pixel now carries a `reconstructedValue` field. The encoder maintains a reconstructed-value buffer per component (for non-interleaved scans) and passes reconstructed neighbours to subsequent pixels, keeping encoder and decoder contexts in sync.
+- **Near-lossless dequantisation** (`JPEGLSRegularModeDecoder.reconstructSample`): For NEAR > 0 the decoded error is now dequantised before reconstruction: `deq = Errval × (2·NEAR + 1)`, then `sample = Px' + deq` with modular correction.
+- **Flat-region and near-lossless round-trip tests** (`JPEGLSDecoderTests`): Both previously-disabled tests are now enabled and pass: `testRoundTripFlatRegion` and `testRoundTripGrayscaleNearLossless`.
+- All 732 unit tests pass with no regressions; coverage remains at 96.00%
 
 #### Phase 10.3: File Format & Marker Refactoring
 - [ ] Refactor marker segment parsing and writing for strict standard compliance

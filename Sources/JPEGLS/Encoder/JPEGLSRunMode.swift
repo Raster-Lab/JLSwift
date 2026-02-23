@@ -90,9 +90,12 @@ public struct JPEGLSRunMode: Sendable {
         var runLength = 0
         let limit = min(pixels.count, startIndex + maxRunLength)
         
-        // Scan ahead to count matching pixels
+        // Scan ahead to count matching pixels.
+        // For near-lossless (NEAR > 0) a pixel is part of the run when
+        // |pixel − runValue| ≤ NEAR; for lossless (NEAR = 0) this reduces
+        // to exact equality.
         for i in startIndex..<limit {
-            if pixels[i] == runValue {
+            if abs(pixels[i] - runValue) <= near {
                 runLength += 1
             } else {
                 // Run interrupted
