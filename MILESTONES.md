@@ -600,6 +600,408 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 - Updated README.md documentation table with new release documents
 - **Note**: Automated release workflow and binary distribution deferred to post-v1.0 as they require CI/CD infrastructure beyond the current scope
 
+### Milestone 10: Standards Conformance Audit & Core Refactoring 📋
+**Target**: Full conformance with the latest version of ISO/IEC 14495-1 / ITU-T.87 across the core coding system and file formats  
+**Status**: Not Started
+
+#### Phase 10.1: Standards Conformance Audit
+- [ ] Audit the entire codebase against the latest published version of ISO/IEC 14495-1 / ITU-T.87
+- [ ] Verify core coding system conformance (prediction, context modelling, Golomb-Rice coding, run mode)
+- [ ] Verify file format conformance (marker segments, frame/scan headers, preset parameters, extension markers)
+- [ ] Identify and document any deviations from the standard
+- [ ] Create a conformance matrix mapping each section of the standard to its implementation and test coverage
+- [ ] Ensure all unit tests pass before any refactoring begins (baseline verification)
+
+#### Phase 10.2: Core Coding System Refactoring
+- [ ] Refactor gradient computation to match the standard exactly (D1=d−b, D2=b−c, D3=c−a)
+- [ ] Refactor context quantisation and index computation (365 regular contexts)
+- [ ] Refactor Golomb-Rice parameter estimation and encoding/decoding
+- [ ] Refactor run mode encoder/decoder synchronisation (RUNindex, J table per Annex J)
+- [ ] Refactor near-lossless error quantisation and reconstructed value tracking
+- [ ] Refactor bias correction logic (B accumulation, C correction per Section 4.3.3)
+- [ ] Ensure all unit tests pass after each refactoring step — no regressions permitted
+- [ ] Achieve >95% test coverage throughout the refactoring process
+
+#### Phase 10.3: File Format & Marker Refactoring
+- [ ] Refactor marker segment parsing and writing for strict standard compliance
+- [ ] Refactor LSE preset parameters handling (length field, threshold validation)
+- [ ] Refactor restart marker support (RST intervals)
+- [ ] Refactor byte stuffing logic (standard FF 00 and CharLS extended patterns)
+- [ ] Validate all marker lengths and parameter ranges against the standard
+- [ ] Ensure encoder output is valid JPEG-LS that any compliant decoder can process
+- [ ] Run the full test suite after each file format change — no regressions permitted
+
+#### Phase 10.4: Swift 6.2 Strict Concurrency Compliance
+- [ ] Audit all types for `Sendable` conformance where shared across concurrency domains
+- [ ] Adopt structured concurrency (`async`/`await`, `TaskGroup`) where appropriate
+- [ ] Eliminate any data races flagged by Swift 6.2 strict concurrency checking
+- [ ] Mark all global state as `@MainActor` or use appropriate isolation
+- [ ] Verify thread safety of buffer pool, tile processor, and shared resources
+- [ ] Enable strict concurrency checking in Package.swift and resolve all warnings
+- [ ] Ensure all unit tests pass under strict concurrency mode
+
+### Milestone 11: JPEG-LS Part 2 Extensions (ITU-T T.870 / ISO/IEC 14495-2:2003) 📋
+**Target**: Implement, verify, and optimise JPEG-LS Part 2 extensions  
+**Status**: Not Started
+
+#### Phase 11.1: Part 2 Specification Analysis
+- [ ] Review ITU-T T.870 (2002) / ISO/IEC 14495-2:2003 in full
+- [ ] Identify which Part 2 features are already partially implemented (if any)
+- [ ] Create an implementation plan with dependencies between features
+- [ ] Define test fixtures and reference data for Part 2 validation
+
+#### Phase 11.2: Arithmetic Coding Support
+- [ ] Implement arithmetic coding as an alternative entropy coder
+- [ ] Implement arithmetic coding context model and probability tables
+- [ ] Implement arithmetic coding bitstream format
+- [ ] Ensure encoder can select between Golomb-Rice and arithmetic coding
+- [ ] Ensure decoder auto-detects and handles both entropy coding modes
+- [ ] Create comprehensive unit tests for arithmetic coding
+- [ ] Achieve >95% test coverage for arithmetic coding paths
+
+#### Phase 11.3: Extended Prediction & Transform Modes
+- [ ] Implement extended prediction modes defined in Part 2
+- [ ] Implement additional colour transformations beyond HP1/HP2/HP3
+- [ ] Implement extended near-lossless modes (if specified in Part 2)
+- [ ] Implement inverse colour transformations for decoding
+- [ ] Create unit tests for all extended prediction and transform modes
+- [ ] Validate round-trip correctness for each mode
+
+#### Phase 11.4: Extended Marker & Parameter Support
+- [ ] Implement additional marker segments defined in Part 2
+- [ ] Implement extended preset parameter tables
+- [ ] Implement extended application data marker support
+- [ ] Update parser to recognise and handle all Part 2 markers
+- [ ] Update encoder to emit Part 2 markers where applicable
+- [ ] Create unit tests for all extended markers and parameters
+
+#### Phase 11.5: Part 2 Optimisation
+- [ ] Profile Part 2 codepaths and identify bottlenecks
+- [ ] Optimise arithmetic coding for Apple Silicon (ARM Neon, Accelerate)
+- [ ] Optimise arithmetic coding for Intel (SSE/AVX)
+- [ ] Ensure Part 2 performance does not regress Part 1 codepaths
+- [ ] Benchmark Part 2 features against Part 1 equivalents
+- [ ] Run the full test suite — no regressions to Part 1 functionality
+
+### Milestone 12: CharLS Bidirectional Interoperability 📋
+**Target**: Full interoperability with CharLS in both encoding and decoding directions  
+**Status**: Not Started
+
+#### Phase 12.1: CharLS Decode Interoperability (CharLS-encoded → JLSwift-decoded)
+- [ ] Resolve existing decoder pixel drift issues with CharLS-encoded files
+- [ ] Enable and pass all currently disabled CharLS bit-exact comparison tests
+- [ ] Validate decoding of all 12 CharLS reference files to bit-exact output
+- [ ] Test decoding of CharLS-encoded 8-bit and 16-bit grayscale images
+- [ ] Test decoding of CharLS-encoded RGB images with all interleaving modes
+- [ ] Test decoding of CharLS-encoded near-lossless images (error ≤ NEAR)
+- [ ] Test decoding of CharLS-encoded images with non-default preset parameters
+- [ ] Test decoding of CharLS-encoded images with colour transformations
+
+#### Phase 12.2: CharLS Encode Interoperability (JLSwift-encoded → CharLS-decoded)
+- [ ] Create test infrastructure to invoke CharLS decoder on JLSwift-encoded output
+- [ ] Validate that CharLS can decode all JLSwift-encoded lossless output (bit-exact)
+- [ ] Validate that CharLS can decode JLSwift-encoded near-lossless output (error ≤ NEAR)
+- [ ] Test all interleaving modes (none, line, sample) for CharLS decode compatibility
+- [ ] Test all bit depths (8-bit, 12-bit, 16-bit) for CharLS decode compatibility
+- [ ] Test grayscale and RGB component configurations
+- [ ] Test with custom preset parameters and colour transformations
+- [ ] Document any CharLS-specific encoding quirks or extensions needed
+
+#### Phase 12.3: Round-Trip Interoperability Validation
+- [ ] Implement automated round-trip tests: JLSwift encode → CharLS decode → compare
+- [ ] Implement automated round-trip tests: CharLS encode → JLSwift decode → compare
+- [ ] Implement automated round-trip tests: JLSwift encode → JLSwift decode → compare (regression)
+- [ ] Test round-trip with medical imaging test patterns (CT, MR, CR, US simulations)
+- [ ] Test round-trip with edge-case images (1×1, maximum dimensions, flat, gradient, noise)
+- [ ] Achieve 100% pass rate on all interoperability test cases
+
+### Milestone 13: Apple Silicon Optimisation (ARM Neon & Accelerate) 📋
+**Target**: Maximise performance on Apple Silicon (A-series and M-series processors) as the primary target  
+**Status**: Not Started
+
+#### Phase 13.1: ARM Neon Optimisation Audit & Enhancement
+- [ ] Profile existing ARM Neon implementations on Apple Silicon hardware
+- [ ] Optimise gradient computation using advanced Neon intrinsics (UMINP, UMAXP, TBL)
+- [ ] Optimise MED prediction with wider SIMD operations (SIMD8/SIMD16 where beneficial)
+- [ ] Optimise context quantisation with Neon lookup table instructions
+- [ ] Optimise Golomb-Rice coding using Neon bit manipulation (CLZ, CTZ)
+- [ ] Optimise run-length detection using Neon comparison and mask extraction
+- [ ] Implement Neon-accelerated byte stuffing detection for the parser
+- [ ] Keep all ARM-specific code behind `#if arch(arm64)` compilation boundaries
+- [ ] Benchmark each optimisation against the baseline — only retain improvements
+- [ ] Ensure all optimisations produce bit-exact results
+
+#### Phase 13.2: Accelerate Framework Deep Integration
+- [ ] Profile existing Accelerate usage and identify missed opportunities
+- [ ] Implement vDSP-accelerated error computation for batch pixel processing
+- [ ] Implement vDSP-accelerated context state updates (A, B, C, N arrays)
+- [ ] Implement vImage integration for pixel buffer format conversions
+- [ ] Implement Accelerate-based colour space transformations (HP1/HP2/HP3)
+- [ ] Evaluate and integrate BNNS (Basic Neural Network Subroutines) for pattern recognition if applicable
+- [ ] Benchmark Accelerate paths against manual Neon — use whichever is faster per operation
+- [ ] Keep Accelerate code behind `#if canImport(Accelerate)` compilation boundaries
+- [ ] Ensure all optimisations produce bit-exact results
+
+#### Phase 13.3: Apple Silicon Memory Architecture Optimisation
+- [ ] Optimise data layouts for Apple Silicon cache hierarchy (performance cores vs efficiency cores)
+- [ ] Implement prefetch hints for predictable memory access patterns during encoding/decoding
+- [ ] Optimise buffer pooling for Apple Silicon unified memory architecture
+- [ ] Tune tile sizes for optimal L1/L2 cache utilisation on M-series processors
+- [ ] Implement memory-mapped I/O for large file handling on Apple platforms
+- [ ] Benchmark memory throughput with Instruments and optimise accordingly
+- [ ] Document hardware-specific tuning parameters and rationale
+
+### Milestone 14: Intel x86-64 Optimisation (MMX/SSE/AVX) 📋
+**Target**: Maximise performance on Intel x86-64 as the secondary target, kept separate for clean removal  
+**Status**: Not Started
+
+#### Phase 14.1: SSE/AVX Optimisation Enhancement
+- [ ] Profile existing x86-64 implementations on Intel hardware
+- [ ] Optimise gradient computation using SSE4.2 / AVX2 intrinsics
+- [ ] Optimise MED prediction using SSE/AVX min/max/blend instructions
+- [ ] Optimise context quantisation with AVX2 gather/scatter operations
+- [ ] Optimise Golomb-Rice coding using BMI1/BMI2 bit manipulation extensions
+- [ ] Optimise run-length detection using SSE comparison and PMOVMSKB
+- [ ] Implement AVX-512 codepaths where available (guarded by runtime detection)
+- [ ] Keep all x86-64 code behind `#if arch(x86_64)` compilation boundaries
+- [ ] Benchmark each optimisation against the baseline — only retain improvements
+- [ ] Ensure all optimisations produce bit-exact results
+
+#### Phase 14.2: Intel Memory & Cache Optimisation
+- [ ] Optimise data layouts for Intel cache hierarchy
+- [ ] Implement software prefetch instructions (PREFETCHT0/T1/T2) for predictable access patterns
+- [ ] Tune tile sizes for optimal cache utilisation on Intel processors
+- [ ] Evaluate Non-Temporal stores (MOVNTDQ) for large output writes
+- [ ] Benchmark memory throughput with Intel VTune or perf and optimise accordingly
+
+#### Phase 14.3: x86-64 Separation Verification
+- [ ] Verify all x86-64 code is cleanly separable from the ARM64 codebase
+- [ ] Update the x86-64 removal guide to reflect any new optimisation code
+- [ ] Ensure removal of all x86-64 code does not affect ARM64 functionality or performance
+- [ ] Document all x86-64 specific files, conditional compilation guards, and dependencies
+
+### Milestone 15: GPU Compute Acceleration (Metal & Vulkan) 📋
+**Target**: GPU-accelerated processing via Metal (Apple) and Vulkan (Linux/Windows)  
+**Status**: Not Started
+
+#### Phase 15.1: Metal GPU Pipeline Enhancement
+- [ ] Profile existing Metal compute shaders on Apple Silicon (M1/M2/M3/M4)
+- [ ] Implement Metal compute shaders for full encoding pipeline (not just gradient/prediction)
+- [ ] Implement Metal compute shaders for full decoding pipeline
+- [ ] Implement Metal-accelerated colour space transformation (HP1/HP2/HP3 and inverse)
+- [ ] Implement Metal-accelerated batch context state computation
+- [ ] Optimise GPU–CPU data transfer using shared memory on Apple Silicon unified memory
+- [ ] Implement dynamic workload balancing between CPU and GPU based on image size
+- [ ] Implement Metal Performance Shaders (MPS) integration where applicable
+- [ ] Tune thread group sizes and threadgroup memory for each Apple GPU generation
+- [ ] Benchmark Metal pipeline against CPU-only — establish GPU crossover point per image size
+- [ ] Keep Metal code behind `#if canImport(Metal)` compilation boundaries
+- [ ] Ensure GPU results are bit-exact with CPU implementations
+
+#### Phase 15.2: Vulkan GPU Compute Support (Linux/Windows)
+- [ ] Evaluate Vulkan compute shader feasibility for JPEG-LS operations
+- [ ] Design Vulkan compute pipeline architecture mirroring the Metal pipeline
+- [ ] Implement Vulkan compute shaders for gradient computation and MED prediction
+- [ ] Implement Vulkan compute shaders for encoding and decoding pipelines
+- [ ] Implement Vulkan memory management and buffer allocation
+- [ ] Implement Vulkan command buffer recording and submission
+- [ ] Implement host–device data transfer optimisation
+- [ ] Create Vulkan device selection and capability detection
+- [ ] Implement CPU fallback for systems without Vulkan support
+- [ ] Keep Vulkan code behind appropriate conditional compilation boundaries
+- [ ] Benchmark Vulkan pipeline against CPU-only on Linux
+- [ ] Ensure Vulkan results are bit-exact with CPU implementations
+- [ ] Document Vulkan setup requirements and supported GPU vendors
+
+#### Phase 15.3: GPU Compute Testing & Validation
+- [ ] Create GPU-specific test suite validating bit-exact results across CPU, Metal, and Vulkan
+- [ ] Test GPU pipelines with all image sizes, bit depths, and component configurations
+- [ ] Test GPU pipelines with near-lossless encoding modes
+- [ ] Test graceful fallback behaviour on systems without GPU support
+- [ ] Benchmark GPU vs CPU across representative workloads
+- [ ] Document performance characteristics and recommended usage thresholds
+
+### Milestone 16: Performance Optimisation & Benchmarking 📋
+**Target**: Achieve better-than-CharLS performance across all key metrics  
+**Status**: Not Started
+
+#### Phase 16.1: Performance Profiling & Hotspot Analysis
+- [ ] Profile the complete encode pipeline with Instruments (macOS) and perf (Linux)
+- [ ] Profile the complete decode pipeline with Instruments and perf
+- [ ] Identify the top 10 hotspots by CPU time in both encode and decode paths
+- [ ] Identify memory allocation hotspots and unnecessary copies
+- [ ] Profile cache miss rates and branch misprediction rates
+- [ ] Document baseline performance metrics for all configurations
+
+#### Phase 16.2: Algorithmic Optimisation
+- [ ] Optimise Golomb-Rice parameter computation (fast log2, lookup tables)
+- [ ] Optimise context model state updates (minimise branches, use branchless arithmetic)
+- [ ] Optimise prediction error modular reduction
+- [ ] Optimise run-length detection and encoding (fast zero-comparison scanning)
+- [ ] Optimise bitstream reading and writing (minimise bit shifts, batch operations)
+- [ ] Optimise byte stuffing insertion and detection
+- [ ] Implement fast-path optimisations for common cases (8-bit lossless grayscale)
+- [ ] Evaluate and implement table-driven approaches where beneficial
+- [ ] Benchmark each optimisation — only retain measurable improvements
+
+#### Phase 16.3: Memory & I/O Optimisation
+- [ ] Minimise heap allocations during encode/decode (prefer stack allocation)
+- [ ] Implement zero-copy I/O paths where possible
+- [ ] Optimise buffer pool allocation/release overhead
+- [ ] Implement streaming encode/decode to reduce peak memory usage
+- [ ] Optimise tile boundary handling for seamless joins
+- [ ] Profile and reduce memory bandwidth consumption
+
+#### Phase 16.4: CharLS Head-to-Head Benchmarking
+- [ ] Integrate CharLS C library as a Swift Package Manager test dependency
+- [ ] Enable and complete all CharLS comparison benchmark tests
+- [ ] Benchmark encoding speed: JLSwift vs CharLS (grayscale, RGB, near-lossless, all bit depths)
+- [ ] Benchmark decoding speed: JLSwift vs CharLS (grayscale, RGB, near-lossless, all bit depths)
+- [ ] Benchmark memory usage: JLSwift vs CharLS (encoding and decoding)
+- [ ] Benchmark compression ratio: JLSwift vs CharLS (should be identical for lossless)
+- [ ] Establish performance targets: match or exceed CharLS in all categories
+- [ ] Document performance comparison results with methodology
+- [ ] Create automated regression tests to maintain performance parity with CharLS
+
+### Milestone 17: Command Line Tools Enhancement 📋
+**Target**: Complete, well-documented CLI with full functionality and dual-spelling support  
+**Status**: Not Started
+
+#### Phase 17.1: Missing Functionality
+- [ ] Implement PNG output format support for the `decode` command
+- [ ] Implement TIFF output format support for the `decode` command
+- [ ] Implement PGM/PPM output format support for the `decode` command
+- [ ] Implement PGM/PPM input format support for the `encode` command (auto-detect dimensions/components)
+- [ ] Implement PNG/TIFF input format support for the `encode` command
+- [ ] Implement `jpegls convert` command for format-to-format conversion
+- [ ] Implement `jpegls benchmark` command for quick performance measurement
+- [ ] Implement `jpegls compare` command to diff two JPEG-LS files
+- [ ] Implement `--preset` parameter integration in the encoder (custom T1, T2, T3, RESET)
+- [ ] Implement `--part2` flag for Part 2 extensions encoding
+- [ ] Implement progress bars for long-running operations (large files, batch processing)
+- [ ] Implement `--version` flag displaying library and tool version information
+
+#### Phase 17.2: British & American Spelling Support
+- [ ] Support both `--colour-transform` and `--color-transform` options
+- [ ] Support both `--colour` and `--color` in all relevant contexts
+- [ ] Support both `--optimise` and `--optimize` flags
+- [ ] Support both `--summarise` and `--summary` where applicable
+- [ ] Support both `--organisation` and `--organization` where applicable
+- [ ] Ensure help text documents both spellings for each dual-spelling option
+- [ ] Create unit tests validating both spellings produce identical behaviour
+
+#### Phase 17.3: CLI Help & Usage Documentation
+- [ ] Update man page (`jpegls.1`) with all new commands and options
+- [ ] Add detailed usage examples for every command and option combination
+- [ ] Add error message guidance (suggest correct flags on misspelling)
+- [ ] Implement contextual help (e.g., `jpegls encode --help` with encode-specific examples)
+- [ ] Update shell completion scripts (bash, zsh, fish) with new commands and options
+- [ ] Ensure all help text and error messages use British English consistently
+- [ ] Create quick-reference cheat sheet as part of `--help` output
+
+### Milestone 18: Localisation & British English Consistency 📋
+**Target**: Consistent British English throughout all comments, help text, and documentation  
+**Status**: Not Started
+
+#### Phase 18.1: Source Code Comments
+- [ ] Audit all source code comments for American English spellings
+- [ ] Convert all comments to British English (e.g., colour, optimise, initialise, centre, behaviour, licence, analyse, serialise, modelling, grey)
+- [ ] Ensure documentation comments (`///`) use British English consistently
+- [ ] Verify TODO/FIXME/NOTE comments use British English
+- [ ] Create a project spelling reference list for contributors
+
+#### Phase 18.2: Help Text & Error Messages
+- [ ] Convert all CLI help text to British English
+- [ ] Convert all error messages to British English
+- [ ] Convert all verbose/debug output to British English
+- [ ] Ensure man page uses British English throughout
+- [ ] Verify shell completion descriptions use British English
+
+#### Phase 18.3: Documentation
+- [ ] Convert README.md to British English
+- [ ] Convert MILESTONES.md to British English
+- [ ] Convert all guide documents (GETTING_STARTED, USAGE_EXAMPLES, PERFORMANCE_TUNING, TROUBLESHOOTING, etc.) to British English
+- [ ] Convert CHANGELOG.md to British English
+- [ ] Convert VERSIONING.md and RELEASE_NOTES_TEMPLATE.md to British English
+- [ ] Ensure all code examples in documentation use British English comments
+- [ ] Add a note to the contributing guidelines requiring British English
+
+### Milestone 19: Documentation Revision & J2KSwift Consistency 📋
+**Target**: Comprehensive, consistent documentation with examples, sample code, and J2KSwift alignment  
+**Status**: Not Started
+
+#### Phase 19.1: Library Usage Documentation Revision
+- [ ] Revise GETTING_STARTED.md to reflect all refactoring changes
+- [ ] Revise USAGE_EXAMPLES.md with updated APIs and new features
+- [ ] Revise PERFORMANCE_TUNING.md with new optimisation details and benchmarks
+- [ ] Revise METAL_GPU_ACCELERATION.md with enhanced Metal pipeline details
+- [ ] Create VULKAN_GPU_ACCELERATION.md documenting Vulkan compute support
+- [ ] Revise TROUBLESHOOTING.md with new issues and solutions
+- [ ] Revise DICOMKIT_INTEGRATION.md with any API changes
+- [ ] Revise SWIFTUI_EXAMPLES.md with updated code samples
+- [ ] Revise APPKIT_EXAMPLES.md with updated code samples
+- [ ] Revise SERVER_SIDE_EXAMPLES.md with updated code samples
+- [ ] Revise X86_64_REMOVAL_GUIDE.md with updated file listings
+
+#### Phase 19.2: Sample Code & Examples
+- [ ] Ensure every public API has at least one working code example in documentation
+- [ ] Create end-to-end example: encode raw → JPEG-LS → decode → verify
+- [ ] Create end-to-end example: DICOM pixel data round-trip
+- [ ] Create example: batch processing with progress reporting
+- [ ] Create example: GPU-accelerated processing on Apple Silicon
+- [ ] Create example: Part 2 extensions usage (arithmetic coding, extended modes)
+- [ ] Create example: CharLS interoperability (encode with JLSwift, decode with CharLS)
+- [ ] Verify all code examples compile and produce correct output
+- [ ] Add inline documentation examples using `/// ```swift` blocks
+
+#### Phase 19.3: J2KSwift Consistency
+- [ ] Review J2KSwift project structure, naming conventions, and API patterns
+- [ ] Align public API naming conventions with J2KSwift (method names, parameter labels, type names)
+- [ ] Align error handling patterns with J2KSwift (error types, error codes)
+- [ ] Align CLI command structure and option naming with J2KSwift
+- [ ] Align documentation structure and formatting with J2KSwift
+- [ ] Align test organisation and naming conventions with J2KSwift
+- [ ] Document any intentional deviations from J2KSwift with rationale
+
+### Milestone 20: DICOM Independence & Final Integration 📋
+**Target**: DICOM-aware but independently usable library; hardware-accelerated, 100% Swift native reference implementation  
+**Status**: Not Started
+
+#### Phase 20.1: DICOM Independence Verification
+- [ ] Audit all source code for hard DICOM dependencies — remove or abstract them
+- [ ] Ensure the library can be used without any DICOM knowledge or imports
+- [ ] Ensure DICOM-specific functionality (transfer syntax mapping, modality awareness) is optional/additive
+- [ ] Verify the library works as a standalone JPEG-LS codec in non-DICOM contexts
+- [ ] Create non-DICOM usage examples (general-purpose image compression, web, archival)
+- [ ] Ensure Package.swift has no DICOM-related dependencies
+- [ ] Document the DICOM-aware/DICOM-independent architecture
+
+#### Phase 20.2: Full Test Suite & Coverage
+- [ ] Ensure all unit tests pass across all milestones (10–20)
+- [ ] Achieve >95% test coverage across all modules including new Part 2 code
+- [ ] Verify all CharLS interoperability tests pass in both directions
+- [ ] Verify all conformance tests pass (core coding system and file formats)
+- [ ] Verify all performance regression tests pass with no regressions
+- [ ] Run fuzz testing on the decoder for robustness (if infrastructure is available)
+- [ ] Run the complete test suite on both ARM64 and x86-64 platforms
+
+#### Phase 20.3: Final Performance Validation
+- [ ] Confirm JLSwift meets or exceeds CharLS performance in encoding speed
+- [ ] Confirm JLSwift meets or exceeds CharLS performance in decoding speed
+- [ ] Confirm JLSwift meets or exceeds CharLS performance in memory efficiency
+- [ ] Confirm compression ratios match CharLS for identical lossless inputs
+- [ ] Document final performance comparison with methodology and hardware details
+- [ ] Publish benchmark results in the repository documentation
+
+#### Phase 20.4: Release Preparation
+- [ ] Update CHANGELOG.md with all changes from milestones 10–20
+- [ ] Update version number following semantic versioning strategy
+- [ ] Update all documentation to reflect the final state of the implementation
+- [ ] Perform a final full-project code review
+- [ ] Tag a release candidate and validate on all target platforms
+- [ ] Create release notes highlighting the refactoring achievements
+- [ ] Prepare for v1.0 release as a hardware-accelerated, 100% Swift native reference implementation
+
 ---
 
 ## Summary: JPEG-LS Development Phases
@@ -607,37 +1009,61 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 | Milestone | Description | Key Deliverables |
 |-----------|-------------|------------------|
 | **1** | Project Setup | Swift Package, CI, Documentation ✅ |
-| **2** | Foundation | Architecture, core types, context modeling ✅ |
+| **2** | Foundation | Architecture, core types, context modelling ✅ |
 | **3** | Encoder | Regular mode, run mode, near-lossless, interleaving ✅ |
 | **4** | Decoder | Parsing, regular mode, run mode, multi-component ✅ |
-| **5** | Apple Silicon | NEON/SIMD ✅, Accelerate ✅, Metal ✅, memory optimization ✅ |
+| **5** | Apple Silicon | NEON/SIMD ✅, Accelerate ✅, Metal ✅, memory optimisation ✅ |
 | **6** | x86-64 | Removable x86-64 support with clear boundaries ✅ |
 | **7** | CLI | Core commands (info ✅, verify ✅, encode ✅, decode ✅), utilities ✅, help & docs ✅ |
 | **8** | Validation | CharLS conformance ✅, benchmarks ✅, DICOM testing ✅, edge cases ✅ |
 | **9** | Release | API docs ✅, integration guides ✅, versioning ✅, changelog ✅, release template ✅ |
+| **10** | Standards Conformance & Refactoring | Conformance audit, core refactoring, file format refactoring, Swift 6.2 strict concurrency 📋 |
+| **11** | Part 2 Extensions | Arithmetic coding, extended prediction/transform modes, extended markers, Part 2 optimisation 📋 |
+| **12** | CharLS Interoperability | Bidirectional interoperability, bit-exact validation, round-trip testing 📋 |
+| **13** | Apple Silicon Optimisation | ARM Neon enhancement, Accelerate deep integration, memory architecture tuning 📋 |
+| **14** | Intel x86-64 Optimisation | SSE/AVX enhancement, memory/cache tuning, separation verification 📋 |
+| **15** | GPU Compute | Metal pipeline enhancement, Vulkan compute support (Linux/Windows), GPU testing 📋 |
+| **16** | Performance Optimisation | Hotspot analysis, algorithmic optimisation, CharLS head-to-head benchmarking 📋 |
+| **17** | CLI Enhancement | Missing functionality, British & American spelling support, help & usage docs 📋 |
+| **18** | Localisation | British English in comments, help text, error messages, and documentation 📋 |
+| **19** | Documentation & J2KSwift | Documentation revision, sample code, J2KSwift consistency alignment 📋 |
+| **20** | Final Integration & Release | DICOM independence, full test suite, performance validation, v1.0 release 📋 |
 
 ### Architecture Principles
 
 1. **Platform Abstraction**: All platform-specific code behind protocols for clean separation
 2. **Testability**: Every component designed for unit testing with >95% coverage
-3. **Performance First**: Optimize for Apple Silicon while maintaining correctness
+3. **Performance First**: Optimise for Apple Silicon while maintaining correctness
 4. **x86-64 Removability**: Clear compilation boundaries for future deprecation
 5. **Memory Efficiency**: Streaming support for large images, buffer pooling
-6. **Standards Compliance**: Strict adherence to ISO/IEC 14495-1:1999 / ITU-T.87
+6. **Standards Compliance**: Strict adherence to ISO/IEC 14495-1 / ITU-T.87 and ISO/IEC 14495-2 / ITU-T T.870
+7. **DICOM Aware, DICOM Independent**: Library is usable by any project without DICOM dependencies
+8. **Architecture Separation**: Each architecture's optimisations are separate and independently removable
+9. **British English**: Consistent use of British English across the project
+10. **J2KSwift Consistency**: API patterns, naming conventions, and documentation aligned with J2KSwift
 
 ### Dependencies
 
-- **Swift 6.2+**: Required for modern concurrency and language features
-- **Apple Accelerate**: Implemented, provides vDSP-based batch operations and statistical analysis (macOS, iOS, tvOS, watchOS)
-- **Metal**: Optional, for GPU acceleration (planned)
-- **CharLS**: Test reference only (not runtime dependency)
+- **Swift 6.2+**: Required for modern concurrency and language features (strict concurrency enabled)
+- **Apple Accelerate**: vDSP-based batch operations and statistical analysis (macOS, iOS, tvOS, watchOS)
+- **Metal**: GPU acceleration for Apple platforms (macOS 10.13+, iOS 11+)
+- **Vulkan**: GPU compute for Linux/Windows (planned)
+- **CharLS**: Test reference only (not a runtime dependency)
 
 ### Hardware Targets
 
-- **Primary**: Apple Silicon (M1, M2, M3 series) with ARM64
-- **Secondary**: x86-64 (Intel Macs, Linux) — designed for removal
-- **Minimum iOS**: iOS 15+ (for Metal 3 features if used)
+- **Primary**: Apple Silicon (A-series and M-series processors) with ARM64
+- **Secondary**: x86-64 (Intel Macs, Linux) — designed for clean removal
+- **GPU (Apple)**: Metal compute on Apple Silicon and discrete GPUs
+- **GPU (Linux/Windows)**: Vulkan compute (planned)
+- **Minimum iOS**: iOS 15+
 - **Minimum macOS**: macOS 12+ (Monterey)
+
+### Performance Targets
+
+- **Goal**: Match or exceed CharLS performance in encoding speed, decoding speed, and memory efficiency
+- **Approach**: Hardware acceleration via ARM Neon, Accelerate, Metal, SSE/AVX, and Vulkan
+- **End Goal**: A hardware-accelerated, 100% Swift native reference implementation
 
 ---
 
