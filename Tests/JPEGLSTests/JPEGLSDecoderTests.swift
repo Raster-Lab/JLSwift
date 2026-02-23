@@ -87,7 +87,7 @@ struct JPEGLSDecoderTests {
         }
     }
     
-    @Test("Round-trip: 8x8 grayscale near-lossless (NEAR=3)", .disabled("Encoder near-lossless mode does not yet quantize errors or track reconstructed values"))
+    @Test("Round-trip: 8x8 grayscale near-lossless (NEAR=3)")
     func testRoundTripGrayscaleNearLossless() throws {
         let pixels: [[Int]] = [
             [100, 101, 102, 103, 104, 105, 106, 107],
@@ -230,7 +230,7 @@ struct JPEGLSDecoderTests {
         }
     }
     
-    @Test("Round-trip: Flat region (run mode)", .disabled("Decoder has known pixel drift for images with gradient regions"))
+    @Test("Round-trip: Flat region (run mode)")
     func testRoundTripFlatRegion() throws {
         // Create image with flat regions to trigger run mode
         var pixels: [[Int]] = []

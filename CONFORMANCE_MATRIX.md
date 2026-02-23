@@ -94,10 +94,19 @@ to its implementation in JLSwift and records the conformance status of each item
 | 4.5.2 | Run scanning and continuation bits | `JPEGLSRunMode.encodeRunLength` | ✅ |
 | 4.5.2 | J[RUNindex] table (Annex J) | `JPEGLSRunMode.jTable`, `JPEGLSRunModeDecoder.jTable` | ✅ |
 | 4.5.2 | RUNindex incremented after each full 2^J block | `JPEGLSEncoder.encodeNoneInterleaved`, `JPEGLSDecoder.readRunLength` | ✅ |
-| 4.5.2 | RUNindex decremented on run interruption | `JPEGLSDecoder.readRunLength` | ✅ |
+| 4.5.2 | RUNindex decremented on run interruption; EOL exact-block runs omit terminator | `JPEGLSEncoder.encodeNoneInterleaved`, `JPEGLSDecoder.readRunLength` | 🔧 **Fixed** |
 | 4.5.3 | Run interruption sample encoding | `JPEGLSRunMode.encodeRunInterruption` | ⚠️ Simplified |
 | 4.5.4 | Run interruption Golomb-Rice k=0 | `JPEGLSEncoder.writeRunInterruptionBits` | ✅ |
-| 4.5 | Near-lossless run counting | `JPEGLSRunMode.detectRunLength` | ⚠️ Not fully implemented |
+| 4.5 | Near-lossless run counting (|pixel − runValue| ≤ NEAR) | `JPEGLSRunMode.detectRunLength` | 🔧 **Fixed** |
+
+### 4.2 Near-Lossless Mode
+
+| Sub-section | Item | Implementation | Status |
+|-------------|------|----------------|--------|
+| 4.2 | Error quantisation: Errval' = sgn(e)×floor((|e|+NEAR)/qbpp) | `JPEGLSRegularMode.computePredictionError` | 🔧 **Fixed** |
+| 4.2 | Reconstructed-value tracking: Rx = Px' + Errval'×qbpp | `JPEGLSEncoder.encodeNoneInterleaved`, `EncodedPixel.reconstructedValue` | 🔧 **Fixed** |
+| 4.2 | Decoder dequantisation: deq = Errval'×qbpp before reconstruction | `JPEGLSRegularModeDecoder.reconstructSample` | 🔧 **Fixed** |
+
 
 ---
 
@@ -251,14 +260,74 @@ streams (e.g. CharLS).
 **Impact:** Context adaptation statistics are now correct, leading to better bias correction
 over time.
 
+### 6. Run Mode EOL Terminator Bug (Critical)
+
+**Standard (§4.5.2):** The decoder exits the run-length loop when the run count reaches the
+end of line, without reading a termination bit. Exact-block EOL runs — where the final '1' bit
+brings the decoded run length to exactly the remaining line width — are therefore self-terminating.  
+**Previous implementation:** The encoder always wrote a '0' termination bit followed by J
+remainder bits after all continuation '1' bits, even for exact-block EOL runs. The decoder
+read all continuation '1' bits, exited the loop, and never consumed the '0' terminator, leaving
+one or more bits misaligned in the bitstream.  
+**Fix:** The encoder now omits the termination bit and remainder for EOL runs where
+`encoded.remainder == 0` (exact-block EOL). The terminator is still written for interrupted
+runs and for partial-block EOL runs (`encoded.remainder > 0`).  
+**Impact:** Flat-region images (which produce EOL runs) now round-trip correctly.
+
+### 7. Run Mode RUNindex Encoder/Decoder Synchronisation (Critical)
+
+**Standard (§4.5.2):** RUNindex is incremented after each successfully encoded 2^J block
+and decremented when the '0' terminator is written/read for an interrupted or partial-block
+run. Both encoder and decoder must maintain identical RUNindex state.  
+**Previous implementation:** The encoder called `context.updateRunIndex(completedRunLength:)`,
+which applied a simple heuristic that diverged from the decoder's incremental update. After the
+first multi-block run, encoder and decoder held different RUNindex values, causing subsequent
+run-length blocks to be encoded with the wrong J, producing incorrect bit patterns.  
+**Fix:** After encoding each run the encoder computes the post-run RUNindex as
+`finalRunIndex = min(initialRunIndex + continuationBits, 31)`, then:
+- For interrupted/partial-EOL runs: `context.setRunIndex(max(finalRunIndex − 1, 0))`
+- For exact-block EOL runs: `context.setRunIndex(finalRunIndex)`  
+This precisely mirrors the decoder's `readRunLength` behaviour.  
+**Impact:** Flat-region images with multiple runs per line now round-trip correctly.
+
+### 8. Near-Lossless Error Quantisation (Significant)
+
+**Standard (§4.2.2):** For NEAR > 0, the raw prediction error is quantised before Golomb-Rice
+coding: `Errval' = sgn(e) × floor((|e| + NEAR) / (2·NEAR + 1))`.  
+**Previous implementation:** The raw error was encoded without quantisation, giving no
+compression benefit from NEAR and violating the near-lossless error bound.  
+**Fix:** `JPEGLSRegularMode.computePredictionError` now applies quantisation for NEAR > 0
+before the modular reduction step.  
+**Impact:** Near-lossless encoding now achieves the correct compression-quality trade-off
+and guarantees `|original − reconstructed| ≤ NEAR`.
+
+### 9. Near-Lossless Decoder Dequantisation (Significant)
+
+**Standard (§4.2.2):** The decoder reverses quantisation: `deq = Errval' × (2·NEAR + 1)`,
+then `sample = Px' + deq` (with modular correction).  
+**Previous implementation:** The decoder added the decoded error directly without dequantisation.  
+**Fix:** `JPEGLSRegularModeDecoder.reconstructSample` now multiplies the decoded quantised
+error by `qbpp = 2·NEAR + 1` before adding it to the prediction.  
+**Impact:** Decoder correctly reconstructs near-lossless samples.
+
+### 10. Near-Lossless Reconstructed-Value Tracking (Significant)
+
+**Standard (§4.3):** The encoder must use reconstructed neighbours (the values the decoder
+will hold) for context computation and prediction, not the original pixel values.  
+**Previous implementation:** The encoder always used original pixel values as neighbours.  
+**Fix:** `JPEGLSEncoder.encodeNoneInterleaved` maintains a per-component reconstructed-value
+buffer. After encoding each pixel the reconstructed value is stored and used for all subsequent
+neighbour lookups in near-lossless mode. `JPEGLSRunMode.detectRunLength` uses
+`|pixel − runValue| ≤ NEAR` to match the decoder's run entry criterion.  
+**Impact:** Near-lossless round-trip tests now pass; encoder and decoder contexts stay in sync.
+
 ---
 
 ## Remaining Deviations (Future Milestones)
 
 | Deviation | Standard Section | Planned Fix |
 |-----------|-----------------|-------------|
-| Near-lossless error quantisation and reconstructed value tracking | §4.2 | Milestone 10 Phase 10.2 (subsequent PR) |
-| Run interruption context statistics (A_run, B_run, N_run) | §4.5.4 | Milestone 10 Phase 10.2 |
+| Run interruption context statistics (A_run, B_run, N_run) | §4.5.4 | Milestone 10 Phase 10.3 |
 | Restart markers (RST0–RST7) | §5.1 | Milestone 10 Phase 10.3 |
 | DRI marker support | §5.1 | Milestone 10 Phase 10.3 |
 | DNL marker support | §5.1 | Milestone 10 Phase 10.3 |
@@ -273,7 +342,7 @@ over time.
 | `JPEGLSContextModelTests.swift` | Context model A init, B update, index computation | ✅ Updated |
 | `JPEGLSRegularModeTests.swift` | Encoder pipeline including sign-adjusted error | ✅ Passing |
 | `JPEGLSRegularModeDecoderTests.swift` | Decoder pipeline including sign-adjusted reconstruction | ✅ Passing |
-| `JPEGLSDecoderTests.swift` | Round-trip encoding and decoding | ✅ Passing |
-| `CharLSConformanceTests.swift` | Bit-exact comparison with CharLS reference files | 📋 Disabled pending run-mode fixes |
+| `JPEGLSDecoderTests.swift` | Round-trip encoding and decoding, including flat-region and near-lossless | ✅ Passing |
+| `CharLSConformanceTests.swift` | Bit-exact comparison with CharLS reference files | 📋 Disabled pending run-interruption context fixes |
 
-**Overall test coverage:** 95.95% (above the 95% requirement)
+**Overall test coverage:** 96.00% (above the 95% requirement)

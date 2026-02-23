@@ -345,6 +345,16 @@ public struct JPEGLSEncoder: Sendable {
         }
         
         let componentId = scanHeader.components[0].id
+        let near = scanHeader.near
+        
+        // Track reconstructed values for near-lossless neighbour computation.
+        // For lossless (NEAR = 0) this array is never read; for near-lossless it
+        // stores what the decoder will reconstruct so that subsequent pixels use
+        // the same context as the decoder.
+        var reconstructed = Array(
+            repeating: Array(repeating: 0, count: buffer.width),
+            count: buffer.height
+        )
         
         // Encode pixels in raster order with run mode support
         for row in 0..<buffer.height {
@@ -360,17 +370,27 @@ public struct JPEGLSEncoder: Sendable {
                     )
                 }
                 
+                // Use reconstructed neighbours for near-lossless; originals for lossless.
+                let (a, b, c, d): (Int, Int, Int, Int)
+                if near > 0 {
+                    (a, b, c, d) = computeReconstructedNeighbors(
+                        from: reconstructed, row: row, col: col,
+                        width: buffer.width, height: buffer.height
+                    )
+                } else {
+                    (a, b, c, d) = (neighbors.left, neighbors.top, neighbors.topLeft, neighbors.topRight)
+                }
+                
                 // Check for run mode: all quantized gradients are zero
-                let (d1, d2, d3) = regularMode.computeGradients(
-                    a: neighbors.left, b: neighbors.top, c: neighbors.topLeft, d: neighbors.topRight
-                )
+                let (d1, d2, d3) = regularMode.computeGradients(a: a, b: b, c: c, d: d)
                 let q1 = regularMode.quantizeGradient(d1)
                 let q2 = regularMode.quantizeGradient(d2)
                 let q3 = regularMode.quantizeGradient(d3)
                 
                 if q1 == 0 && q2 == 0 && q3 == 0 {
-                    // Run mode: scan ahead for matching pixels
-                    let runValue = neighbors.left
+                    // Run mode: scan ahead for matching pixels.
+                    // The run value is the reconstructed left neighbour (a).
+                    let runValue = a
                     guard let componentPixels = buffer.getComponentPixels(componentId: componentId) else {
                         throw JPEGLSError.encodingFailed(reason: "Failed to get component pixels")
                     }
@@ -395,8 +415,15 @@ public struct JPEGLSEncoder: Sendable {
                         writer.writeBits(1, count: 1)
                     }
                     
+                    // Store the run value as reconstructed for every run pixel.
+                    if near > 0 {
+                        for runCol in col..<col + actualRunLength {
+                            reconstructed[row][runCol] = runValue
+                        }
+                    }
+                    
                     if actualRunLength < remainingInLine {
-                        // Run was interrupted - write termination and remainder
+                        // Run was interrupted — write termination and remainder.
                         writeRunTermination(encoded: encoded, writer: writer)
                         
                         // Encode the interruption pixel
@@ -423,30 +450,48 @@ public struct JPEGLSEncoder: Sendable {
                                 writer: writer
                             )
                             
+                            // Run interruption uses exact (unquantised) reconstruction.
+                            if near > 0 {
+                                reconstructed[row][interruptionCol] = interruptionNeighbors.actual
+                            }
                             col = interruptionCol + 1
                         } else {
                             col = interruptionCol
                         }
                     } else {
-                        // Run reaches end of line - write termination with remainder
-                        writeRunTermination(encoded: encoded, writer: writer)
+                        // Run reaches end of line.  Only write the termination bit if
+                        // there is a partial-block remainder — when the run exactly fills
+                        // the line with full blocks the decoder exits the run-length loop
+                        // at the last '1' bit and never reads a '0' terminator.
+                        if encoded.remainder > 0 {
+                            writeRunTermination(encoded: encoded, writer: writer)
+                        }
                         col += actualRunLength
                     }
                     
-                    context.updateRunIndex(completedRunLength: actualRunLength)
+                    // Update RUNindex to stay in sync with the decoder.
+                    // The decoder increments runIndex after each '1' bit and decrements
+                    // it when it reads the '0' terminator (interrupted runs and EOL with
+                    // a partial block).  Exact-block EOL runs leave the index at the
+                    // post-increment level.
+                    let finalRunIndex = min(encoded.runIndex + encoded.continuationBits, 31)
+                    if actualRunLength < remainingInLine || encoded.remainder > 0 {
+                        context.setRunIndex(max(finalRunIndex - 1, 0))
+                    } else {
+                        context.setRunIndex(finalRunIndex)
+                    }
                 } else {
                     // Regular mode
-                    try encodePixel(
-                        buffer: buffer,
-                        componentId: componentId,
-                        row: row,
-                        column: col,
+                    let rv = encodePixel(
+                        actual: neighbors.actual,
+                        a: a, b: b, c: c, d: d,
                         regularMode: regularMode,
-                        runMode: runMode,
                         context: &context,
-                        writer: writer,
-                        near: scanHeader.near
+                        writer: writer
                     )
+                    if near > 0 {
+                        reconstructed[row][col] = rv
+                    }
                     col += 1
                 }
             }
@@ -541,24 +586,32 @@ public struct JPEGLSEncoder: Sendable {
                                 col = interruptionCol
                             }
                         } else {
-                            // Run reaches end of line - write termination with remainder
-                            writeRunTermination(encoded: encoded, writer: writer)
+                            // EOL: only write the terminator when there is a partial-block
+                            // remainder — exact-block EOL runs need no terminator.
+                            if encoded.remainder > 0 {
+                                writeRunTermination(encoded: encoded, writer: writer)
+                            }
                             col += actualRunLength
                         }
                         
-                        context.updateRunIndex(completedRunLength: actualRunLength)
+                        // Synchronise RUNindex with the decoder.
+                        let finalRunIndex = min(encoded.runIndex + encoded.continuationBits, 31)
+                        if actualRunLength < remainingInLine || encoded.remainder > 0 {
+                            context.setRunIndex(max(finalRunIndex - 1, 0))
+                        } else {
+                            context.setRunIndex(finalRunIndex)
+                        }
                     } else {
                         // Regular mode
-                        try encodePixel(
-                            buffer: buffer,
-                            componentId: component.id,
-                            row: row,
-                            column: col,
+                        encodePixel(
+                            actual: neighbors.actual,
+                            a: neighbors.left,
+                            b: neighbors.top,
+                            c: neighbors.topLeft,
+                            d: neighbors.topRight,
                             regularMode: regularMode,
-                            runMode: runMode,
                             context: &context,
-                            writer: writer,
-                            near: scanHeader.near
+                            writer: writer
                         )
                         col += 1
                     }
@@ -580,51 +633,91 @@ public struct JPEGLSEncoder: Sendable {
         for row in 0..<buffer.height {
             for col in 0..<buffer.width {
                 for component in scanHeader.components {
-                    try encodePixel(
-                        buffer: buffer,
+                    guard let neighbors = buffer.getNeighbors(
                         componentId: component.id,
                         row: row,
-                        column: col,
+                        column: col
+                    ) else {
+                        throw JPEGLSError.encodingFailed(
+                            reason: "Failed to get neighbors for pixel at (\(row), \(col))"
+                        )
+                    }
+                    encodePixel(
+                        actual: neighbors.actual,
+                        a: neighbors.left,
+                        b: neighbors.top,
+                        c: neighbors.topLeft,
+                        d: neighbors.topRight,
                         regularMode: regularMode,
-                        runMode: runMode,
                         context: &context,
-                        writer: writer,
-                        near: scanHeader.near
+                        writer: writer
                     )
                 }
             }
         }
     }
     
-    /// Encode a single pixel (regular mode only for now)
-    private func encodePixel(
-        buffer: JPEGLSPixelBuffer,
-        componentId: UInt8,
+    /// Compute boundary-condition-aware neighbours from a reconstructed-value buffer.
+    ///
+    /// Mirrors the boundary conditions applied by `JPEGLSPixelBuffer.getNeighbors`
+    /// but operates on the encoder's local reconstructed-value array, which is
+    /// populated during near-lossless encoding to track the values that the decoder
+    /// will reconstruct.
+    ///
+    /// - Returns: Tuple (a, b, c, d) = (left, top, topLeft, topRight) neighbours.
+    private func computeReconstructedNeighbors(
+        from reconstructed: [[Int]],
         row: Int,
-        column: Int,
-        regularMode: JPEGLSRegularMode,
-        runMode: JPEGLSRunMode,
-        context: inout JPEGLSContextModel,
-        writer: JPEGLSBitstreamWriter,
-        near: Int
-    ) throws {
-        guard let neighbors = buffer.getNeighbors(
-            componentId: componentId,
-            row: row,
-            column: column
-        ) else {
-            throw JPEGLSError.encodingFailed(
-                reason: "Failed to get neighbors for pixel at (\(row), \(column))"
-            )
+        col: Int,
+        width: Int,
+        height: Int
+    ) -> (a: Int, b: Int, c: Int, d: Int) {
+        if row == 0 && col == 0 {
+            return (0, 0, 0, 0)
+        } else if row == 0 {
+            let left = reconstructed[row][col - 1]
+            return (left, left, left, left)
+        } else if col == 0 {
+            let top = reconstructed[row - 1][col]
+            let topRight = (width > 1) ? reconstructed[row - 1][col + 1] : top
+            return (top, top, top, topRight)
+        } else {
+            let left = reconstructed[row][col - 1]
+            let top = reconstructed[row - 1][col]
+            let topLeft = reconstructed[row - 1][col - 1]
+            let topRight = (col + 1 < width) ? reconstructed[row - 1][col + 1] : top
+            return (left, top, topLeft, topRight)
         }
-        
-        // Regular mode encoding (run mode is handled at the scan level)
+    }
+    
+    /// Encode a single pixel in regular mode and return its reconstructed value.
+    ///
+    /// Takes pre-computed neighbour values so that the caller can supply either
+    /// original or reconstructed neighbours as appropriate (e.g. for near-lossless
+    /// mode the encoder passes reconstructed neighbours; for lossless it uses the
+    /// original pixel values directly).
+    ///
+    /// - Returns: The reconstructed sample value that the decoder will produce,
+    ///   which the caller should store for use as a neighbour in subsequent pixels
+    ///   when operating in near-lossless mode.
+    @discardableResult
+    private func encodePixel(
+        actual: Int,
+        a: Int,
+        b: Int,
+        c: Int,
+        d: Int,
+        regularMode: JPEGLSRegularMode,
+        context: inout JPEGLSContextModel,
+        writer: JPEGLSBitstreamWriter
+    ) -> Int {
+        // Regular mode encoding
         let encodedPixel = regularMode.encodePixel(
-            actual: neighbors.actual,
-            a: neighbors.left,
-            b: neighbors.top,
-            c: neighbors.topLeft,
-            d: neighbors.topRight,
+            actual: actual,
+            a: a,
+            b: b,
+            c: c,
+            d: d,
             context: context
         )
         
@@ -637,6 +730,8 @@ public struct JPEGLSEncoder: Sendable {
             predictionError: encodedPixel.error,
             sign: encodedPixel.sign
         )
+        
+        return encodedPixel.reconstructedValue
     }
     
     /// Write regular mode encoded bits to bitstream
