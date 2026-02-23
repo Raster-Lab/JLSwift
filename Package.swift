@@ -26,6 +26,9 @@ let package = Package(
             name: "JPEGLS",
             resources: [
                 .process("Platform/Metal/JPEGLSShaders.metal")
+            ],
+            swiftSettings: [
+                .swiftLanguageMode(.v6)
             ]
         ),
         .executableTarget(
@@ -33,6 +36,9 @@ let package = Package(
             dependencies: [
                 "JPEGLS",
                 .product(name: "ArgumentParser", package: "swift-argument-parser"),
+            ],
+            swiftSettings: [
+                .swiftLanguageMode(.v6)
             ]
         ),
         .testTarget(
@@ -43,6 +49,9 @@ let package = Package(
             ],
             resources: [
                 .copy("TestFixtures")
+            ],
+            swiftSettings: [
+                .swiftLanguageMode(.v6)
             ]
         ),
     ]

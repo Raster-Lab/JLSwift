@@ -85,6 +85,7 @@ JPEG-LS is a lossless/near-lossless compression standard specifically designed f
 | Feature | Description |
 |---------|-------------|
 | **Native Swift** | Pure Swift implementation with no external C dependencies |
+| **Swift 6.2 Strict Concurrency** | Explicit `.swiftLanguageMode(.v6)` in Package.swift; all shared types are `Sendable`; batch processing uses `withTaskGroup` structured concurrency |
 | **Apple Silicon Optimized** | ARM NEON/SIMD acceleration with Swift SIMD4 types |
 | **Hardware Acceleration** | Apple Accelerate framework (vDSP) for batch operations & statistics |
 | **Metal GPU Acceleration** | Optional GPU acceleration for large images (macOS 10.13+, iOS 11+) |

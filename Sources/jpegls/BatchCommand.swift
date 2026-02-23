@@ -3,7 +3,7 @@ import Foundation
 import JPEGLS
 
 /// Batch processing command for multiple JPEG-LS files
-struct Batch: ParsableCommand {
+struct Batch: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "batch",
         abstract: "Process multiple JPEG-LS files in batch",
@@ -109,7 +109,7 @@ struct Batch: ParsableCommand {
     
     // MARK: - Execution
     
-    func run() throws {
+    func run() async throws {
         let processor = BatchProcessor(
             operation: operation.lowercased(),
             inputPattern: inputPattern,
@@ -129,13 +129,13 @@ struct Batch: ParsableCommand {
             failFast: failFast
         )
         
-        try processor.process()
+        try await processor.process()
     }
 }
 
 // MARK: - Encode Options
 
-struct EncodeOptions {
+struct EncodeOptions: Sendable {
     let width: Int
     let height: Int
     let bitsPerSample: Int
@@ -147,7 +147,7 @@ struct EncodeOptions {
 
 // MARK: - Batch Processor
 
-struct BatchProcessor {
+struct BatchProcessor: Sendable {
     let operation: String
     let inputPattern: String
     let outputDir: String?
@@ -157,7 +157,7 @@ struct BatchProcessor {
     let quiet: Bool
     let failFast: Bool
     
-    func process() throws {
+    func process() async throws {
         // Find input files matching pattern
         let inputFiles = try findInputFiles()
         
@@ -181,8 +181,8 @@ struct BatchProcessor {
             try createOutputDirectory(outputDir)
         }
         
-        // Process files
-        let results = try processFiles(inputFiles)
+        // Process files using structured concurrency
+        let results = await processFiles(inputFiles)
         
         // Print summary
         if !quiet {
@@ -292,32 +292,67 @@ struct BatchProcessor {
         }
     }
     
-    private func processFiles(_ files: [String]) throws -> BatchResults {
-        // Process files with concurrency control
-        let semaphore = DispatchSemaphore(value: parallelism)
-        let queue = DispatchQueue(label: "com.jpegls.batch", attributes: .concurrent)
-        let group = DispatchGroup()
-        
-        // Use a thread-safe results aggregator
-        let resultsAggregator = ResultsAggregator()
-        
-        for (index, inputFile) in files.enumerated() {
-            group.enter()
-            semaphore.wait()
-            
-            queue.async {
-                defer {
-                    semaphore.signal()
-                    group.leave()
+    /// Process files using structured concurrency with a sliding-window parallelism limit.
+    ///
+    /// Tasks are submitted in batches of `parallelism` and results are collected as each
+    /// task completes, keeping at most `parallelism` tasks in flight at any time.
+    private func processFiles(_ files: [String]) async -> BatchResults {
+        var successes = 0
+        var failures = 0
+        var totalDuration: TimeInterval = 0
+        var failedFiles: [String] = []
+        var cancelled = false
+
+        await withTaskGroup(of: FileResult.self) { group in
+            var nextIndex = 0
+            let total = files.count
+
+            // Seed the group up to the parallelism limit
+            while nextIndex < min(parallelism, total) {
+                let file = files[nextIndex]
+                let index = nextIndex
+                let processor = self
+                group.addTask {
+                    processor.processFile(file, index: index, total: total)
                 }
-                
-                let fileResult = self.processFile(inputFile, index: index, total: files.count)
-                resultsAggregator.add(fileResult)
+                nextIndex += 1
+            }
+
+            // Collect results and submit new tasks as slots become free
+            for await result in group {
+                if result.success {
+                    successes += 1
+                } else {
+                    failures += 1
+                    failedFiles.append(result.file)
+                }
+                totalDuration += result.duration
+
+                if failFast && !result.success {
+                    cancelled = true
+                    group.cancelAll()
+                    break
+                }
+
+                // Submit the next file if one is available
+                if !cancelled && nextIndex < total {
+                    let file = files[nextIndex]
+                    let index = nextIndex
+                    let processor = self
+                    group.addTask {
+                        processor.processFile(file, index: index, total: total)
+                    }
+                    nextIndex += 1
+                }
             }
         }
         
-        group.wait()
-        return resultsAggregator.getResults()
+        return BatchResults(
+            successes: successes,
+            failures: failures,
+            totalDuration: totalDuration,
+            failedFiles: failedFiles
+        )
     }
     
     private func processFile(_ inputFile: String, index: Int, total: Int) -> FileResult {
@@ -358,11 +393,6 @@ struct BatchProcessor {
             
             if !quiet {
                 print("  ✗ Failed: \(error.localizedDescription)")
-            }
-            
-            if failFast {
-                // In fail-fast mode, we still return the result but the caller will exit
-                return FileResult(file: inputFile, success: false, duration: duration, error: error)
             }
             
             return FileResult(file: inputFile, success: false, duration: duration, error: error)
@@ -450,48 +480,14 @@ struct BatchProcessor {
 
 // MARK: - Results Tracking
 
-struct FileResult {
+struct FileResult: Sendable {
     let file: String
     let success: Bool
     let duration: TimeInterval
     let error: Error?
 }
 
-/// Thread-safe results aggregator using NSLock
-final class ResultsAggregator: @unchecked Sendable {
-    private let lock = NSLock()
-    private var successes = 0
-    private var failures = 0
-    private var totalDuration: TimeInterval = 0
-    private var failedFiles: [String] = []
-    
-    func add(_ result: FileResult) {
-        lock.lock()
-        defer { lock.unlock() }
-        
-        if result.success {
-            successes += 1
-        } else {
-            failures += 1
-            failedFiles.append(result.file)
-        }
-        totalDuration += result.duration
-    }
-    
-    func getResults() -> BatchResults {
-        lock.lock()
-        defer { lock.unlock() }
-        
-        return BatchResults(
-            successes: successes,
-            failures: failures,
-            totalDuration: totalDuration,
-            failedFiles: failedFiles
-        )
-    }
-}
-
-struct BatchResults {
+struct BatchResults: Sendable {
     let successes: Int
     let failures: Int
     let totalDuration: TimeInterval
