@@ -600,9 +600,9 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 - Updated README.md documentation table with new release documents
 - **Note**: Automated release workflow and binary distribution deferred to post-v1.0 as they require CI/CD infrastructure beyond the current scope
 
-### Milestone 10: Standards Conformance Audit & Core Refactoring 📋
+### Milestone 10: Standards Conformance Audit & Core Refactoring ⏳
 **Target**: Full conformance with the latest version of ISO/IEC 14495-1 / ITU-T.87 across the core coding system and file formats  
-**Status**: Not Started
+**Status**: In Progress
 
 #### Phase 10.1: Standards Conformance Audit
 - [ ] Audit the entire codebase against the latest published version of ISO/IEC 14495-1 / ITU-T.87
@@ -631,14 +631,23 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 - [ ] Ensure encoder output is valid JPEG-LS that any compliant decoder can process
 - [ ] Run the full test suite after each file format change — no regressions permitted
 
-#### Phase 10.4: Swift 6.2 Strict Concurrency Compliance
-- [ ] Audit all types for `Sendable` conformance where shared across concurrency domains
-- [ ] Adopt structured concurrency (`async`/`await`, `TaskGroup`) where appropriate
-- [ ] Eliminate any data races flagged by Swift 6.2 strict concurrency checking
-- [ ] Mark all global state as `@MainActor` or use appropriate isolation
-- [ ] Verify thread safety of buffer pool, tile processor, and shared resources
-- [ ] Enable strict concurrency checking in Package.swift and resolve all warnings
-- [ ] Ensure all unit tests pass under strict concurrency mode
+#### Phase 10.4: Swift 6.2 Strict Concurrency Compliance ✅
+- [x] Audit all types for `Sendable` conformance where shared across concurrency domains
+- [x] Adopt structured concurrency (`async`/`await`, `TaskGroup`) where appropriate
+- [x] Eliminate any data races flagged by Swift 6.2 strict concurrency checking
+- [x] Mark all global state as `@MainActor` or use appropriate isolation
+- [x] Verify thread safety of buffer pool, tile processor, and shared resources
+- [x] Enable strict concurrency checking in Package.swift and resolve all warnings
+- [x] Ensure all unit tests pass under strict concurrency mode
+
+**Implementation Details:**
+- Added explicit `.swiftLanguageMode(.v6)` to all three targets in Package.swift (JPEGLS library, jpegls executable, JPEGLSTests) to make Swift 6 strict concurrency checking visible and self-documenting
+- Converted `Batch` CLI command from `ParsableCommand` to `AsyncParsableCommand` with an `async throws` `run()` method
+- Replaced GCD-based batch parallelism (`DispatchQueue` + `DispatchGroup` + `DispatchSemaphore`) with Swift structured concurrency using `withTaskGroup(of: FileResult.self)`
+- Implemented a sliding-window parallelism pattern: seeds `parallelism` tasks initially, then submits the next task as each result is collected — keeping at most `parallelism` tasks in-flight at any time
+- Removed the `NSLock`-based `ResultsAggregator` class; results are now accumulated in local variables accessed only from the task-group continuation (no shared mutable state across tasks)
+- Added explicit `Sendable` conformance to `EncodeOptions`, `BatchProcessor`, `FileResult`, and `BatchResults`
+- All 732 unit tests pass with no regressions
 
 ### Milestone 11: JPEG-LS Part 2 Extensions (ITU-T T.870 / ISO/IEC 14495-2:2003) 📋
 **Target**: Implement, verify, and optimise JPEG-LS Part 2 extensions  
@@ -1017,7 +1026,7 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 | **7** | CLI | Core commands (info ✅, verify ✅, encode ✅, decode ✅), utilities ✅, help & docs ✅ |
 | **8** | Validation | CharLS conformance ✅, benchmarks ✅, DICOM testing ✅, edge cases ✅ |
 | **9** | Release | API docs ✅, integration guides ✅, versioning ✅, changelog ✅, release template ✅ |
-| **10** | Standards Conformance & Refactoring | Conformance audit, core refactoring, file format refactoring, Swift 6.2 strict concurrency 📋 |
+| **10** | Standards Conformance & Refactoring | Conformance audit ⏳, core refactoring ⏳, file format refactoring ⏳, Swift 6.2 strict concurrency ✅ |
 | **11** | Part 2 Extensions | Arithmetic coding, extended prediction/transform modes, extended markers, Part 2 optimisation 📋 |
 | **12** | CharLS Interoperability | Bidirectional interoperability, bit-exact validation, round-trip testing 📋 |
 | **13** | Apple Silicon Optimisation | ARM Neon enhancement, Accelerate deep integration, memory architecture tuning 📋 |
