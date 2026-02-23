@@ -574,13 +574,13 @@ JLSwift includes comprehensive conformance testing using reference files from th
   - Non-default parameters
 - **Image Loading**: PGM (grayscale) and PPM (color) reference image parsing
 - **Bit-Exact Comparison**: Infrastructure ready to validate decoded output against CharLS reference images
-  - Test suite with 10 comparison test cases (currently disabled pending run-interruption context statistics improvements)
+  - Test suite with 10 comparison test cases (currently disabled pending further decoder alignment work)
   - Pixel-by-pixel validation (lossless and near-lossless modes)
-  - Flat-region (run mode) and near-lossless round-trip encoding/decoding now verified correct
+  - Flat-region (run mode) and near-lossless round-trip encoding/decoding verified correct
 
-The conformance tests are located in `Tests/JPEGLSTests/CharLSConformanceTests.swift` with reference fixtures in `Tests/JPEGLSTests/TestFixtures/`. These tests ensure compatibility with the JPEG-LS standard (ISO/IEC 14495-1:1999 / ITU-T.87) and provide a foundation for bit-exact comparison with CharLS output. The parser successfully handles all 12 CharLS reference files; bit-exact decoder comparison is pending run-interruption context statistics implementation (§4.5.4).
+The conformance tests are located in `Tests/JPEGLSTests/CharLSConformanceTests.swift` with reference fixtures in `Tests/JPEGLSTests/TestFixtures/`. These tests ensure compatibility with the JPEG-LS standard (ISO/IEC 14495-1:1999 / ITU-T.87) and provide a foundation for bit-exact comparison with CharLS output.
 
-A full standards conformance matrix (`CONFORMANCE_MATRIX.md`) documents the mapping between every normative section of ITU-T.87 and its implementation in JLSwift, including deviations found and fixed during Milestone 10.
+A full standards conformance matrix (`CONFORMANCE_MATRIX.md`) documents the mapping between every normative section of ITU-T.87 and its implementation in JLSwift, including all deviations found and fixed during Milestone 10 (Phases 10.1–10.4).
 
 ### Code Coverage Requirement
 

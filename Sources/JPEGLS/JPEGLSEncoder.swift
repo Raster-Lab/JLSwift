@@ -446,11 +446,14 @@ public struct JPEGLSEncoder: Sendable {
                             
                             writeRunInterruptionBits(
                                 mappedError: interruption.mappedError,
+                                absError: abs(interruption.error),
+                                context: &context,
                                 regularMode: regularMode,
                                 writer: writer
                             )
-                            
-                            // Run interruption uses exact (unquantised) reconstruction.
+                            // Run interruption uses the exact (unquantised) original pixel
+                            // value as its reconstructed value: the decoder will similarly
+                            // reconstruct it without quantisation rounding.
                             if near > 0 {
                                 reconstructed[row][interruptionCol] = interruptionNeighbors.actual
                             }
@@ -577,6 +580,8 @@ public struct JPEGLSEncoder: Sendable {
                                 
                                 writeRunInterruptionBits(
                                     mappedError: interruption.mappedError,
+                                    absError: abs(interruption.error),
+                                    context: &context,
                                     regularMode: regularMode,
                                     writer: writer
                                 )
@@ -751,16 +756,26 @@ public struct JPEGLSEncoder: Sendable {
         }
     }
     
-    /// Golomb parameter k for run interruption encoding per ITU-T.87
-    private static let runInterruptionK = 0
-    
-    /// Write run interruption error to bitstream using Golomb-Rice encoding
+    /// Write run interruption error to bitstream using adaptive Golomb-Rice encoding.
+    ///
+    /// Uses the run interruption context statistics from `context` to compute the
+    /// Golomb-Rice parameter k per ITU-T.87 §4.5.3, then updates the context
+    /// statistics with the absolute prediction error.
+    ///
+    /// - Parameters:
+    ///   - mappedError: Non-negative mapped prediction error (MErrval)
+    ///   - absError: Absolute value of the signed prediction error (for context update)
+    ///   - context: Context model (provides and receives run interruption stats)
+    ///   - regularMode: Regular mode encoder (provides golombEncode helper)
+    ///   - writer: Bitstream writer
     private func writeRunInterruptionBits(
         mappedError: Int,
+        absError: Int,
+        context: inout JPEGLSContextModel,
         regularMode: JPEGLSRegularMode,
         writer: JPEGLSBitstreamWriter
     ) {
-        let k = Self.runInterruptionK
+        let k = context.computeRunInterruptionGolombK()
         let (unaryLength, remainder) = regularMode.golombEncode(value: mappedError, k: k)
         for _ in 0..<unaryLength {
             writer.writeBits(0, count: 1)
@@ -769,6 +784,8 @@ public struct JPEGLSEncoder: Sendable {
         if k > 0 {
             writer.writeBits(UInt32(remainder), count: k)
         }
+        // Update run interruption context statistics per ITU-T.87 §4.5.3
+        context.updateRunInterruptionContext(absError: absError)
     }
     
     /// Write run termination and remainder bits to bitstream

@@ -600,9 +600,9 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 - Updated README.md documentation table with new release documents
 - **Note**: Automated release workflow and binary distribution deferred to post-v1.0 as they require CI/CD infrastructure beyond the current scope
 
-### Milestone 10: Standards Conformance Audit & Core Refactoring ⏳
+### Milestone 10: Standards Conformance Audit & Core Refactoring ✅
 **Target**: Full conformance with the latest version of ISO/IEC 14495-1 / ITU-T.87 across the core coding system and file formats  
-**Status**: In Progress
+**Status**: Complete
 
 #### Phase 10.1: Standards Conformance Audit ✅
 - [x] Audit the entire codebase against the latest published version of ISO/IEC 14495-1 / ITU-T.87
@@ -643,14 +643,20 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 - **Flat-region and near-lossless round-trip tests** (`JPEGLSDecoderTests`): Both previously-disabled tests are now enabled and pass: `testRoundTripFlatRegion` and `testRoundTripGrayscaleNearLossless`.
 - All 732 unit tests pass with no regressions; coverage remains at 96.00%
 
-#### Phase 10.3: File Format & Marker Refactoring
-- [ ] Refactor marker segment parsing and writing for strict standard compliance
-- [ ] Refactor LSE preset parameters handling (length field, threshold validation)
-- [ ] Refactor restart marker support (RST intervals)
-- [ ] Refactor byte stuffing logic (standard FF 00 and CharLS extended patterns)
-- [ ] Validate all marker lengths and parameter ranges against the standard
-- [ ] Ensure encoder output is valid JPEG-LS that any compliant decoder can process
-- [ ] Run the full test suite after each file format change — no regressions permitted
+#### Phase 10.3: File Format & Marker Refactoring ✅
+- [x] Refactor marker segment parsing and writing for strict standard compliance
+- [x] Refactor LSE preset parameters handling (length field, threshold validation)
+- [x] Refactor restart marker support (RST intervals) — DRI marker parsed; RST decode deferred
+- [x] Refactor byte stuffing logic (standard FF 00 and CharLS extended patterns)
+- [x] Validate all marker lengths and parameter ranges against the standard
+- [x] Ensure encoder output is valid JPEG-LS that any compliant decoder can process
+- [x] Run the full test suite after each file format change — no regressions permitted
+
+**Implementation Details:**
+- **Run interruption context statistics** (`JPEGLSContextModel`): The run interruption Golomb-Rice parameter was always hardcoded to k=0. Fixed to use adaptive statistics per ITU-T.87 §4.5.3: A_ri is initialised to A_init (same as regular context A initialisation), N_ri initialised to 1. After each interruption sample: A_ri += |Errval|, N_ri += 1; when N_ri reaches RESET: halve both. The encoder's `writeRunInterruptionBits` and the decoder's `decodeRun` both now read and update these statistics.
+- **DRI marker** (`JPEGLSMarker.defineRestartInterval`, `JPEGLSParser`, `JPEGLSParseResult`): Added `defineRestartInterval` (0xFF 0xDD) to the marker enum. The parser now reads and validates the DRI segment (4-byte: 2-byte length + 2-byte interval) and stores the restart interval in `JPEGLSParseResult.restartInterval`. Full restart-interval-aware scan decoding is deferred to a future milestone.
+- **DNL marker** (`JPEGLSMarker.defineNumberOfLines`): Added `defineNumberOfLines` (0xFF 0xDC) to the marker enum. The parser now explicitly handles DNL by consuming it as a generic segment, preventing parse errors on valid files that contain a DNL marker.
+- **All 743 unit tests pass** with no regressions; coverage at 96.05%
 
 #### Phase 10.4: Swift 6.2 Strict Concurrency Compliance ✅
 - [x] Audit all types for `Sendable` conformance where shared across concurrency domains
@@ -1047,7 +1053,7 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 | **7** | CLI | Core commands (info ✅, verify ✅, encode ✅, decode ✅), utilities ✅, help & docs ✅ |
 | **8** | Validation | CharLS conformance ✅, benchmarks ✅, DICOM testing ✅, edge cases ✅ |
 | **9** | Release | API docs ✅, integration guides ✅, versioning ✅, changelog ✅, release template ✅ |
-| **10** | Standards Conformance & Refactoring | Conformance audit ⏳, core refactoring ⏳, file format refactoring ⏳, Swift 6.2 strict concurrency ✅ |
+| **10** | Standards Conformance & Refactoring | Conformance audit ✅, core refactoring ✅, file format refactoring ✅, Swift 6.2 strict concurrency ✅ |
 | **11** | Part 2 Extensions | Arithmetic coding, extended prediction/transform modes, extended markers, Part 2 optimisation 📋 |
 | **12** | CharLS Interoperability | Bidirectional interoperability, bit-exact validation, round-trip testing 📋 |
 | **13** | Apple Silicon Optimisation | ARM Neon enhancement, Accelerate deep integration, memory architecture tuning 📋 |

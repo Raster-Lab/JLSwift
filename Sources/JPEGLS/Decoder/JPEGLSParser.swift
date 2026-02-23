@@ -25,6 +25,9 @@ public struct JPEGLSParseResult: Sendable {
     /// Preset parameters (if custom parameters were specified via LSE marker)
     public let presetParameters: JPEGLSPresetParameters?
     
+    /// Restart interval in MCUs (if a DRI marker was present, otherwise nil)
+    public let restartInterval: Int?
+    
     /// Application marker data (APP0-APP15)
     public let applicationMarkers: [(marker: JPEGLSMarker, data: Data)]
     
@@ -37,18 +40,21 @@ public struct JPEGLSParseResult: Sendable {
     ///   - frameHeader: Frame header
     ///   - scanHeaders: Scan headers
     ///   - presetParameters: Optional custom preset parameters
+    ///   - restartInterval: Optional restart interval from DRI marker
     ///   - applicationMarkers: Application markers
     ///   - comments: Comment data
     public init(
         frameHeader: JPEGLSFrameHeader,
         scanHeaders: [JPEGLSScanHeader],
         presetParameters: JPEGLSPresetParameters? = nil,
+        restartInterval: Int? = nil,
         applicationMarkers: [(marker: JPEGLSMarker, data: Data)] = [],
         comments: [Data] = []
     ) {
         self.frameHeader = frameHeader
         self.scanHeaders = scanHeaders
         self.presetParameters = presetParameters
+        self.restartInterval = restartInterval
         self.applicationMarkers = applicationMarkers
         self.comments = comments
     }
@@ -84,6 +90,7 @@ public final class JPEGLSParser {
         var frameHeader: JPEGLSFrameHeader?
         var scanHeaders: [JPEGLSScanHeader] = []
         var presetParameters: JPEGLSPresetParameters?
+        var restartInterval: Int?
         var applicationMarkers: [(marker: JPEGLSMarker, data: Data)] = []
         var comments: [Data] = []
         
@@ -141,6 +148,7 @@ public final class JPEGLSParser {
                     frameHeader: frame,
                     scanHeaders: scanHeaders,
                     presetParameters: presetParameters,
+                    restartInterval: restartInterval,
                     applicationMarkers: applicationMarkers,
                     comments: comments
                 )
@@ -223,6 +231,18 @@ public final class JPEGLSParser {
                  .restart4, .restart5, .restart6, .restart7:
                 // Restart markers have no length field, just skip
                 continue
+                
+            case .defineRestartInterval:
+                // Parse Define Restart Interval (DRI) marker per ITU-T.87 §5.1
+                restartInterval = try parseRestartInterval()
+                
+            case .defineNumberOfLines:
+                // Parse Define Number of Lines (DNL) marker per ITU-T.87 §5.1.
+                // DNL may appear after the first scan to supply the Y value when it was
+                // unknown (Y=0) at SOF time. Frame dimensions are already known from the
+                // SOF marker in typical usage, so the DNL payload is consumed but not
+                // applied. Full DNL-based dimension update is deferred to a future milestone.
+                _ = try parseMarkerSegment()
                 
             case .startOfImage:
                 throw JPEGLSError.invalidBitstreamStructure(
@@ -413,5 +433,21 @@ public final class JPEGLSParser {
             let skipLength = Int(length) - 3
             _ = try reader.readBytes(skipLength)
         }
+    }
+    
+    /// Parse Define Restart Interval (DRI) marker segment per ITU-T.87 §5.1
+    ///
+    /// The DRI segment specifies the number of MCUs between restart markers.
+    /// Length field is always 4 (2-byte length + 2-byte interval value).
+    ///
+    /// - Returns: Restart interval value (0 means restart markers are not used)
+    private func parseRestartInterval() throws -> Int {
+        let length = try reader.readUInt16()
+        guard length == 4 else {
+            throw JPEGLSError.invalidBitstreamStructure(
+                reason: "Invalid DRI marker length: expected 4, got \(length)"
+            )
+        }
+        return Int(try reader.readUInt16())
     }
 }
