@@ -13,9 +13,11 @@ struct JPEGLSContextModelTests {
         let params = try JPEGLSPresetParameters.defaultParameters(bitsPerSample: 8)
         let context = try JPEGLSContextModel(parameters: params, near: 0)
         
-        // Verify all contexts are initialized correctly
+        // Per ITU-T.87 Section 4.3: A[i] = max(2, floor((RANGE + 32) / 64))
+        // For 8-bit lossless: RANGE = 256, A_init = max(2, (256+32)/64) = max(2, 4) = 4
+        let expectedAInit = 4
         for i in 0..<JPEGLSContextModel.regularContextCount {
-            #expect(context.getA(contextIndex: i) == 2)
+            #expect(context.getA(contextIndex: i) == expectedAInit)
             #expect(context.getB(contextIndex: i) == 0)
             #expect(context.getC(contextIndex: i) == 0)
             #expect(context.getN(contextIndex: i) == 1)
@@ -144,8 +146,11 @@ struct JPEGLSContextModelTests {
         let predictionError = 5
         let sign = 1
         
+        // For 8-bit lossless: A is initialised to 4 per ITU-T.87
+        let expectedAInit = 4
+        
         // Initial state
-        #expect(context.getA(contextIndex: contextIndex) == 2)
+        #expect(context.getA(contextIndex: contextIndex) == expectedAInit)
         #expect(context.getB(contextIndex: contextIndex) == 0)
         #expect(context.getC(contextIndex: contextIndex) == 0)
         #expect(context.getN(contextIndex: contextIndex) == 1)
@@ -153,8 +158,9 @@ struct JPEGLSContextModelTests {
         // Update context
         context.updateContext(contextIndex: contextIndex, predictionError: predictionError, sign: sign)
         
-        // Check updated values
-        #expect(context.getA(contextIndex: contextIndex) == 7)
+        // A += |error| = 4 + 5 = 9
+        // B += sign * error = 0 + 1*5 = 5; N becomes 2; B >= N → C += 1, B -= N → B = 3
+        #expect(context.getA(contextIndex: contextIndex) == expectedAInit + 5)
         #expect(context.getB(contextIndex: contextIndex) == 3)
         #expect(context.getC(contextIndex: contextIndex) == 1)
         #expect(context.getN(contextIndex: contextIndex) == 2)
@@ -167,21 +173,21 @@ struct JPEGLSContextModelTests {
         
         let contextIndex = 50
         
-        // Positive error, positive sign -> C increases
+        // Positive error, positive sign → B = sign*error = 3; N=2; B>=N → C=1, B=1
         context.updateContext(contextIndex: contextIndex, predictionError: 3, sign: 1)
         #expect(context.getC(contextIndex: contextIndex) == 1)
         
-        // Negative error, positive sign -> B decreases but no bias correction triggers
+        // Negative error, positive sign → B += 1*(-2) = -1; N=3; no threshold triggered
         context.updateContext(contextIndex: contextIndex, predictionError: -2, sign: 1)
         #expect(context.getC(contextIndex: contextIndex) == 1)
         
-        // Positive error, negative sign -> B increases but no bias correction triggers
+        // Positive error, negative sign → B += (-1)*4 = -4; B becomes -5; N=4; B<-N → C decrements
         context.updateContext(contextIndex: contextIndex, predictionError: 4, sign: -1)
-        #expect(context.getC(contextIndex: contextIndex) == 1)
+        #expect(context.getC(contextIndex: contextIndex) == 0)
         
-        // Negative error, negative sign -> B decreases but no bias correction triggers
+        // Negative error, negative sign → B += (-1)*(-1) = +1; B becomes 0; N=5; no threshold
         context.updateContext(contextIndex: contextIndex, predictionError: -1, sign: -1)
-        #expect(context.getC(contextIndex: contextIndex) == 1)
+        #expect(context.getC(contextIndex: contextIndex) == 0)
     }
     
     @Test("Context reset mechanism works correctly")
@@ -243,9 +249,10 @@ struct JPEGLSContextModelTests {
         let params = try JPEGLSPresetParameters.defaultParameters(bitsPerSample: 8)
         let context = try JPEGLSContextModel(parameters: params, near: 0)
         
-        // With A initialized to 2 and N=1, k = 1
+        // For 8-bit lossless: A initialised to 4, N=1.
+        // k is the smallest integer such that N * 2^k >= A: 1*2^k >= 4 → k = 2.
         let k = context.computeGolombParameter(contextIndex: 100)
-        #expect(k == 1)
+        #expect(k == 2)
     }
     
     @Test("Golomb parameter increases with accumulated error")
@@ -441,15 +448,18 @@ struct JPEGLSContextModelTests {
         let ctx2 = 20
         let ctx3 = 30
         
+        // For 8-bit lossless: A is initialised to 4 per ITU-T.87
+        let aInit = 4
+        
         // Update different contexts with different errors
         context.updateContext(contextIndex: ctx1, predictionError: 5, sign: 1)
         context.updateContext(contextIndex: ctx2, predictionError: 10, sign: 1)
         context.updateContext(contextIndex: ctx3, predictionError: 15, sign: 1)
         
-        // Each context should have different values
-        #expect(context.getA(contextIndex: ctx1) == 7)
-        #expect(context.getA(contextIndex: ctx2) == 12)
-        #expect(context.getA(contextIndex: ctx3) == 17)
+        // Each context should have different values: A = aInit + |error|
+        #expect(context.getA(contextIndex: ctx1) == aInit + 5)
+        #expect(context.getA(contextIndex: ctx2) == aInit + 10)
+        #expect(context.getA(contextIndex: ctx3) == aInit + 15)
         
         // B accumulates error minus bias corrections
         #expect(context.getB(contextIndex: ctx1) == 3)

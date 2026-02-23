@@ -311,18 +311,23 @@ public struct JPEGLSRegularModeDecoder: Sendable {
             sign: sign
         )
         
-        // Step 6: Unmap error from non-negative to signed
-        let error = unmapError(mappedError)
+        // Step 6: Unmap error from non-negative to signed (sign-adjusted Errval)
+        let signAdjustedError = unmapError(mappedError)
+        
+        // Step 6a: Undo sign normalisation to recover the raw prediction error.
+        // The encoder negated the error when the context sign was -1, so to
+        // reconstruct the correct sample we must apply the inverse: rawError = sign × Errval.
+        let rawError = sign * signAdjustedError
         
         // Step 7: Reconstruct sample value
-        let sample = reconstructSample(prediction: correctedPrediction, error: error)
+        let sample = reconstructSample(prediction: correctedPrediction, error: rawError)
         
         return DecodedPixel(
             contextIndex: contextIndex,
             sign: sign,
             prediction: correctedPrediction,
             mappedError: mappedError,
-            error: error,
+            error: rawError,
             sample: sample
         )
     }

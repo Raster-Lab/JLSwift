@@ -94,7 +94,7 @@ JPEG-LS is a lossless/near-lossless compression standard specifically designed f
 | **Multi-Component Support** | Full RGB and grayscale encoding with all interleaving modes |
 | **Interleaving Modes** | None (separate scans), Line-interleaved, Sample-interleaved |
 | **Near-Lossless Support** | Configurable error tolerance encoding with NEAR parameter (1-255) |
-| **ITU-T.87 Compliant** | Standard-compliant gradient computation (D1=d-b, D2=b-c, D3=c-a) and run mode |
+| **ITU-T.87 Compliant** | Standard-conformant context index formula (365 contexts), A initialisation, sign-adjusted Golomb-Rice coding, and bias correction per §4.3.3 |
 | **Command-Line Tool** | `jpegls` CLI with info, verify, encode, and decode commands |
 
 ### Architecture Overview
@@ -579,6 +579,8 @@ JLSwift includes comprehensive conformance testing using reference files from th
   - Pending: Full decoder support for CharLS encoding patterns (decoder pixel drift under investigation)
 
 The conformance tests are located in `Tests/JPEGLSTests/CharLSConformanceTests.swift` with reference fixtures in `Tests/JPEGLSTests/TestFixtures/`. These tests ensure compatibility with the JPEG-LS standard (ISO/IEC 14495-1:1999 / ITU-T.87) and provide a foundation for bit-exact comparison with CharLS output. The parser successfully handles all 12 CharLS reference files; decoder integration is in progress.
+
+A full standards conformance matrix (`CONFORMANCE_MATRIX.md`) documents the mapping between every normative section of ITU-T.87 and its implementation in JLSwift, including deviations found and fixed during Milestone 10.
 
 ### Code Coverage Requirement
 

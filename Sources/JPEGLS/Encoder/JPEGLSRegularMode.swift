@@ -311,7 +311,12 @@ public struct JPEGLSRegularMode: Sendable {
         )
         
         // Step 6: Compute prediction error with modular reduction
-        let error = computePredictionError(actual: actual, prediction: correctedPrediction)
+        let rawError = computePredictionError(actual: actual, prediction: correctedPrediction)
+        
+        // Step 6a: Apply sign to normalise the error per ITU-T.87 Section 4.3.3.
+        // When the context sign is negative the error is negated so that the encoded
+        // error is always relative to the normalised (positive-sign) context.
+        let error = sign * rawError
         
         // Step 7: Map to non-negative for Golomb coding
         let mappedError = mapErrorToNonNegative(error)
@@ -326,7 +331,7 @@ public struct JPEGLSRegularMode: Sendable {
             contextIndex: contextIndex,
             sign: sign,
             prediction: correctedPrediction,
-            error: error,
+            error: rawError,
             mappedError: mappedError,
             golombK: k,
             unaryLength: unaryLength,
