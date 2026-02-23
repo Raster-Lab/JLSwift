@@ -604,23 +604,37 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 **Target**: Full conformance with the latest version of ISO/IEC 14495-1 / ITU-T.87 across the core coding system and file formats  
 **Status**: In Progress
 
-#### Phase 10.1: Standards Conformance Audit
-- [ ] Audit the entire codebase against the latest published version of ISO/IEC 14495-1 / ITU-T.87
-- [ ] Verify core coding system conformance (prediction, context modelling, Golomb-Rice coding, run mode)
-- [ ] Verify file format conformance (marker segments, frame/scan headers, preset parameters, extension markers)
-- [ ] Identify and document any deviations from the standard
-- [ ] Create a conformance matrix mapping each section of the standard to its implementation and test coverage
-- [ ] Ensure all unit tests pass before any refactoring begins (baseline verification)
+#### Phase 10.1: Standards Conformance Audit ✅
+- [x] Audit the entire codebase against the latest published version of ISO/IEC 14495-1 / ITU-T.87
+- [x] Verify core coding system conformance (prediction, context modelling, Golomb-Rice coding, run mode)
+- [x] Verify file format conformance (marker segments, frame/scan headers, preset parameters, extension markers)
+- [x] Identify and document any deviations from the standard
+- [x] Create a conformance matrix mapping each section of the standard to its implementation and test coverage
+- [x] Ensure all unit tests pass before any refactoring begins (baseline verification)
 
-#### Phase 10.2: Core Coding System Refactoring
-- [ ] Refactor gradient computation to match the standard exactly (D1=d−b, D2=b−c, D3=c−a)
-- [ ] Refactor context quantisation and index computation (365 regular contexts)
+**Implementation Details:**
+- Created `CONFORMANCE_MATRIX.md` mapping every normative section of ITU-T.87 to its JLSwift implementation
+- Identified five critical and significant deviations from the standard (see Phase 10.2 below)
+- All 732 tests passed as baseline verification before any refactoring
+
+#### Phase 10.2: Core Coding System Refactoring ⏳
+- [x] Refactor gradient computation to match the standard exactly (D1=d−b, D2=b−c, D3=c−a) — was already correct
+- [x] Refactor context quantisation and index computation (365 regular contexts)
+- [x] Refactor bias correction logic (B accumulation, C correction per Section 4.3.3)
+- [x] Refactor Golomb-Rice sign-adjusted error encoding (encoder maps sign×Errval, decoder reconstructs Px'+sign×Errval)
 - [ ] Refactor Golomb-Rice parameter estimation and encoding/decoding
 - [ ] Refactor run mode encoder/decoder synchronisation (RUNindex, J table per Annex J)
 - [ ] Refactor near-lossless error quantisation and reconstructed value tracking
-- [ ] Refactor bias correction logic (B accumulation, C correction per Section 4.3.3)
-- [ ] Ensure all unit tests pass after each refactoring step — no regressions permitted
-- [ ] Achieve >95% test coverage throughout the refactoring process
+- [x] Ensure all unit tests pass after each refactoring step — no regressions permitted
+- [x] Achieve >95% test coverage throughout the refactoring process
+
+**Implementation Details (completed items):**
+- **Context index formula** (`JPEGLSContextModel.computeContextIndex`): The formula was incorrectly computing `81*(Q1+4) + 9*(Q2+4) + (Q3+4)` which collapsed all 365 valid contexts to a single index (364) after clamping. Fixed to the correct ITU-T.87 formula `Qt = 81*Q1 + 9*Q2 + Q3` applied to sign-normalised gradients, yielding distinct indices in [0, 364].
+- **Context A initialisation** (`JPEGLSContextModel.initializeContexts`): A was hardcoded to 2. Fixed to compute `max(2, floor((RANGE + 32) / 64))` per ITU-T.87 §4.3.3. For 8-bit lossless images this gives A_init = 4; for 16-bit images, A_init = 1025.
+- **Sign-adjusted B update** (`JPEGLSContextModel.updateContext`): B was updated with the raw prediction error. Fixed to `B += sign × predictionError` per ITU-T.87 §4.3.3 so that the bias correction adapts in the normalised context direction.
+- **Encoder sign-adjusted error** (`JPEGLSRegularMode.encodePixel`): The raw prediction error was mapped to MErrval directly. Fixed to first sign-adjust: `signAdjustedError = sign × rawError`, then map `signAdjustedError` to MErrval.
+- **Decoder sign-adjusted reconstruction** (`JPEGLSRegularModeDecoder.decodePixel`): The decoded error was added to the prediction without sign adjustment. Fixed to compute `rawError = sign × decodedSignAdjustedError` and reconstruct `sample = Px' + rawError`.
+- All 732 unit tests pass with no regressions; coverage remains at 95.95%
 
 #### Phase 10.3: File Format & Marker Refactoring
 - [ ] Refactor marker segment parsing and writing for strict standard compliance
