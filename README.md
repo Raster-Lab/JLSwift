@@ -85,6 +85,7 @@ JPEG-LS is a lossless/near-lossless compression standard specifically designed f
 | Feature | Description |
 |---------|-------------|
 | **Native Swift** | Pure Swift implementation with no external C dependencies |
+| **Swift 6.2 Strict Concurrency** | Explicit `.swiftLanguageMode(.v6)` in Package.swift; all shared types are `Sendable`; batch processing uses `withTaskGroup` structured concurrency |
 | **Apple Silicon Optimized** | ARM NEON/SIMD acceleration with Swift SIMD4 types |
 | **Hardware Acceleration** | Apple Accelerate framework (vDSP) for batch operations & statistics |
 | **Metal GPU Acceleration** | Optional GPU acceleration for large images (macOS 10.13+, iOS 11+) |
@@ -92,8 +93,11 @@ JPEG-LS is a lossless/near-lossless compression standard specifically designed f
 | **DICOM Compatible** | Full support for DICOM transfer syntaxes |
 | **Multi-Component Support** | Full RGB and grayscale encoding with all interleaving modes |
 | **Interleaving Modes** | None (separate scans), Line-interleaved, Sample-interleaved |
-| **Near-Lossless Support** | Configurable error tolerance encoding with NEAR parameter (1-255) |
-| **ITU-T.87 Compliant** | Standard-compliant gradient computation (D1=d-b, D2=b-c, D3=c-a) and run mode |
+| **Near-Lossless Support** | Configurable error tolerance encoding with NEAR parameter (1-255), with correct error quantisation per §4.2.2 and reconstructed-value tracking |
+| **ITU-T.87 Compliant** | Standard-conformant context index formula (365 contexts), A initialisation, sign-adjusted Golomb-Rice coding, bias correction per §4.3.3, run-mode RUNindex synchronisation, near-lossless quantisation/dequantisation, and EOL terminator handling |
+| **Mapping Table (Palette) Support** | LSE type 2/3 mapping tables parsed and applied per ITU-T.87 §5.1.1.3; scan header `Tdi` field used to reference tables per component; encoder can emit mapping table LSE segments |
+| **Extended Dimensions (LSE Type 4)** | Images with width or height > 65535 are fully supported via LSE type 4 per ITU-T.87 §5.1.1.4; encoder auto-emits the segment and writes 0 in SOF for extended fields; parser restores the true dimensions |
+| **Part 2 Colour Transform Signalling** | APP8 "mrfx" marker (ITU-T T.870 Annex A) written by encoder when HP1/HP2/HP3 transform is selected; parser extracts the transform ID and decoder automatically applies the modular inverse transform |
 | **Command-Line Tool** | `jpegls` CLI with info, verify, encode, and decode commands |
 
 ### Architecture Overview
@@ -106,6 +110,7 @@ JPEGLS/
 │   ├── JPEGLSScanHeader     # Scan header structures
 │   ├── JPEGLSPresetParameters # Preset parameters (MAXVAL, T1-T3, RESET)
 │   ├── JPEGLSContextModel   # Context state management (365 contexts)
+│   ├── JPEGLSMappingTable   # Mapping table (palette) support per §5.1.1.3
 │   ├── JPEGLSBitstreamReader/Writer # Bitstream I/O utilities
 │   └── JPEGLSError          # Comprehensive error handling
 ├── Decoder/                 # Decoding implementation
@@ -573,11 +578,13 @@ JLSwift includes comprehensive conformance testing using reference files from th
   - Non-default parameters
 - **Image Loading**: PGM (grayscale) and PPM (color) reference image parsing
 - **Bit-Exact Comparison**: Infrastructure ready to validate decoded output against CharLS reference images
-  - Test suite with 10 comparison test cases (currently disabled pending decoder improvements)
+  - Test suite with 10 comparison test cases (currently disabled pending further decoder alignment work)
   - Pixel-by-pixel validation (lossless and near-lossless modes)
-  - Pending: Full decoder support for CharLS encoding patterns (decoder pixel drift under investigation)
+  - Flat-region (run mode) and near-lossless round-trip encoding/decoding verified correct
 
-The conformance tests are located in `Tests/JPEGLSTests/CharLSConformanceTests.swift` with reference fixtures in `Tests/JPEGLSTests/TestFixtures/`. These tests ensure compatibility with the JPEG-LS standard (ISO/IEC 14495-1:1999 / ITU-T.87) and provide a foundation for bit-exact comparison with CharLS output. The parser successfully handles all 12 CharLS reference files; decoder integration is in progress.
+The conformance tests are located in `Tests/JPEGLSTests/CharLSConformanceTests.swift` with reference fixtures in `Tests/JPEGLSTests/TestFixtures/`. These tests ensure compatibility with the JPEG-LS standard (ISO/IEC 14495-1:1999 / ITU-T.87) and provide a foundation for bit-exact comparison with CharLS output.
+
+A full standards conformance matrix (`CONFORMANCE_MATRIX.md`) documents the mapping between every normative section of ITU-T.87 and its implementation in JLSwift, including all deviations found and fixed during Milestone 10 (Phases 10.1–10.4).
 
 ### Code Coverage Requirement
 

@@ -45,6 +45,13 @@ public struct JPEGLSContextModel: Sendable {
     /// Used for run-length encoding context selection.
     private var runInterruptionIndex: [Int]
     
+    /// Run interruption accumulated absolute error (A_ri) per ITU-T.87 §4.5.3.
+    /// Initialised to A_init (same as regular context A initialisation).
+    private var runInterruptionA: Int
+    
+    /// Run interruption sample count (N_ri) per ITU-T.87 §4.5.3.
+    private var runInterruptionN: Int
+    
     /// Current run length counter
     private var runLength: Int
     
@@ -53,11 +60,14 @@ public struct JPEGLSContextModel: Sendable {
     
     // MARK: - Parameters
     
-    /// Preset parameters controlling context behavior
+    /// Preset parameters controlling context behaviour
     private let parameters: JPEGLSPresetParameters
     
     /// Near-lossless parameter (0 for lossless)
     private let near: Int
+    
+    /// A[i] initial value per ITU-T.87 Section 4.3: max(2, floor((RANGE + 32) / 64))
+    private let aInit: Int
     
     // MARK: - Initialization
     
@@ -75,6 +85,19 @@ public struct JPEGLSContextModel: Sendable {
         self.parameters = parameters
         self.near = near
         
+        // Compute RANGE per ITU-T.87 Section 4.2.1
+        let range: Int
+        if near == 0 {
+            range = parameters.maxValue + 1
+        } else {
+            let qbpp = (near << 1) | 1
+            range = (parameters.maxValue + 2 * near) / qbpp + 1
+        }
+        
+        // Compute A initial value per ITU-T.87 Section 4.3:
+        // A[i] = max(2, floor((RANGE + 32) / 64))
+        self.aInit = max(2, (range + 32) / 64)
+        
         // Initialize context arrays to default values per ITU-T.87 Section 4.3
         self.contextA = Array(repeating: 0, count: Self.regularContextCount)
         self.contextB = Array(repeating: 0, count: Self.regularContextCount)
@@ -83,6 +106,10 @@ public struct JPEGLSContextModel: Sendable {
         
         // Initialize run-length state
         self.runInterruptionIndex = Array(repeating: 0, count: Self.runContextCount)
+        // Initialise run interruption statistics per ITU-T.87 §4.5.3.
+        // A_ri starts at A_init (same as regular context A); N_ri starts at 1.
+        self.runInterruptionA = max(2, (range + 32) / 64)
+        self.runInterruptionN = 1
         self.runLength = 0
         self.runIndex = 0
         
@@ -92,14 +119,14 @@ public struct JPEGLSContextModel: Sendable {
     
     /// Initialize all context statistics to their default values.
     ///
-    /// Per ITU-T.87 Section 4.3, contexts are initialized with:
-    /// - A[i] = max(2, floor((RANGE + 2^5) / 2^6))
+    /// Per ITU-T.87 Section 4.3, contexts are initialised with:
+    /// - A[i] = max(2, floor((RANGE + 32) / 64))
     /// - B[i] = 0
     /// - C[i] = 0
     /// - N[i] = 1
     private mutating func initializeContexts() {
         for i in 0..<Self.regularContextCount {
-            contextA[i] = 2  // Per ITU-T.87: max(2, floor((RANGE + 2^5) / 2^6))
+            contextA[i] = aInit
             contextB[i] = 0
             contextC[i] = 0
             contextN[i] = 1
@@ -127,25 +154,18 @@ public struct JPEGLSContextModel: Sendable {
         // Apply sign reversal symmetry per ITU-T.87 Section 4.3.1
         let sign = computeContextSign(q1: q1, q2: q2, q3: q3)
         
+        // Normalise gradients so that the first non-zero value is positive.
+        // After this step Q1 is in [0, 4]; Q2 and Q3 are in [-4, 4].
         let q1Adj = q1 * sign
         let q2Adj = q2 * sign
         let q3Adj = q3 * sign
         
-        // Map from [-4, 4] to [0, 8] to get non-negative indices
-        let q1Idx = q1Adj + 4
-        let q2Idx = q2Adj + 4
-        let q3Idx = q3Adj + 4
+        // Compute context index per ITU-T.87 Section 4.3.1:
+        // Qt = 81 × Q1 + 9 × Q2 + Q3
+        // After normalisation Qt lies in [0, 364] (365 distinct regular contexts).
+        let index = 81 * q1Adj + 9 * q2Adj + q3Adj
         
-        // Compute context index: 81*Q1 + 9*Q2 + Q3
-        // After sign correction, this maps to [0, 364] per ITU-T.87
-        // The formula ensures each unique gradient pattern maps to a unique context
-        let index = 81 * q1Idx + 9 * q2Idx + q3Idx
-        
-        // With correct sign application, index should be in [0, 728]
-        // but symmetry reduction via sign ensures we only use [0, 364]
-        // Additional symmetry (not implemented yet) could reduce this further
-        // For now, clamp to the valid range
-        return min(index, Self.regularContextCount - 1)
+        return max(0, min(index, Self.regularContextCount - 1))
     }
     
     /// Compute context sign for bias correction.
@@ -228,11 +248,13 @@ public struct JPEGLSContextModel: Sendable {
             return
         }
         
-        // Update A (accumulated absolute error) per ITU-T.87
+        // Update A (accumulated absolute prediction error) per ITU-T.87
         contextA[contextIndex] += abs(predictionError)
         
-        // Update B (bias accumulator with signed error) per ITU-T.87
-        contextB[contextIndex] += predictionError
+        // Update B (bias accumulator) with sign-adjusted prediction error per ITU-T.87.
+        // The sign normalises the context so that a positive B means the prediction
+        // is systematically low; a negative B means it is systematically high.
+        contextB[contextIndex] += sign * predictionError
         
         // Update N (occurrence counter)
         contextN[contextIndex] += 1
@@ -356,6 +378,47 @@ public struct JPEGLSContextModel: Sendable {
             return 0
         }
         return runInterruptionIndex[index]
+    }
+    
+    // MARK: - Run Interruption Context Statistics
+    
+    /// Compute the Golomb-Rice parameter k for run interruption coding.
+    ///
+    /// Per ITU-T.87 §4.5.3, the Golomb parameter for run interruption is the
+    /// smallest k such that N_ri × 2^k ≥ A_ri.
+    ///
+    /// - Returns: Golomb-Rice parameter k (non-negative integer)
+    public func computeRunInterruptionGolombK() -> Int {
+        let n = runInterruptionN
+        let a = runInterruptionA
+        guard n > 0 else { return 0 }
+        var k = 0
+        var threshold = n
+        while threshold < a && k < 16 {
+            threshold <<= 1
+            k += 1
+        }
+        return k
+    }
+    
+    /// Update run interruption context statistics after coding one interruption sample.
+    ///
+    /// Per ITU-T.87 §4.5.3, after coding each run interruption sample:
+    /// - A_ri += |Errval|
+    /// - N_ri += 1
+    /// - When N_ri reaches RESET: halve both A_ri and N_ri.
+    ///
+    /// - Parameter absError: Absolute value of the (sign-adjusted) prediction error
+    public mutating func updateRunInterruptionContext(absError: Int) {
+        runInterruptionA += absError
+        runInterruptionN += 1
+        if runInterruptionN >= parameters.reset {
+            runInterruptionA >>= 1
+            runInterruptionN >>= 1
+            if runInterruptionN == 0 {
+                runInterruptionN = 1
+            }
+        }
     }
 }
 

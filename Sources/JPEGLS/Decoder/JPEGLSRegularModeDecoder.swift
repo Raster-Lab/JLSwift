@@ -232,10 +232,26 @@ public struct JPEGLSRegularModeDecoder: Sendable {
     
     // MARK: - Sample Reconstruction
     
+    /// Dequantise a signed prediction error for near-lossless reconstruction.
+    ///
+    /// Per ITU-T.87 Section 4.2.2, for NEAR > 0 the decoded Errval is a
+    /// quantised approximation; the raw (dequantised) error is:
+    /// - deq = Errval × (2·NEAR + 1)
+    ///
+    /// For lossless (NEAR = 0), the error is returned unchanged.
+    ///
+    /// - Parameter error: Signed quantised prediction error (after unmapping)
+    /// - Returns: Dequantised error suitable for sample reconstruction
+    private func dequantizeError(_ error: Int) -> Int {
+        guard near > 0 else { return error }
+        return error * qbpp
+    }
+    
     /// Reconstruct the sample value from prediction and error.
     ///
     /// Per ITU-T.87 Section 4.2.2, the sample value is computed as:
-    /// - x = Px' + Errval
+    /// - For lossless:    x = Px' + Errval
+    /// - For near-lossless: x = Px' + Errval × (2·NEAR + 1)
     ///
     /// With modular arithmetic to handle wraparound:
     /// - If result < 0: result += RANGE
@@ -243,10 +259,11 @@ public struct JPEGLSRegularModeDecoder: Sendable {
     ///
     /// - Parameters:
     ///   - prediction: Bias-corrected prediction value
-    ///   - error: Signed prediction error
+    ///   - error: Signed (quantised) prediction error after unmapping
     /// - Returns: Reconstructed sample value clamped to [0, MAXVAL]
     public func reconstructSample(prediction: Int, error: Int) -> Int {
-        var sample = prediction + error
+        let dequantized = dequantizeError(error)
+        var sample = prediction + dequantized
         
         // Apply modular arithmetic for near-lossless
         if sample < 0 {
@@ -311,18 +328,23 @@ public struct JPEGLSRegularModeDecoder: Sendable {
             sign: sign
         )
         
-        // Step 6: Unmap error from non-negative to signed
-        let error = unmapError(mappedError)
+        // Step 6: Unmap error from non-negative to signed (sign-adjusted Errval)
+        let signAdjustedError = unmapError(mappedError)
+        
+        // Step 6a: Undo sign normalisation to recover the raw prediction error.
+        // The encoder negated the error when the context sign was -1, so to
+        // reconstruct the correct sample we must apply the inverse: rawError = sign × Errval.
+        let rawError = sign * signAdjustedError
         
         // Step 7: Reconstruct sample value
-        let sample = reconstructSample(prediction: correctedPrediction, error: error)
+        let sample = reconstructSample(prediction: correctedPrediction, error: rawError)
         
         return DecodedPixel(
             contextIndex: contextIndex,
             sign: sign,
             prediction: correctedPrediction,
             mappedError: mappedError,
-            error: error,
+            error: rawError,
             sample: sample
         )
     }

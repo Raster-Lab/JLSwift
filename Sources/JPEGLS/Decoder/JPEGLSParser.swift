@@ -25,11 +25,28 @@ public struct JPEGLSParseResult: Sendable {
     /// Preset parameters (if custom parameters were specified via LSE marker)
     public let presetParameters: JPEGLSPresetParameters?
     
+    /// Restart interval in MCUs (if a DRI marker was present, otherwise nil)
+    public let restartInterval: Int?
+    
+    /// Mapping tables keyed by table ID (parsed from LSE type 2/3 markers).
+    ///
+    /// When a scan component references a table ID > 0, decoded raw sample
+    /// values are used as indices into the corresponding mapping table.
+    public let mappingTables: [UInt8: JPEGLSMappingTable]
+    
     /// Application marker data (APP0-APP15)
     public let applicationMarkers: [(marker: JPEGLSMarker, data: Data)]
     
     /// Comment marker data
     public let comments: [Data]
+    
+    /// Colour transformation identified from an APP8 "mrfx" marker (ITU-T T.870 Annex A).
+    ///
+    /// When the bitstream contains an APP8 segment with the "mrfx" signature, the
+    /// transform identifier byte is parsed and stored here. Decoders must apply the
+    /// corresponding inverse transform after decoding the pixel values.
+    /// Defaults to `.none` if no APP8 "mrfx" marker is present.
+    public let colorTransformation: JPEGLSColorTransformation
     
     /// Initialize parse result
     ///
@@ -37,20 +54,29 @@ public struct JPEGLSParseResult: Sendable {
     ///   - frameHeader: Frame header
     ///   - scanHeaders: Scan headers
     ///   - presetParameters: Optional custom preset parameters
+    ///   - restartInterval: Optional restart interval from DRI marker
+    ///   - mappingTables: Mapping tables keyed by table ID
     ///   - applicationMarkers: Application markers
     ///   - comments: Comment data
+    ///   - colorTransformation: Colour transform from APP8 "mrfx" (default: none)
     public init(
         frameHeader: JPEGLSFrameHeader,
         scanHeaders: [JPEGLSScanHeader],
         presetParameters: JPEGLSPresetParameters? = nil,
+        restartInterval: Int? = nil,
+        mappingTables: [UInt8: JPEGLSMappingTable] = [:],
         applicationMarkers: [(marker: JPEGLSMarker, data: Data)] = [],
-        comments: [Data] = []
+        comments: [Data] = [],
+        colorTransformation: JPEGLSColorTransformation = .none
     ) {
         self.frameHeader = frameHeader
         self.scanHeaders = scanHeaders
         self.presetParameters = presetParameters
+        self.restartInterval = restartInterval
+        self.mappingTables = mappingTables
         self.applicationMarkers = applicationMarkers
         self.comments = comments
+        self.colorTransformation = colorTransformation
     }
 }
 
@@ -84,8 +110,13 @@ public final class JPEGLSParser {
         var frameHeader: JPEGLSFrameHeader?
         var scanHeaders: [JPEGLSScanHeader] = []
         var presetParameters: JPEGLSPresetParameters?
+        var restartInterval: Int?
+        var mappingTables: [UInt8: JPEGLSMappingTable] = [:]
         var applicationMarkers: [(marker: JPEGLSMarker, data: Data)] = []
         var comments: [Data] = []
+        var extendedWidth: Int?
+        var extendedHeight: Int?
+        var colorTransformation: JPEGLSColorTransformation = .none
         
         // Parse marker segments until EOI
         while !reader.isAtEnd {
@@ -141,8 +172,11 @@ public final class JPEGLSParser {
                     frameHeader: frame,
                     scanHeaders: scanHeaders,
                     presetParameters: presetParameters,
+                    restartInterval: restartInterval,
+                    mappingTables: mappingTables,
                     applicationMarkers: applicationMarkers,
-                    comments: comments
+                    comments: comments,
+                    colorTransformation: colorTransformation
                 )
                 
             case .startOfFrameJPEGLS:
@@ -152,7 +186,7 @@ public final class JPEGLSParser {
                         reason: "Multiple SOF markers found"
                     )
                 }
-                frameHeader = try parseFrameHeader()
+                frameHeader = try parseFrameHeader(extendedWidth: extendedWidth, extendedHeight: extendedHeight)
                 
             case .startOfScan:
                 // Parse scan header
@@ -201,7 +235,10 @@ public final class JPEGLSParser {
                 // Parse JPEG-LS extension
                 try parseJPEGLSExtension(
                     frameHeader: frameHeader,
-                    presetParameters: &presetParameters
+                    presetParameters: &presetParameters,
+                    mappingTables: &mappingTables,
+                    extendedWidth: &extendedWidth,
+                    extendedHeight: &extendedHeight
                 )
                 
             case .applicationMarker0, .applicationMarker1, .applicationMarker2,
@@ -210,9 +247,23 @@ public final class JPEGLSParser {
                  .applicationMarker9, .applicationMarker10, .applicationMarker11,
                  .applicationMarker12, .applicationMarker13, .applicationMarker14,
                  .applicationMarker15:
-                // Parse application marker
+                // Parse application marker data
                 let data = try parseMarkerSegment()
                 applicationMarkers.append((marker: marker, data: data))
+                
+                // Check for APP8 "mrfx" colour transform marker (ITU-T T.870 Annex A).
+                // Format: "mrfx" (4 bytes) + transform ID (1 byte)
+                // Note: `data` is a Data slice that may have a non-zero startIndex,
+                // so we copy to a contiguous array before subscripting.
+                if marker == .applicationMarker8 && data.count >= 5 {
+                    let bytes = Array(data)
+                    if bytes[0] == 0x6D && bytes[1] == 0x72 &&
+                       bytes[2] == 0x66 && bytes[3] == 0x78 {
+                        if let transform = JPEGLSColorTransformation(rawValue: bytes[4]) {
+                            colorTransformation = transform
+                        }
+                    }
+                }
                 
             case .comment:
                 // Parse comment
@@ -223,6 +274,18 @@ public final class JPEGLSParser {
                  .restart4, .restart5, .restart6, .restart7:
                 // Restart markers have no length field, just skip
                 continue
+                
+            case .defineRestartInterval:
+                // Parse Define Restart Interval (DRI) marker per ITU-T.87 §5.1
+                restartInterval = try parseRestartInterval()
+                
+            case .defineNumberOfLines:
+                // Parse Define Number of Lines (DNL) marker per ITU-T.87 §5.1.
+                // DNL may appear after the first scan to supply the Y value when it was
+                // unknown (Y=0) at SOF time. Frame dimensions are already known from the
+                // SOF marker in typical usage, so the DNL payload is consumed but not
+                // applied. Full DNL-based dimension update is deferred to a future milestone.
+                _ = try parseMarkerSegment()
                 
             case .startOfImage:
                 throw JPEGLSError.invalidBitstreamStructure(
@@ -262,15 +325,18 @@ public final class JPEGLSParser {
     }
     
     /// Parse frame header (SOF marker segment)
-    private func parseFrameHeader() throws -> JPEGLSFrameHeader {
+    private func parseFrameHeader(extendedWidth: Int? = nil, extendedHeight: Int? = nil) throws -> JPEGLSFrameHeader {
         let length = try reader.readUInt16()
         
         // Read precision (bits per sample)
         let bitsPerSample = Int(try reader.readByte())
         
-        // Read dimensions
-        let height = Int(try reader.readUInt16())
-        let width = Int(try reader.readUInt16())
+        // Read dimensions from SOF.  When a dimension is 0, the actual value comes
+        // from a preceding LSE type 4 (extended dimensions) segment per ITU-T.87 §5.1.1.4.
+        let sofHeight = Int(try reader.readUInt16())
+        let sofWidth  = Int(try reader.readUInt16())
+        let height = (sofHeight == 0) ? (extendedHeight ?? sofHeight) : sofHeight
+        let width  = (sofWidth  == 0) ? (extendedWidth  ?? sofWidth)  : sofWidth
         
         // Read component count
         let componentCount = Int(try reader.readByte())
@@ -331,8 +397,10 @@ public final class JPEGLSParser {
         
         for _ in 0..<componentCount {
             let id = try reader.readByte()
-            _ = try reader.readByte()  // Table selector (not used in JPEG-LS)
-            components.append(JPEGLSScanHeader.ComponentSelector(id: id))
+            // Tdi field: mapping table ID per ITU-T.87 §5.1.2.
+            // 0 means no mapping table; 1–255 references a mapping table from an LSE type 2/3 marker.
+            let mappingTableID = try reader.readByte()
+            components.append(JPEGLSScanHeader.ComponentSelector(id: id, mappingTableID: mappingTableID))
         }
         
         // Read NEAR parameter
@@ -366,7 +434,10 @@ public final class JPEGLSParser {
     /// Parse JPEG-LS extension marker (LSE)
     private func parseJPEGLSExtension(
         frameHeader: JPEGLSFrameHeader?,
-        presetParameters: inout JPEGLSPresetParameters?
+        presetParameters: inout JPEGLSPresetParameters?,
+        mappingTables: inout [UInt8: JPEGLSMappingTable],
+        extendedWidth: inout Int?,
+        extendedHeight: inout Int?
     ) throws {
         let length = try reader.readUInt16()
         
@@ -403,15 +474,131 @@ public final class JPEGLSParser {
                 reset: reset
             )
             
-        case .mappingTable, .mappingTableContinuation:
-            // Mapping tables not yet supported - skip
-            let skipLength = Int(length) - 3
-            _ = try reader.readBytes(skipLength)
+        case .mappingTable:
+            // Parse mapping table specification per ITU-T.87 §5.1.1.3.
+            // Format: Length(2) + Type(1) + TID(1) + Wt(1) + Entries((Length-5)*1 or (Length-5)/2)
+            // Minimum length = 5 (no entries)
+            guard length >= 5 else {
+                throw JPEGLSError.invalidBitstreamStructure(
+                    reason: "Invalid LSE mapping table length: \(length)"
+                )
+            }
+            let tableID = try reader.readByte()
+            let entryWidth = Int(try reader.readByte())
+            guard entryWidth == 1 || entryWidth == 2 else {
+                throw JPEGLSError.invalidBitstreamStructure(
+                    reason: "Invalid mapping table entry width: \(entryWidth) (must be 1 or 2)"
+                )
+            }
+            // Data bytes = length - 5 (subtract: 2 for Ll, 1 for Id, 1 for TID, 1 for Wt)
+            let dataBytes = Int(length) - 5
+            guard dataBytes >= 0 && dataBytes % entryWidth == 0 else {
+                throw JPEGLSError.invalidBitstreamStructure(
+                    reason: "Mapping table data length \(dataBytes) not a multiple of entry width \(entryWidth)"
+                )
+            }
+            let entryCount = dataBytes / entryWidth
+            var entries: [Int] = []
+            entries.reserveCapacity(entryCount)
+            for _ in 0..<entryCount {
+                if entryWidth == 1 {
+                    entries.append(Int(try reader.readByte()))
+                } else {
+                    entries.append(Int(try reader.readUInt16()))
+                }
+            }
+            let table = try JPEGLSMappingTable(id: tableID, entryWidth: entryWidth, entries: entries)
+            // If a table with this ID already exists, the new one replaces it
+            mappingTables[tableID] = table
+            
+        case .mappingTableContinuation:
+            // Append additional entries to an existing mapping table per ITU-T.87 §5.1.1.3.
+            // Format: Length(2) + Type(1) + TID(1) + Entries((Length-4) bytes or /2)
+            guard length >= 4 else {
+                throw JPEGLSError.invalidBitstreamStructure(
+                    reason: "Invalid LSE mapping table continuation length: \(length)"
+                )
+            }
+            let tableID = try reader.readByte()
+            // data bytes = length - 4 (subtract: 2 for Ll, 1 for Id, 1 for TID)
+            let dataBytes = Int(length) - 4
+            guard let existingTable = mappingTables[tableID] else {
+                // No existing table — skip the data gracefully
+                _ = try reader.readBytes(dataBytes)
+                return
+            }
+            let entryWidth = existingTable.entryWidth
+            guard dataBytes % entryWidth == 0 else {
+                throw JPEGLSError.invalidBitstreamStructure(
+                    reason: "Mapping table continuation data length \(dataBytes) not a multiple of entry width \(entryWidth)"
+                )
+            }
+            let entryCount = dataBytes / entryWidth
+            var additionalEntries: [Int] = []
+            additionalEntries.reserveCapacity(entryCount)
+            for _ in 0..<entryCount {
+                if entryWidth == 1 {
+                    additionalEntries.append(Int(try reader.readByte()))
+                } else {
+                    additionalEntries.append(Int(try reader.readUInt16()))
+                }
+            }
+            let combinedEntries = existingTable.entries + additionalEntries
+            let updatedTable = try JPEGLSMappingTable(
+                id: tableID,
+                entryWidth: existingTable.entryWidth,
+                entries: combinedEntries
+            )
+            mappingTables[tableID] = updatedTable
             
         case .extendedDimensions:
-            // Extended dimensions not yet supported - skip
-            let skipLength = Int(length) - 3
-            _ = try reader.readBytes(skipLength)
+            // Parse extended X/Y dimensions per ITU-T.87 §5.1.1.4.
+            // Format: Ll(2) + Id(1) + Wxy(1) + XSIZE(Wxy bytes) + YSIZE(Wxy bytes)
+            // remainingBytes = everything after Ll (2) and Id (1) that has already been read.
+            let remainingBytes = Int(length) - 3
+            guard remainingBytes >= 1 else {
+                throw JPEGLSError.invalidBitstreamStructure(
+                    reason: "Invalid LSE extended dimensions segment length: \(length)"
+                )
+            }
+            let wxy = Int(try reader.readByte())
+            // Wxy must be 1, 2, or 4 and the remaining bytes must be exactly 1 + 2*Wxy.
+            guard (wxy == 1 || wxy == 2 || wxy == 4) && remainingBytes == 1 + 2 * wxy else {
+                // Unsupported or malformed — skip remaining bytes gracefully.
+                let skipLength = remainingBytes - 1
+                if skipLength > 0 {
+                    _ = try reader.readBytes(skipLength)
+                }
+                return
+            }
+            // Read XSIZE (image width) as Wxy bytes, big-endian.
+            var xSize = 0
+            for _ in 0..<wxy {
+                xSize = (xSize << 8) | Int(try reader.readByte())
+            }
+            // Read YSIZE (image height) as Wxy bytes, big-endian.
+            var ySize = 0
+            for _ in 0..<wxy {
+                ySize = (ySize << 8) | Int(try reader.readByte())
+            }
+            extendedWidth  = xSize
+            extendedHeight = ySize
         }
+    }
+    
+    /// Parse Define Restart Interval (DRI) marker segment per ITU-T.87 §5.1
+    ///
+    /// The DRI segment specifies the number of MCUs between restart markers.
+    /// Length field is always 4 (2-byte length + 2-byte interval value).
+    ///
+    /// - Returns: Restart interval value (0 means restart markers are not used)
+    private func parseRestartInterval() throws -> Int {
+        let length = try reader.readUInt16()
+        guard length == 4 else {
+            throw JPEGLSError.invalidBitstreamStructure(
+                reason: "Invalid DRI marker length: expected 4, got \(length)"
+            )
+        }
+        return Int(try reader.readUInt16())
     }
 }

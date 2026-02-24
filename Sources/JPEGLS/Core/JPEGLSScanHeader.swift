@@ -28,12 +28,21 @@ public struct JPEGLSScanHeader: Sendable, Equatable {
     public struct ComponentSelector: Sendable, Equatable {
         /// Component identifier (must match frame component ID)
         public let id: UInt8
-        
-        /// Initialize component selector
+
+        /// Mapping table ID referenced by this component (0 = no mapping table).
         ///
-        /// - Parameter id: Component identifier
-        public init(id: UInt8) {
+        /// When non-zero, decoded sample values for this component are treated as
+        /// indices into the mapping table with this ID per ITU-T.87 §5.1.1.3.
+        public let mappingTableID: UInt8
+
+        /// Initialise a component selector.
+        ///
+        /// - Parameters:
+        ///   - id: Component identifier.
+        ///   - mappingTableID: Mapping table ID (0 = no mapping table).
+        public init(id: UInt8, mappingTableID: UInt8 = 0) {
             self.id = id
+            self.mappingTableID = mappingTableID
         }
     }
     

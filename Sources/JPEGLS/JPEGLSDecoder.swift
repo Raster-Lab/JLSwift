@@ -65,7 +65,8 @@ public struct JPEGLSDecoder: Sendable {
                 frameHeader: parseResult.frameHeader,
                 scanHeaders: parseResult.scanHeaders,
                 scanDataList: scanDataList,
-                parameters: parameters
+                parameters: parameters,
+                mappingTables: parseResult.mappingTables
             )
             
         case .line:
@@ -74,7 +75,8 @@ public struct JPEGLSDecoder: Sendable {
                 frameHeader: parseResult.frameHeader,
                 scanHeader: firstScanHeader,
                 scanData: scanDataList[0],
-                parameters: parameters
+                parameters: parameters,
+                mappingTables: parseResult.mappingTables
             )
             
         case .sample:
@@ -83,15 +85,70 @@ public struct JPEGLSDecoder: Sendable {
                 frameHeader: parseResult.frameHeader,
                 scanHeader: firstScanHeader,
                 scanData: scanDataList[0],
-                parameters: parameters
+                parameters: parameters,
+                mappingTables: parseResult.mappingTables
             )
+        }
+        
+        // Apply inverse colour transformation when signalled by an APP8 "mrfx" marker
+        // (ITU-T T.870 Annex A). The decoded pixel values are in [0, MAXVAL] (modular
+        // representation), so modular arithmetic must be used for the inverse transform.
+        let finalComponents: [MultiComponentImageData.ComponentData]
+        if parseResult.colorTransformation != .none && decodedComponents.count == 3 {
+            let maxValue = (1 << parseResult.frameHeader.bitsPerSample) - 1
+            finalComponents = try applyInverseColorTransform(
+                decodedComponents,
+                transform: parseResult.colorTransformation,
+                maxValue: maxValue
+            )
+        } else {
+            finalComponents = decodedComponents
         }
         
         // Create result
         return try MultiComponentImageData(
-            components: decodedComponents,
+            components: finalComponents,
             frameHeader: parseResult.frameHeader
         )
+    }
+    
+    /// Apply the inverse colour transformation to a set of decoded component arrays.
+    ///
+    /// - Parameters:
+    ///   - components: Decoded component data (must contain exactly 3 elements)
+    ///   - transform: Colour transform to invert
+    ///   - maxValue: Maximum sample value for modular arithmetic
+    /// - Returns: Component data with inverse transform applied
+    /// - Throws: `JPEGLSError` if the transform operation fails
+    private func applyInverseColorTransform(
+        _ components: [MultiComponentImageData.ComponentData],
+        transform: JPEGLSColorTransformation,
+        maxValue: Int
+    ) throws -> [MultiComponentImageData.ComponentData] {
+        let height = components[0].pixels.count
+        let width = components[0].pixels.first?.count ?? 0
+        
+        var c0 = components[0].pixels
+        var c1 = components[1].pixels
+        var c2 = components[2].pixels
+        
+        for row in 0..<height {
+            for col in 0..<width {
+                let original = try transform.transformInverse(
+                    [c0[row][col], c1[row][col], c2[row][col]],
+                    maxValue: maxValue
+                )
+                c0[row][col] = original[0]
+                c1[row][col] = original[1]
+                c2[row][col] = original[2]
+            }
+        }
+        
+        return [
+            MultiComponentImageData.ComponentData(id: components[0].id, pixels: c0),
+            MultiComponentImageData.ComponentData(id: components[1].id, pixels: c1),
+            MultiComponentImageData.ComponentData(id: components[2].id, pixels: c2)
+        ]
     }
     
     // MARK: - Scan Data Extraction
@@ -188,7 +245,8 @@ public struct JPEGLSDecoder: Sendable {
         frameHeader: JPEGLSFrameHeader,
         scanHeaders: [JPEGLSScanHeader],
         scanDataList: [Data],
-        parameters: JPEGLSPresetParameters
+        parameters: JPEGLSPresetParameters,
+        mappingTables: [UInt8: JPEGLSMappingTable] = [:]
     ) throws -> [MultiComponentImageData.ComponentData] {
         var components: [MultiComponentImageData.ComponentData] = []
         
@@ -197,13 +255,19 @@ public struct JPEGLSDecoder: Sendable {
             let reader = JPEGLSBitstreamReader(data: scanData)
             
             // Decode this component
-            let pixels = try decodeComponent(
+            var pixels = try decodeComponent(
                 reader: reader,
                 width: frameHeader.width,
                 height: frameHeader.height,
                 scanHeader: scanHeader,
                 parameters: parameters
             )
+            
+            // Apply mapping table lookup if the component references one
+            let tableID = scanHeader.components[0].mappingTableID
+            if tableID != 0, let table = mappingTables[tableID] {
+                pixels = applyMappingTable(table, to: pixels)
+            }
             
             components.append(MultiComponentImageData.ComponentData(
                 id: scanHeader.components[0].id,
@@ -221,7 +285,8 @@ public struct JPEGLSDecoder: Sendable {
         frameHeader: JPEGLSFrameHeader,
         scanHeader: JPEGLSScanHeader,
         scanData: Data,
-        parameters: JPEGLSPresetParameters
+        parameters: JPEGLSPresetParameters,
+        mappingTables: [UInt8: JPEGLSMappingTable] = [:]
     ) throws -> [MultiComponentImageData.ComponentData] {
         let reader = JPEGLSBitstreamReader(data: scanData)
         let componentCount = scanHeader.componentCount
@@ -254,11 +319,16 @@ public struct JPEGLSDecoder: Sendable {
             }
         }
         
-        // Create component data
+        // Apply mapping table lookups per component
         return (0..<componentCount).map { componentIndex in
-            MultiComponentImageData.ComponentData(
+            let tableID = scanHeader.components[componentIndex].mappingTableID
+            var pixels = componentPixels[componentIndex]
+            if tableID != 0, let table = mappingTables[tableID] {
+                pixels = applyMappingTable(table, to: pixels)
+            }
+            return MultiComponentImageData.ComponentData(
                 id: scanHeader.components[componentIndex].id,
-                pixels: componentPixels[componentIndex]
+                pixels: pixels
             )
         }
     }
@@ -270,7 +340,8 @@ public struct JPEGLSDecoder: Sendable {
         frameHeader: JPEGLSFrameHeader,
         scanHeader: JPEGLSScanHeader,
         scanData: Data,
-        parameters: JPEGLSPresetParameters
+        parameters: JPEGLSPresetParameters,
+        mappingTables: [UInt8: JPEGLSMappingTable] = [:]
     ) throws -> [MultiComponentImageData.ComponentData] {
         let reader = JPEGLSBitstreamReader(data: scanData)
         let componentCount = scanHeader.componentCount
@@ -313,11 +384,16 @@ public struct JPEGLSDecoder: Sendable {
             }
         }
         
-        // Create component data
+        // Apply mapping table lookups per component
         return (0..<componentCount).map { componentIndex in
-            MultiComponentImageData.ComponentData(
+            let tableID = scanHeader.components[componentIndex].mappingTableID
+            var pixels = componentPixels[componentIndex]
+            if tableID != 0, let table = mappingTables[tableID] {
+                pixels = applyMappingTable(table, to: pixels)
+            }
+            return MultiComponentImageData.ComponentData(
                 id: scanHeader.components[componentIndex].id,
-                pixels: componentPixels[componentIndex]
+                pixels: pixels
             )
         }
     }
@@ -549,10 +625,9 @@ public struct JPEGLSDecoder: Sendable {
         
         // If run ends before end of line, decode interruption pixel
         if runLength < remainingInLine {
-            // Per ITU-T.87, interruption uses Golomb-Rice with k computed
-            // from run interruption context statistics
-            // Use a simple approach: k based on run context
-            let k = 0
+            // Per ITU-T.87 §4.5.3, the Golomb parameter for run interruption is
+            // computed adaptively from run interruption context statistics (A_ri, N_ri).
+            let k = context.computeRunInterruptionGolombK()
             
             // Read Golomb-Rice encoded interruption error
             let mappedError = try readGolombCode(reader: reader, k: k)
@@ -562,6 +637,9 @@ public struct JPEGLSDecoder: Sendable {
                 mappedError: mappedError,
                 runValue: runValue
             )
+            
+            // Update run interruption context statistics per ITU-T.87 §4.5.3
+            context.updateRunInterruptionContext(absError: abs(interruption.error))
             
             return (runLength, interruption.sample)
         }
@@ -657,6 +735,21 @@ public struct JPEGLSDecoder: Sendable {
     }
     
     // MARK: - Helper Methods
+    
+    /// Apply a mapping table lookup to a decoded pixel buffer.
+    ///
+    /// Each raw sample value is used as an index into the mapping table, and the
+    /// corresponding table entry replaces the raw value.
+    ///
+    /// - Parameters:
+    ///   - table: The mapping table to apply.
+    ///   - pixels: Raw decoded pixel buffer (rows of columns).
+    /// - Returns: Pixel buffer with mapped values.
+    private func applyMappingTable(_ table: JPEGLSMappingTable, to pixels: [[Int]]) -> [[Int]] {
+        return pixels.map { row in
+            row.map { table.map($0) }
+        }
+    }
     
     /// Get neighbor pixels for gradient computation
     ///

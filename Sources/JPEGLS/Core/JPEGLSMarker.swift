@@ -69,6 +69,14 @@ public enum JPEGLSMarker: UInt8, Sendable {
     case restart6 = 0xD6
     case restart7 = 0xD7
     
+    // MARK: - Interval and Line Markers
+    
+    /// Define Number of Lines (DNL) - specifies the number of lines when not known at SOF
+    case defineNumberOfLines = 0xDC
+    
+    /// Define Restart Interval (DRI) - specifies the number of MCUs between restart markers
+    case defineRestartInterval = 0xDD
+    
     /// Marker prefix byte (0xFF) - all markers start with this
     public static let markerPrefix: UInt8 = 0xFF
     

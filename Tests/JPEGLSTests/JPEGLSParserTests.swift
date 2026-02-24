@@ -539,4 +539,145 @@ struct JPEGLSParserTests {
             try parser.parse()
         }
     }
+    
+    // MARK: - DRI/DNL Marker Tests
+    
+    @Test("Parser reads DRI marker and stores restart interval")
+    func testParserDRIMarker() throws {
+        var data = Data()
+        
+        // SOI
+        data.append(contentsOf: [0xFF, 0xD8])
+        
+        // DRI marker: FF DD, length=4, restart interval=32
+        data.append(contentsOf: [0xFF, 0xDD])
+        data.append(contentsOf: withUnsafeBytes(of: UInt16(4).bigEndian) { Array($0) })
+        data.append(contentsOf: withUnsafeBytes(of: UInt16(32).bigEndian) { Array($0) })
+        
+        // SOF
+        data.append(contentsOf: [0xFF, 0xF7])
+        let sofLength: UInt16 = 11
+        data.append(contentsOf: withUnsafeBytes(of: sofLength.bigEndian) { Array($0) })
+        data.append(8); data.append(contentsOf: withUnsafeBytes(of: UInt16(10).bigEndian) { Array($0) })
+        data.append(contentsOf: withUnsafeBytes(of: UInt16(10).bigEndian) { Array($0) })
+        data.append(1); data.append(1); data.append(0x11); data.append(0)
+        
+        // SOS
+        data.append(contentsOf: [0xFF, 0xDA])
+        let sosLength: UInt16 = 8
+        data.append(contentsOf: withUnsafeBytes(of: sosLength.bigEndian) { Array($0) })
+        data.append(1); data.append(1); data.append(0); data.append(0); data.append(0); data.append(0)
+        
+        // Minimal scan data
+        data.append(contentsOf: [0x01])
+        
+        // EOI
+        data.append(contentsOf: [0xFF, 0xD9])
+        
+        let parser = JPEGLSParser(data: data)
+        let result = try parser.parse()
+        
+        #expect(result.restartInterval == 32)
+    }
+    
+    @Test("Parser returns nil restartInterval when no DRI marker present")
+    func testParserNoDRIMarker() throws {
+        let data = createMinimalGrayscaleBitstream()
+        let parser = JPEGLSParser(data: data)
+        let result = try parser.parse()
+        #expect(result.restartInterval == nil)
+    }
+    
+    @Test("Parser handles DRI restart interval zero")
+    func testParserDRIZero() throws {
+        var data = Data()
+        
+        // SOI
+        data.append(contentsOf: [0xFF, 0xD8])
+        
+        // DRI marker with interval=0 (disables restart markers)
+        data.append(contentsOf: [0xFF, 0xDD])
+        data.append(contentsOf: withUnsafeBytes(of: UInt16(4).bigEndian) { Array($0) })
+        data.append(contentsOf: withUnsafeBytes(of: UInt16(0).bigEndian) { Array($0) })
+        
+        // SOF
+        data.append(contentsOf: [0xFF, 0xF7])
+        let sofLength: UInt16 = 11
+        data.append(contentsOf: withUnsafeBytes(of: sofLength.bigEndian) { Array($0) })
+        data.append(8); data.append(contentsOf: withUnsafeBytes(of: UInt16(10).bigEndian) { Array($0) })
+        data.append(contentsOf: withUnsafeBytes(of: UInt16(10).bigEndian) { Array($0) })
+        data.append(1); data.append(1); data.append(0x11); data.append(0)
+        
+        // SOS
+        data.append(contentsOf: [0xFF, 0xDA])
+        let sosLength: UInt16 = 8
+        data.append(contentsOf: withUnsafeBytes(of: sosLength.bigEndian) { Array($0) })
+        data.append(1); data.append(1); data.append(0); data.append(0); data.append(0); data.append(0)
+        
+        data.append(contentsOf: [0x01])
+        data.append(contentsOf: [0xFF, 0xD9])
+        
+        let parser = JPEGLSParser(data: data)
+        let result = try parser.parse()
+        #expect(result.restartInterval == 0)
+    }
+    
+    @Test("Parser rejects DRI marker with invalid length")
+    func testParserDRIInvalidLength() throws {
+        var data = Data()
+        
+        // SOI
+        data.append(contentsOf: [0xFF, 0xD8])
+        
+        // DRI marker with wrong length (should be 4)
+        data.append(contentsOf: [0xFF, 0xDD])
+        data.append(contentsOf: withUnsafeBytes(of: UInt16(6).bigEndian) { Array($0) })
+        data.append(contentsOf: [0x00, 0x10, 0x00, 0x00])
+        
+        // SOF (won't be reached)
+        data.append(contentsOf: [0xFF, 0xF7, 0x00, 0x0B, 0x08, 0x00, 0x0A, 0x00, 0x0A, 0x01, 0x01, 0x11, 0x00])
+        data.append(contentsOf: [0xFF, 0xDA, 0x00, 0x08, 0x01, 0x01, 0x00, 0x00, 0x00, 0x00])
+        data.append(contentsOf: [0x01, 0xFF, 0xD9])
+        
+        let parser = JPEGLSParser(data: data)
+        #expect(throws: JPEGLSError.self) {
+            try parser.parse()
+        }
+    }
+    
+    @Test("Parser handles DNL marker gracefully")
+    func testParserDNLMarker() throws {
+        var data = Data()
+        
+        // SOI
+        data.append(contentsOf: [0xFF, 0xD8])
+        
+        // SOF
+        data.append(contentsOf: [0xFF, 0xF7])
+        let sofLength: UInt16 = 11
+        data.append(contentsOf: withUnsafeBytes(of: sofLength.bigEndian) { Array($0) })
+        data.append(8); data.append(contentsOf: withUnsafeBytes(of: UInt16(10).bigEndian) { Array($0) })
+        data.append(contentsOf: withUnsafeBytes(of: UInt16(10).bigEndian) { Array($0) })
+        data.append(1); data.append(1); data.append(0x11); data.append(0)
+        
+        // SOS
+        data.append(contentsOf: [0xFF, 0xDA])
+        let sosLength: UInt16 = 8
+        data.append(contentsOf: withUnsafeBytes(of: sosLength.bigEndian) { Array($0) })
+        data.append(1); data.append(1); data.append(0); data.append(0); data.append(0); data.append(0)
+        data.append(contentsOf: [0x01])
+        
+        // DNL marker (FF DC, length=4, lines=10)
+        data.append(contentsOf: [0xFF, 0xDC])
+        data.append(contentsOf: withUnsafeBytes(of: UInt16(4).bigEndian) { Array($0) })
+        data.append(contentsOf: withUnsafeBytes(of: UInt16(10).bigEndian) { Array($0) })
+        
+        // EOI
+        data.append(contentsOf: [0xFF, 0xD9])
+        
+        let parser = JPEGLSParser(data: data)
+        // DNL should be silently consumed; parse should succeed
+        let result = try parser.parse()
+        #expect(result.frameHeader.width == 10)
+    }
 }
