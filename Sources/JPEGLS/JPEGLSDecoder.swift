@@ -65,7 +65,8 @@ public struct JPEGLSDecoder: Sendable {
                 frameHeader: parseResult.frameHeader,
                 scanHeaders: parseResult.scanHeaders,
                 scanDataList: scanDataList,
-                parameters: parameters
+                parameters: parameters,
+                mappingTables: parseResult.mappingTables
             )
             
         case .line:
@@ -74,7 +75,8 @@ public struct JPEGLSDecoder: Sendable {
                 frameHeader: parseResult.frameHeader,
                 scanHeader: firstScanHeader,
                 scanData: scanDataList[0],
-                parameters: parameters
+                parameters: parameters,
+                mappingTables: parseResult.mappingTables
             )
             
         case .sample:
@@ -83,7 +85,8 @@ public struct JPEGLSDecoder: Sendable {
                 frameHeader: parseResult.frameHeader,
                 scanHeader: firstScanHeader,
                 scanData: scanDataList[0],
-                parameters: parameters
+                parameters: parameters,
+                mappingTables: parseResult.mappingTables
             )
         }
         
@@ -188,7 +191,8 @@ public struct JPEGLSDecoder: Sendable {
         frameHeader: JPEGLSFrameHeader,
         scanHeaders: [JPEGLSScanHeader],
         scanDataList: [Data],
-        parameters: JPEGLSPresetParameters
+        parameters: JPEGLSPresetParameters,
+        mappingTables: [UInt8: JPEGLSMappingTable] = [:]
     ) throws -> [MultiComponentImageData.ComponentData] {
         var components: [MultiComponentImageData.ComponentData] = []
         
@@ -197,13 +201,19 @@ public struct JPEGLSDecoder: Sendable {
             let reader = JPEGLSBitstreamReader(data: scanData)
             
             // Decode this component
-            let pixels = try decodeComponent(
+            var pixels = try decodeComponent(
                 reader: reader,
                 width: frameHeader.width,
                 height: frameHeader.height,
                 scanHeader: scanHeader,
                 parameters: parameters
             )
+            
+            // Apply mapping table lookup if the component references one
+            let tableID = scanHeader.components[0].mappingTableID
+            if tableID != 0, let table = mappingTables[tableID] {
+                pixels = applyMappingTable(table, to: pixels)
+            }
             
             components.append(MultiComponentImageData.ComponentData(
                 id: scanHeader.components[0].id,
@@ -221,7 +231,8 @@ public struct JPEGLSDecoder: Sendable {
         frameHeader: JPEGLSFrameHeader,
         scanHeader: JPEGLSScanHeader,
         scanData: Data,
-        parameters: JPEGLSPresetParameters
+        parameters: JPEGLSPresetParameters,
+        mappingTables: [UInt8: JPEGLSMappingTable] = [:]
     ) throws -> [MultiComponentImageData.ComponentData] {
         let reader = JPEGLSBitstreamReader(data: scanData)
         let componentCount = scanHeader.componentCount
@@ -254,11 +265,16 @@ public struct JPEGLSDecoder: Sendable {
             }
         }
         
-        // Create component data
+        // Apply mapping table lookups per component
         return (0..<componentCount).map { componentIndex in
-            MultiComponentImageData.ComponentData(
+            let tableID = scanHeader.components[componentIndex].mappingTableID
+            var pixels = componentPixels[componentIndex]
+            if tableID != 0, let table = mappingTables[tableID] {
+                pixels = applyMappingTable(table, to: pixels)
+            }
+            return MultiComponentImageData.ComponentData(
                 id: scanHeader.components[componentIndex].id,
-                pixels: componentPixels[componentIndex]
+                pixels: pixels
             )
         }
     }
@@ -270,7 +286,8 @@ public struct JPEGLSDecoder: Sendable {
         frameHeader: JPEGLSFrameHeader,
         scanHeader: JPEGLSScanHeader,
         scanData: Data,
-        parameters: JPEGLSPresetParameters
+        parameters: JPEGLSPresetParameters,
+        mappingTables: [UInt8: JPEGLSMappingTable] = [:]
     ) throws -> [MultiComponentImageData.ComponentData] {
         let reader = JPEGLSBitstreamReader(data: scanData)
         let componentCount = scanHeader.componentCount
@@ -313,11 +330,16 @@ public struct JPEGLSDecoder: Sendable {
             }
         }
         
-        // Create component data
+        // Apply mapping table lookups per component
         return (0..<componentCount).map { componentIndex in
-            MultiComponentImageData.ComponentData(
+            let tableID = scanHeader.components[componentIndex].mappingTableID
+            var pixels = componentPixels[componentIndex]
+            if tableID != 0, let table = mappingTables[tableID] {
+                pixels = applyMappingTable(table, to: pixels)
+            }
+            return MultiComponentImageData.ComponentData(
                 id: scanHeader.components[componentIndex].id,
-                pixels: componentPixels[componentIndex]
+                pixels: pixels
             )
         }
     }
@@ -659,6 +681,21 @@ public struct JPEGLSDecoder: Sendable {
     }
     
     // MARK: - Helper Methods
+    
+    /// Apply a mapping table lookup to a decoded pixel buffer.
+    ///
+    /// Each raw sample value is used as an index into the mapping table, and the
+    /// corresponding table entry replaces the raw value.
+    ///
+    /// - Parameters:
+    ///   - table: The mapping table to apply.
+    ///   - pixels: Raw decoded pixel buffer (rows of columns).
+    /// - Returns: Pixel buffer with mapped values.
+    private func applyMappingTable(_ table: JPEGLSMappingTable, to pixels: [[Int]]) -> [[Int]] {
+        return pixels.map { row in
+            row.map { table.map($0) }
+        }
+    }
     
     /// Get neighbor pixels for gradient computation
     ///

@@ -28,6 +28,12 @@ public struct JPEGLSParseResult: Sendable {
     /// Restart interval in MCUs (if a DRI marker was present, otherwise nil)
     public let restartInterval: Int?
     
+    /// Mapping tables keyed by table ID (parsed from LSE type 2/3 markers).
+    ///
+    /// When a scan component references a table ID > 0, decoded raw sample
+    /// values are used as indices into the corresponding mapping table.
+    public let mappingTables: [UInt8: JPEGLSMappingTable]
+    
     /// Application marker data (APP0-APP15)
     public let applicationMarkers: [(marker: JPEGLSMarker, data: Data)]
     
@@ -41,6 +47,7 @@ public struct JPEGLSParseResult: Sendable {
     ///   - scanHeaders: Scan headers
     ///   - presetParameters: Optional custom preset parameters
     ///   - restartInterval: Optional restart interval from DRI marker
+    ///   - mappingTables: Mapping tables keyed by table ID
     ///   - applicationMarkers: Application markers
     ///   - comments: Comment data
     public init(
@@ -48,6 +55,7 @@ public struct JPEGLSParseResult: Sendable {
         scanHeaders: [JPEGLSScanHeader],
         presetParameters: JPEGLSPresetParameters? = nil,
         restartInterval: Int? = nil,
+        mappingTables: [UInt8: JPEGLSMappingTable] = [:],
         applicationMarkers: [(marker: JPEGLSMarker, data: Data)] = [],
         comments: [Data] = []
     ) {
@@ -55,6 +63,7 @@ public struct JPEGLSParseResult: Sendable {
         self.scanHeaders = scanHeaders
         self.presetParameters = presetParameters
         self.restartInterval = restartInterval
+        self.mappingTables = mappingTables
         self.applicationMarkers = applicationMarkers
         self.comments = comments
     }
@@ -91,6 +100,7 @@ public final class JPEGLSParser {
         var scanHeaders: [JPEGLSScanHeader] = []
         var presetParameters: JPEGLSPresetParameters?
         var restartInterval: Int?
+        var mappingTables: [UInt8: JPEGLSMappingTable] = [:]
         var applicationMarkers: [(marker: JPEGLSMarker, data: Data)] = []
         var comments: [Data] = []
         
@@ -149,6 +159,7 @@ public final class JPEGLSParser {
                     scanHeaders: scanHeaders,
                     presetParameters: presetParameters,
                     restartInterval: restartInterval,
+                    mappingTables: mappingTables,
                     applicationMarkers: applicationMarkers,
                     comments: comments
                 )
@@ -209,7 +220,8 @@ public final class JPEGLSParser {
                 // Parse JPEG-LS extension
                 try parseJPEGLSExtension(
                     frameHeader: frameHeader,
-                    presetParameters: &presetParameters
+                    presetParameters: &presetParameters,
+                    mappingTables: &mappingTables
                 )
                 
             case .applicationMarker0, .applicationMarker1, .applicationMarker2,
@@ -351,8 +363,10 @@ public final class JPEGLSParser {
         
         for _ in 0..<componentCount {
             let id = try reader.readByte()
-            _ = try reader.readByte()  // Table selector (not used in JPEG-LS)
-            components.append(JPEGLSScanHeader.ComponentSelector(id: id))
+            // Tdi field: mapping table ID per ITU-T.87 §5.1.2.
+            // 0 means no mapping table; 1–255 references a mapping table from an LSE type 2/3 marker.
+            let mappingTableID = try reader.readByte()
+            components.append(JPEGLSScanHeader.ComponentSelector(id: id, mappingTableID: mappingTableID))
         }
         
         // Read NEAR parameter
@@ -386,7 +400,8 @@ public final class JPEGLSParser {
     /// Parse JPEG-LS extension marker (LSE)
     private func parseJPEGLSExtension(
         frameHeader: JPEGLSFrameHeader?,
-        presetParameters: inout JPEGLSPresetParameters?
+        presetParameters: inout JPEGLSPresetParameters?,
+        mappingTables: inout [UInt8: JPEGLSMappingTable]
     ) throws {
         let length = try reader.readUInt16()
         
@@ -423,10 +438,82 @@ public final class JPEGLSParser {
                 reset: reset
             )
             
-        case .mappingTable, .mappingTableContinuation:
-            // Mapping tables not yet supported - skip
-            let skipLength = Int(length) - 3
-            _ = try reader.readBytes(skipLength)
+        case .mappingTable:
+            // Parse mapping table specification per ITU-T.87 §5.1.1.3.
+            // Format: Length(2) + Type(1) + TID(1) + Wt(1) + Entries((Length-5)*1 or (Length-5)/2)
+            // Minimum length = 5 (no entries)
+            guard length >= 5 else {
+                throw JPEGLSError.invalidBitstreamStructure(
+                    reason: "Invalid LSE mapping table length: \(length)"
+                )
+            }
+            let tableID = try reader.readByte()
+            let entryWidth = Int(try reader.readByte())
+            guard entryWidth == 1 || entryWidth == 2 else {
+                throw JPEGLSError.invalidBitstreamStructure(
+                    reason: "Invalid mapping table entry width: \(entryWidth) (must be 1 or 2)"
+                )
+            }
+            // Data bytes = length - 5 (subtract: 2 for Ll, 1 for Id, 1 for TID, 1 for Wt)
+            let dataBytes = Int(length) - 5
+            guard dataBytes >= 0 && dataBytes % entryWidth == 0 else {
+                throw JPEGLSError.invalidBitstreamStructure(
+                    reason: "Mapping table data length \(dataBytes) not a multiple of entry width \(entryWidth)"
+                )
+            }
+            let entryCount = dataBytes / entryWidth
+            var entries: [Int] = []
+            entries.reserveCapacity(entryCount)
+            for _ in 0..<entryCount {
+                if entryWidth == 1 {
+                    entries.append(Int(try reader.readByte()))
+                } else {
+                    entries.append(Int(try reader.readUInt16()))
+                }
+            }
+            let table = try JPEGLSMappingTable(id: tableID, entryWidth: entryWidth, entries: entries)
+            // If a table with this ID already exists, the new one replaces it
+            mappingTables[tableID] = table
+            
+        case .mappingTableContinuation:
+            // Append additional entries to an existing mapping table per ITU-T.87 §5.1.1.3.
+            // Format: Length(2) + Type(1) + TID(1) + Entries((Length-4) bytes or /2)
+            guard length >= 4 else {
+                throw JPEGLSError.invalidBitstreamStructure(
+                    reason: "Invalid LSE mapping table continuation length: \(length)"
+                )
+            }
+            let tableID = try reader.readByte()
+            // data bytes = length - 4 (subtract: 2 for Ll, 1 for Id, 1 for TID)
+            let dataBytes = Int(length) - 4
+            guard let existingTable = mappingTables[tableID] else {
+                // No existing table — skip the data gracefully
+                _ = try reader.readBytes(dataBytes)
+                return
+            }
+            let entryWidth = existingTable.entryWidth
+            guard dataBytes % entryWidth == 0 else {
+                throw JPEGLSError.invalidBitstreamStructure(
+                    reason: "Mapping table continuation data length \(dataBytes) not a multiple of entry width \(entryWidth)"
+                )
+            }
+            let entryCount = dataBytes / entryWidth
+            var additionalEntries: [Int] = []
+            additionalEntries.reserveCapacity(entryCount)
+            for _ in 0..<entryCount {
+                if entryWidth == 1 {
+                    additionalEntries.append(Int(try reader.readByte()))
+                } else {
+                    additionalEntries.append(Int(try reader.readUInt16()))
+                }
+            }
+            let combinedEntries = existingTable.entries + additionalEntries
+            let updatedTable = try JPEGLSMappingTable(
+                id: tableID,
+                entryWidth: existingTable.entryWidth,
+                entries: combinedEntries
+            )
+            mappingTables[tableID] = updatedTable
             
         case .extendedDimensions:
             // Extended dimensions not yet supported - skip

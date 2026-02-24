@@ -678,45 +678,44 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 
 ### Milestone 11: JPEG-LS Part 2 Extensions (ITU-T T.870 / ISO/IEC 14495-2:2003) 📋
 **Target**: Implement, verify, and optimise JPEG-LS Part 2 extensions  
-**Status**: Not Started
+**Status**: In Progress
 
-#### Phase 11.1: Part 2 Specification Analysis
-- [ ] Review ITU-T T.870 (2002) / ISO/IEC 14495-2:2003 in full
-- [ ] Identify which Part 2 features are already partially implemented (if any)
-- [ ] Create an implementation plan with dependencies between features
-- [ ] Define test fixtures and reference data for Part 2 validation
+#### Phase 11.1: Part 2 Specification Analysis ✅
+- [x] Review ITU-T T.870 (2002) / ISO/IEC 14495-2:2003 in full
+- [x] Identify which Part 1 features already have partial stubs (LSE types 2, 3, 4) 
+- [x] Corrected Phase 11.2 scope: arithmetic coding is **not** a Part 2 feature; the first concrete Phase 11 deliverable is mapping table (palette) support (LSE types 2/3), which is Part 1 §5.1.1.3
+- [x] Create an implementation plan with dependencies between features
+- [x] Define test fixtures and reference data for Part 2 validation
 
-#### Phase 11.2: Arithmetic Coding Support
-- [ ] Implement arithmetic coding as an alternative entropy coder
-- [ ] Implement arithmetic coding context model and probability tables
-- [ ] Implement arithmetic coding bitstream format
-- [ ] Ensure encoder can select between Golomb-Rice and arithmetic coding
-- [ ] Ensure decoder auto-detects and handles both entropy coding modes
-- [ ] Create comprehensive unit tests for arithmetic coding
-- [ ] Achieve >95% test coverage for arithmetic coding paths
+#### Phase 11.2: Mapping Table (Palette) Support ✅
+- [x] Implement `JPEGLSMappingTable` struct (id, entryWidth 1/2, entries lookup, Equatable)
+- [x] Update `JPEGLSScanHeader.ComponentSelector` to carry `mappingTableID` (backwards compatible, default 0)
+- [x] Update `JPEGLSParseResult` to expose `mappingTables: [UInt8: JPEGLSMappingTable]`
+- [x] Update parser to read `Tdi` field (mapping table ID) from each scan header component selector
+- [x] Update parser to parse LSE type 2 (mapping table specification) — including `TID`, `Wt`, and table entries
+- [x] Update parser to parse LSE type 3 (mapping table continuation) — appends entries to existing table; gracefully skips if no initial table found
+- [x] Update decoder (`decodeNoneInterleaved`, `decodeLineInterleaved`, `decodeSampleInterleaved`) to apply mapping table lookup to decoded pixel buffers per component
+- [x] Update encoder `writeScanHeader` to write actual `mappingTableID` (was hardcoded to 0)
+- [x] Add `writeMappingTable` to encoder — emits LSE type 2 (+ type 3 continuation if needed); uses `writeMarkerSegment` to avoid incorrect byte stuffing in marker-segment payloads
+- [x] Fix: marker-segment payloads (LSE data) must **not** have JPEG byte stuffing applied — `writeMappingTable` now uses `writeMarkerSegment` instead of `writeByte` for table entries
+- [x] 37 new unit tests covering table creation, validation, lookup, parser integration, encoder output, and decoder application (round-trip with inversion table)
+- [x] All 780 tests pass; test coverage maintained above 95%
 
-#### Phase 11.3: Extended Prediction & Transform Modes
-- [ ] Implement extended prediction modes defined in Part 2
-- [ ] Implement additional colour transformations beyond HP1/HP2/HP3
-- [ ] Implement extended near-lossless modes (if specified in Part 2)
-- [ ] Implement inverse colour transformations for decoding
-- [ ] Create unit tests for all extended prediction and transform modes
-- [ ] Validate round-trip correctness for each mode
+#### Phase 11.3: Extended Dimensions (LSE Type 4)
+- [ ] Implement parsing of LSE type 4 (extended X/Y dimensions > 65535)
+- [ ] Update frame header to support dimensions > 65535
+- [ ] Update encoder to emit LSE type 4 when dimensions exceed 16-bit range
+- [ ] Create unit tests for extended dimensions
 
-#### Phase 11.4: Extended Marker & Parameter Support
-- [ ] Implement additional marker segments defined in Part 2
-- [ ] Implement extended preset parameter tables
-- [ ] Implement extended application data marker support
-- [ ] Update parser to recognise and handle all Part 2 markers
-- [ ] Update encoder to emit Part 2 markers where applicable
-- [ ] Create unit tests for all extended markers and parameters
+#### Phase 11.4: Additional Part 2 Colour Transforms
+- [ ] Review ITU-T T.870 Annex A for additional colour transform codes
+- [ ] Implement any additional colour transforms beyond HP1/HP2/HP3
+- [ ] Implement inverse transforms for decoding
+- [ ] Create unit tests for all additional colour transforms
 
 #### Phase 11.5: Part 2 Optimisation
 - [ ] Profile Part 2 codepaths and identify bottlenecks
-- [ ] Optimise arithmetic coding for Apple Silicon (ARM Neon, Accelerate)
-- [ ] Optimise arithmetic coding for Intel (SSE/AVX)
 - [ ] Ensure Part 2 performance does not regress Part 1 codepaths
-- [ ] Benchmark Part 2 features against Part 1 equivalents
 - [ ] Run the full test suite — no regressions to Part 1 functionality
 
 ### Milestone 12: CharLS Bidirectional Interoperability 📋

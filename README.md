@@ -95,6 +95,7 @@ JPEG-LS is a lossless/near-lossless compression standard specifically designed f
 | **Interleaving Modes** | None (separate scans), Line-interleaved, Sample-interleaved |
 | **Near-Lossless Support** | Configurable error tolerance encoding with NEAR parameter (1-255), with correct error quantisation per §4.2.2 and reconstructed-value tracking |
 | **ITU-T.87 Compliant** | Standard-conformant context index formula (365 contexts), A initialisation, sign-adjusted Golomb-Rice coding, bias correction per §4.3.3, run-mode RUNindex synchronisation, near-lossless quantisation/dequantisation, and EOL terminator handling |
+| **Mapping Table (Palette) Support** | LSE type 2/3 mapping tables parsed and applied per ITU-T.87 §5.1.1.3; scan header `Tdi` field used to reference tables per component; encoder can emit mapping table LSE segments |
 | **Command-Line Tool** | `jpegls` CLI with info, verify, encode, and decode commands |
 
 ### Architecture Overview
@@ -107,6 +108,7 @@ JPEGLS/
 │   ├── JPEGLSScanHeader     # Scan header structures
 │   ├── JPEGLSPresetParameters # Preset parameters (MAXVAL, T1-T3, RESET)
 │   ├── JPEGLSContextModel   # Context state management (365 contexts)
+│   ├── JPEGLSMappingTable   # Mapping table (palette) support per §5.1.1.3
 │   ├── JPEGLSBitstreamReader/Writer # Bitstream I/O utilities
 │   └── JPEGLSError          # Comprehensive error handling
 ├── Decoder/                 # Decoding implementation
