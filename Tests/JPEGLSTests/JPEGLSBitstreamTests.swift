@@ -110,7 +110,10 @@ struct JPEGLSBitstreamReaderTests {
     
     @Test("Read bits across byte boundary")
     func testReadBitsAcrossByteBoundary() throws {
-        let data = Data([0xFF, 0xAA])  // 11111111 10101010
+        // 0xFF 0x00 is standard byte stuffing (represents a single 0xFF data byte).
+        // 0xAA follows as a separate data byte.
+        // Total bitstream after unstuffing: 11111111 10101010
+        let data = Data([0xFF, 0x00, 0xAA])
         let reader = JPEGLSBitstreamReader(data: data)
         
         #expect(try reader.readBits(4) == 0xF)   // 1111
@@ -163,7 +166,9 @@ struct JPEGLSBitstreamReaderTests {
     
     @Test("Reset bit buffer")
     func testResetBitBuffer() throws {
-        let data = Data([0xFF, 0xAA])
+        // Use two non-FF bytes so no stuffing logic is triggered.
+        // Read 4 bits of the first byte, reset, then read the second byte.
+        let data = Data([0xAB, 0xAA])
         let reader = JPEGLSBitstreamReader(data: data)
         
         _ = try reader.readBits(4)

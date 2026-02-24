@@ -755,8 +755,10 @@ public struct JPEGLSDecoder: Sendable {
         if row == 0 && col == 0 {
             return (0, 0, 0, 0)
         } else if row == 0 {
+            // First row: no scan line above; top/top-left/top-right are 0
+            // per ITU-T.87 §3.2 boundary initialisation.
             let left = pixels[row][col - 1]
-            return (left, left, left, left)
+            return (left, 0, 0, 0)
         } else if col == 0 {
             let top = pixels[row - 1][col]
             let topRight = (col + 1 < width) ? pixels[row - 1][col + 1] : top

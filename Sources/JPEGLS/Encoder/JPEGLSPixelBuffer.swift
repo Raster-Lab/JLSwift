@@ -244,15 +244,15 @@ public struct JPEGLSPixelBuffer: Sendable {
                 topRight: 0
             )
         } else if row == 0 {
-            // First row: use left pixel for all top neighbors
+            // First row: no scan line above; top/top-left/top-right are 0
+            // per ITU-T.87 §3.2 boundary initialisation.
             let left = pixels[row][column - 1]
-            let topRight = (column + 1 < width) ? left : left
             return PixelNeighbors(
                 actual: actual,
                 left: left,
-                top: left,
-                topLeft: left,
-                topRight: topRight
+                top: 0,
+                topLeft: 0,
+                topRight: 0
             )
         } else if column == 0 {
             // First column: use top pixel for all left neighbors

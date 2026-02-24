@@ -128,6 +128,12 @@ public final class JPEGLSBitstreamReader {
     /// Handles byte stuffing including CharLS extensions:
     /// - 0xFF 0x00: Standard JPEG-LS byte stuffing
     /// - 0xFF 0x60-0x7F: CharLS escape sequences
+    /// - 0xFF 0xXX where 0xXX is not a recognised JPEG-LS marker: extended stuffing
+    ///   (used by the JPEG-LS conformance reference implementation and some encoders)
+    ///
+    /// This logic mirrors the scan-boundary detection in `JPEGLSDecoder.extractScanData()`:
+    /// any `FF XX` that would NOT be treated as a real marker there must also be treated as
+    /// a stuffed byte here to keep the two code paths consistent.
     ///
     /// - Parameter count: Number of bits to read (1-32)
     /// - Returns: The bits as a UInt32
@@ -141,15 +147,18 @@ public final class JPEGLSBitstreamReader {
         while bitsInBuffer < count && !isAtEnd {
             let byte = try readByte()
             
-            // Handle byte stuffing (standard and CharLS extensions)
+            // Handle byte stuffing (standard and CharLS/reference-implementation extensions).
+            // Any FF XX where XX does not correspond to a known JPEG-LS marker is treated as
+            // a stuffed byte: the XX byte is discarded and only FF contributes to the bitstream.
+            // This matches the extended stuffing detection in extractScanData().
             if byte == 0xFF {
                 if let next = peekByte() {
-                    // Check if this is stuffing
-                    if next == 0x00 || (next >= 0x60 && next <= 0x7F) {
+                    let isKnownMarker = JPEGLSMarker(rawValue: next) != nil
+                    if !isKnownMarker {
                         _ = try readByte()  // Skip the stuffed byte
-                        // Continue with FF in buffer
                     }
-                    // If next byte is anything else, FF is part of the data and will be added to buffer
+                    // If next byte IS a known marker, FF is end-of-scan data —
+                    // it will be added to the buffer but no valid code should consume it.
                 }
             }
             
