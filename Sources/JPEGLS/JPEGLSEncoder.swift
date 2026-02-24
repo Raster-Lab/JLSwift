@@ -41,17 +41,27 @@ public struct JPEGLSEncoder: Sendable {
         /// Optional custom preset parameters
         public let presetParameters: JPEGLSPresetParameters?
         
+        /// Colour transformation applied before encoding (default: .none).
+        ///
+        /// When a transformation other than `.none` is specified the encoder:
+        ///   1. Writes an APP8 "mrfx" marker so decoders can invert the transform.
+        ///   2. Applies the forward transform (with modular arithmetic) to every
+        ///      pixel before the JPEG-LS codec runs.
+        public let colorTransformation: JPEGLSColorTransformation
+        
         /// Initialize encoding configuration
         ///
         /// - Parameters:
         ///   - near: NEAR parameter (0 = lossless, 1-255 = near-lossless)
         ///   - interleaveMode: Interleaving mode for multi-component images
         ///   - presetParameters: Optional custom preset parameters (uses defaults if nil)
+        ///   - colorTransformation: Colour transform to apply before encoding (default: .none)
         /// - Throws: `JPEGLSError.invalidNearParameter` if NEAR is out of range
         public init(
             near: Int = 0,
             interleaveMode: JPEGLSInterleaveMode = .none,
-            presetParameters: JPEGLSPresetParameters? = nil
+            presetParameters: JPEGLSPresetParameters? = nil,
+            colorTransformation: JPEGLSColorTransformation = .none
         ) throws {
             guard near >= 0 && near <= 255 else {
                 throw JPEGLSError.invalidNearParameter(near: near)
@@ -60,6 +70,7 @@ public struct JPEGLSEncoder: Sendable {
             self.near = near
             self.interleaveMode = interleaveMode
             self.presetParameters = presetParameters
+            self.colorTransformation = colorTransformation
         }
     }
     
@@ -82,19 +93,33 @@ public struct JPEGLSEncoder: Sendable {
         // Write SOI marker (Start of Image)
         writer.writeMarker(.startOfImage)
         
+        // Write APP8 "mrfx" colour-transform marker when a transform is requested.
+        // This must appear before the SOF so that decoders can read it and invert the transform.
+        let colorTransformation = configuration.colorTransformation
+        if colorTransformation != .none {
+            writeColorTransformMarker(colorTransformation, to: writer)
+        }
+        
+        // Apply forward colour transform to pixel data (modular arithmetic keeps
+        // values within [0, MAXVAL] for storage in MultiComponentImageData).
+        let maxValue = (1 << imageData.frameHeader.bitsPerSample) - 1
+        let encodingData = colorTransformation != .none
+            ? try applyForwardColorTransform(imageData, transformation: colorTransformation, maxValue: maxValue)
+            : imageData
+        
         // Write LSE type 4 (extended dimensions) before SOF when either dimension > 65535
         // per ITU-T.87 §5.1.1.4.
-        let frame = imageData.frameHeader
+        let frame = encodingData.frameHeader
         if frame.width > 65535 || frame.height > 65535 {
             writeExtendedDimensions(frame, to: writer)
         }
         
         // Write frame header (SOF55)
-        try writeFrameHeader(imageData.frameHeader, to: writer)
+        try writeFrameHeader(encodingData.frameHeader, to: writer)
         
         // Write preset parameters if custom or near-lossless
         let parameters = try configuration.presetParameters ?? JPEGLSPresetParameters.defaultParameters(
-            bitsPerSample: imageData.frameHeader.bitsPerSample
+            bitsPerSample: encodingData.frameHeader.bitsPerSample
         )
         
         if configuration.presetParameters != nil || configuration.near > 0 {
@@ -105,9 +130,9 @@ public struct JPEGLSEncoder: Sendable {
         switch configuration.interleaveMode {
         case .none:
             // Non-interleaved: one scan per component
-            for component in imageData.components {
+            for component in encodingData.components {
                 try encodeScan(
-                    imageData: imageData,
+                    imageData: encodingData,
                     componentIDs: [component.id],
                     configuration: configuration,
                     parameters: parameters,
@@ -117,9 +142,9 @@ public struct JPEGLSEncoder: Sendable {
             
         case .line, .sample:
             // Interleaved: single scan with all components
-            let componentIDs = imageData.components.map { $0.id }
+            let componentIDs = encodingData.components.map { $0.id }
             try encodeScan(
-                imageData: imageData,
+                imageData: encodingData,
                 componentIDs: componentIDs,
                 configuration: configuration,
                 parameters: parameters,
@@ -152,7 +177,86 @@ public struct JPEGLSEncoder: Sendable {
     
     // MARK: - Private Methods
     
-    /// Write frame header (SOF55) to bitstream
+    /// Write an APP8 "mrfx" colour-transform marker to the bitstream.
+    ///
+    /// Format per ISO/IEC 14495-2 Annex A:
+    ///   FF E8  — APP8 marker
+    ///   00 07  — segment length (7 bytes including the length field)
+    ///   "mrfx" — four-byte identifier (0x6D 0x72 0x66 0x78)
+    ///   id     — one-byte transform code (matches JPEGLSColorTransformation.rawValue)
+    ///
+    /// - Parameters:
+    ///   - transformation: Colour transform to signal.
+    ///   - writer: Destination bitstream writer.
+    private func writeColorTransformMarker(
+        _ transformation: JPEGLSColorTransformation,
+        to writer: JPEGLSBitstreamWriter
+    ) {
+        var payload = Data()
+        // "mrfx" identifier
+        payload.append(0x6D)  // 'm'
+        payload.append(0x72)  // 'r'
+        payload.append(0x66)  // 'f'
+        payload.append(0x78)  // 'x'
+        // Transform ID
+        payload.append(transformation.rawValue)
+        writer.writeMarkerSegment(marker: .applicationMarker8, payload: payload)
+    }
+    
+    /// Apply the forward colour transform to all pixels in the image.
+    ///
+    /// Returns a new `MultiComponentImageData` whose pixel values are the transformed
+    /// versions of the originals.  Modular arithmetic is used so that every value
+    /// stays within [0, maxValue] and can be stored in the pixel buffer without
+    /// failing the range-validation checks.
+    ///
+    /// - Parameters:
+    ///   - imageData: Original image data with untransformed pixels.
+    ///   - transformation: Colour transform to apply.
+    ///   - maxValue: MAXVAL for the image (used for modular arithmetic).
+    /// - Returns: New image data with transformed pixels.
+    /// - Throws: `JPEGLSError` if the transform is not valid for the component count.
+    private func applyForwardColorTransform(
+        _ imageData: MultiComponentImageData,
+        transformation: JPEGLSColorTransformation,
+        maxValue: Int
+    ) throws -> MultiComponentImageData {
+        guard transformation != .none else { return imageData }
+        guard transformation.isValid(forComponentCount: imageData.frameHeader.componentCount) else {
+            throw JPEGLSError.encodingFailed(
+                reason: "Colour transformation \(transformation) is invalid for \(imageData.frameHeader.componentCount) components"
+            )
+        }
+        
+        let componentCount = imageData.components.count
+        let height = imageData.frameHeader.height
+        let width  = imageData.frameHeader.width
+        
+        // Build mutable per-component pixel arrays
+        var transformedPixels = imageData.components.map { $0.pixels }
+        
+        // Transform each pixel position across all components simultaneously
+        for row in 0..<height {
+            for col in 0..<width {
+                let original = (0..<componentCount).map { transformedPixels[$0][row][col] }
+                let result = try transformation.transformForward(original, maxValue: maxValue)
+                for idx in 0..<componentCount {
+                    transformedPixels[idx][row][col] = result[idx]
+                }
+            }
+        }
+        
+        // Reconstruct ComponentData array preserving component IDs
+        let transformedComponents = imageData.components.enumerated().map { (idx, comp) in
+            MultiComponentImageData.ComponentData(id: comp.id, pixels: transformedPixels[idx])
+        }
+        
+        return try MultiComponentImageData(
+            components: transformedComponents,
+            frameHeader: imageData.frameHeader
+        )
+    }
+    
     private func writeFrameHeader(
         _ frameHeader: JPEGLSFrameHeader,
         to writer: JPEGLSBitstreamWriter

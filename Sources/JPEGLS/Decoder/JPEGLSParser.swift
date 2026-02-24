@@ -40,6 +40,13 @@ public struct JPEGLSParseResult: Sendable {
     /// Comment marker data
     public let comments: [Data]
     
+    /// Colour transformation signalled by an APP8 "mrfx" marker (default: .none).
+    ///
+    /// The encoder writes an APP8 segment with the four-byte identifier "mrfx"
+    /// followed by a single byte containing the transform ID.  The decoder reads
+    /// this marker and applies the corresponding inverse transform after decoding.
+    public let colorTransformation: JPEGLSColorTransformation
+    
     /// Initialize parse result
     ///
     /// - Parameters:
@@ -50,6 +57,7 @@ public struct JPEGLSParseResult: Sendable {
     ///   - mappingTables: Mapping tables keyed by table ID
     ///   - applicationMarkers: Application markers
     ///   - comments: Comment data
+    ///   - colorTransformation: Colour transform from APP8 "mrfx" marker (default: .none)
     public init(
         frameHeader: JPEGLSFrameHeader,
         scanHeaders: [JPEGLSScanHeader],
@@ -57,7 +65,8 @@ public struct JPEGLSParseResult: Sendable {
         restartInterval: Int? = nil,
         mappingTables: [UInt8: JPEGLSMappingTable] = [:],
         applicationMarkers: [(marker: JPEGLSMarker, data: Data)] = [],
-        comments: [Data] = []
+        comments: [Data] = [],
+        colorTransformation: JPEGLSColorTransformation = .none
     ) {
         self.frameHeader = frameHeader
         self.scanHeaders = scanHeaders
@@ -66,6 +75,7 @@ public struct JPEGLSParseResult: Sendable {
         self.mappingTables = mappingTables
         self.applicationMarkers = applicationMarkers
         self.comments = comments
+        self.colorTransformation = colorTransformation
     }
 }
 
@@ -105,6 +115,7 @@ public final class JPEGLSParser {
         var comments: [Data] = []
         var extendedWidth: Int?
         var extendedHeight: Int?
+        var colorTransformation: JPEGLSColorTransformation = .none
         
         // Parse marker segments until EOI
         while !reader.isAtEnd {
@@ -163,7 +174,8 @@ public final class JPEGLSParser {
                     restartInterval: restartInterval,
                     mappingTables: mappingTables,
                     applicationMarkers: applicationMarkers,
-                    comments: comments
+                    comments: comments,
+                    colorTransformation: colorTransformation
                 )
                 
             case .startOfFrameJPEGLS:
@@ -234,9 +246,21 @@ public final class JPEGLSParser {
                  .applicationMarker9, .applicationMarker10, .applicationMarker11,
                  .applicationMarker12, .applicationMarker13, .applicationMarker14,
                  .applicationMarker15:
-                // Parse application marker
+                // Parse application marker payload
                 let data = try parseMarkerSegment()
                 applicationMarkers.append((marker: marker, data: data))
+                // APP8 "mrfx" carries the colour-transform identifier per ISO/IEC 14495-2 Annex A.
+                // Format: 4-byte identifier "mrfx" followed by 1-byte transform ID.
+                // Use startIndex-relative indexing because the Data may be a slice whose
+                // startIndex is not zero.
+                if marker == .applicationMarker8 && data.count >= 5 {
+                    let i = data.startIndex
+                    if data[i] == 0x6D && data[i + 1] == 0x72 && data[i + 2] == 0x66 && data[i + 3] == 0x78 {
+                        if let ct = JPEGLSColorTransformation(rawValue: data[i + 4]) {
+                            colorTransformation = ct
+                        }
+                    }
+                }
                 
             case .comment:
                 // Parse comment

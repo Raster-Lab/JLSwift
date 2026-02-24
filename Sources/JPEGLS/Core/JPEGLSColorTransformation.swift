@@ -49,12 +49,15 @@ public enum JPEGLSColorTransformation: UInt8, Sendable, Equatable {
     /// Apply the forward color transformation to a pixel
     ///
     /// Transforms RGB components before encoding. The transformation is lossless
-    /// and reversible.
+    /// and reversible. When `maxValue` is provided, modular arithmetic is applied
+    /// so that all output values remain in [0, maxValue].
     ///
-    /// - Parameter components: Original component values [R, G, B] or single component
+    /// - Parameters:
+    ///   - components: Original component values [R, G, B] or single component
+    ///   - maxValue: Maximum sample value for modular reduction (nil = no reduction)
     /// - Returns: Transformed component values
     /// - Throws: `JPEGLSError.invalidComponentCount` if component count doesn't match transformation
-    public func transformForward(_ components: [Int]) throws -> [Int] {
+    public func transformForward(_ components: [Int], maxValue: Int? = nil) throws -> [Int] {
         guard isValid(forComponentCount: components.count) else {
             throw JPEGLSError.invalidComponentCount(count: components.count)
         }
@@ -67,30 +70,34 @@ public enum JPEGLSColorTransformation: UInt8, Sendable, Equatable {
             let r = components[0]
             let g = components[1]
             let b = components[2]
-            return [r - g, g, b - g]
+            return [wrap(r - g, maxValue: maxValue), g, wrap(b - g, maxValue: maxValue)]
             
         case .hp2:
             let r = components[0]
             let g = components[1]
             let b = components[2]
-            return [r - g, g, b - ((r + g) >> 1)]
+            return [wrap(r - g, maxValue: maxValue), g, wrap(b - ((r + g) >> 1), maxValue: maxValue)]
             
         case .hp3:
             let r = components[0]
             let g = components[1]
             let b = components[2]
-            return [r - b, g - ((r + b) >> 1), b]
+            return [wrap(r - b, maxValue: maxValue), wrap(g - ((r + b) >> 1), maxValue: maxValue), b]
         }
     }
     
     /// Apply the inverse color transformation to recover original colors
     ///
     /// Transforms encoded components back to original color space during decoding.
+    /// When `maxValue` is provided, modular arithmetic is applied so that all output
+    /// values remain in [0, maxValue].
     ///
-    /// - Parameter components: Transformed component values
+    /// - Parameters:
+    ///   - components: Transformed component values
+    ///   - maxValue: Maximum sample value for modular reduction (nil = no reduction)
     /// - Returns: Original component values [R, G, B] or single component
     /// - Throws: `JPEGLSError.invalidComponentCount` if component count doesn't match transformation
-    public func transformInverse(_ components: [Int]) throws -> [Int] {
+    public func transformInverse(_ components: [Int], maxValue: Int? = nil) throws -> [Int] {
         guard isValid(forComponentCount: components.count) else {
             throw JPEGLSError.invalidComponentCount(count: components.count)
         }
@@ -103,15 +110,15 @@ public enum JPEGLSColorTransformation: UInt8, Sendable, Equatable {
             let rPrime = components[0]
             let gPrime = components[1]
             let bPrime = components[2]
-            return [rPrime + gPrime, gPrime, bPrime + gPrime]
+            return [wrap(rPrime + gPrime, maxValue: maxValue), gPrime, wrap(bPrime + gPrime, maxValue: maxValue)]
             
         case .hp2:
             let rPrime = components[0]
             let gPrime = components[1]
             let bPrime = components[2]
-            let r = rPrime + gPrime
+            let r = wrap(rPrime + gPrime, maxValue: maxValue)
             let g = gPrime
-            let b = bPrime + ((r + g) >> 1)
+            let b = wrap(bPrime + ((r + g) >> 1), maxValue: maxValue)
             return [r, g, b]
             
         case .hp3:
@@ -119,10 +126,21 @@ public enum JPEGLSColorTransformation: UInt8, Sendable, Equatable {
             let gPrime = components[1]
             let bPrime = components[2]
             let b = bPrime
-            let r = rPrime + b
-            let g = gPrime + ((r + b) >> 1)
+            let r = wrap(rPrime + b, maxValue: maxValue)
+            let g = wrap(gPrime + ((r + b) >> 1), maxValue: maxValue)
             return [r, g, b]
         }
+    }
+    
+    // MARK: - Private Helpers
+    
+    /// Apply modular reduction to keep value in [0, maxValue].
+    ///
+    /// When `maxValue` is nil the raw value is returned unchanged (backward-compatible).
+    private func wrap(_ value: Int, maxValue: Int?) -> Int {
+        guard let maxValue else { return value }
+        let modulus = maxValue + 1
+        return ((value % modulus) + modulus) % modulus
     }
 }
 

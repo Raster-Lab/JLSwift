@@ -56,7 +56,7 @@ public struct JPEGLSDecoder: Sendable {
             throw JPEGLSError.invalidBitstreamStructure(reason: "No scan headers found")
         }
         
-        let decodedComponents: [MultiComponentImageData.ComponentData]
+        var decodedComponents: [MultiComponentImageData.ComponentData]
         
         switch firstScanHeader.interleaveMode {
         case .none:
@@ -90,11 +90,50 @@ public struct JPEGLSDecoder: Sendable {
             )
         }
         
+        // Apply inverse colour transform when signalled by APP8 "mrfx" marker
+        let colorTransformation = parseResult.colorTransformation
+        if colorTransformation != .none
+            && colorTransformation.isValid(forComponentCount: decodedComponents.count)
+        {
+            let maxValue = (1 << parseResult.frameHeader.bitsPerSample) - 1
+            decodedComponents = try applyInverseColorTransform(
+                decodedComponents,
+                transformation: colorTransformation,
+                frameHeader: parseResult.frameHeader,
+                maxValue: maxValue
+            )
+        }
+        
         // Create result
         return try MultiComponentImageData(
             components: decodedComponents,
             frameHeader: parseResult.frameHeader
         )
+    }
+    
+    /// Apply the inverse colour transform to all decoded pixel components.
+    private func applyInverseColorTransform(
+        _ components: [MultiComponentImageData.ComponentData],
+        transformation: JPEGLSColorTransformation,
+        frameHeader: JPEGLSFrameHeader,
+        maxValue: Int
+    ) throws -> [MultiComponentImageData.ComponentData] {
+        let count = components.count
+        var transformedPixels = components.map { $0.pixels }
+        
+        for row in 0..<frameHeader.height {
+            for col in 0..<frameHeader.width {
+                let encoded = (0..<count).map { transformedPixels[$0][row][col] }
+                let original = try transformation.transformInverse(encoded, maxValue: maxValue)
+                for idx in 0..<count {
+                    transformedPixels[idx][row][col] = original[idx]
+                }
+            }
+        }
+        
+        return components.enumerated().map { (idx, comp) in
+            MultiComponentImageData.ComponentData(id: comp.id, pixels: transformedPixels[idx])
+        }
     }
     
     // MARK: - Scan Data Extraction

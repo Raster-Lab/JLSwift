@@ -707,11 +707,16 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 - [x] Update encoder to emit LSE type 4 when dimensions exceed 16-bit range
 - [x] Create unit tests for extended dimensions
 
-#### Phase 11.4: Additional Part 2 Colour Transforms
-- [ ] Review ITU-T T.870 Annex A for additional colour transform codes
-- [ ] Implement any additional colour transforms beyond HP1/HP2/HP3
-- [ ] Implement inverse transforms for decoding
-- [ ] Create unit tests for all additional colour transforms
+#### Phase 11.4: Additional Part 2 Colour Transforms ✅
+- [x] Review ITU-T T.870 Annex A for additional colour transform codes
+- [x] Add optional `maxValue` parameter to `transformForward`/`transformInverse` for modular arithmetic (values stay in [0, MAXVAL])
+- [x] Encoder writes APP8 "mrfx" marker (FF E8 + "mrfx" + transform_id) when a colour transform is configured
+- [x] Encoder applies forward colour transform (with modular arithmetic) to pixel data before encoding
+- [x] Parser reads APP8 "mrfx" marker and stores `colorTransformation` in `JPEGLSParseResult`
+- [x] Decoder applies inverse colour transform (with modular arithmetic) after decoding all pixels
+- [x] Wire up CLI `--color-transform` flag to encoder configuration
+- [x] 19 new unit tests: modular arithmetic correctness, encoder marker writing, parser reading, and full encode→decode round-trips for all three transforms and all interleave modes
+- [x] All 814 tests pass; test coverage maintained above 95%
 
 #### Phase 11.5: Part 2 Optimisation
 - [ ] Profile Part 2 codepaths and identify bottlenecks
