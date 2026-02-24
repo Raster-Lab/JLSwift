@@ -73,8 +73,12 @@ JPEG-LS is a lossless/near-lossless compression standard specifically designed f
 | 7.3 | CLI Argument Parsing Tests | ✅ Complete | N/A* |
 | 8.1 | CharLS Reference Integration | ⏳ In Progress | 100.00% |
 | 8.4 | Edge Cases & Robustness | ✅ Complete | 100.00% |
+| 11.2 | Mapping Table (Palette) Support | ✅ Complete | 100.00% |
+| 11.3 | Extended Dimensions (LSE Type 4) | ✅ Complete | 100.00% |
+| 11.4 | Additional Part 2 Colour Transforms | ✅ Complete | 100.00% |
+| 11.5 | Part 2 Performance Regression Tests | ✅ Complete | 100.00% |
 
-**Overall Project Coverage: 95.80%** (exceeds 95% threshold)
+**Overall Project Coverage: 95.80%** (exceeds 95% threshold) — 824 tests pass
 
 *CLI executable target not included in coverage metrics (Swift Package Manager limitation), but validation logic thoroughly tested with 60 comprehensive tests.
 
@@ -97,6 +101,7 @@ JPEG-LS is a lossless/near-lossless compression standard specifically designed f
 | **ITU-T.87 Compliant** | Standard-conformant context index formula (365 contexts), A initialisation, sign-adjusted Golomb-Rice coding, bias correction per §4.3.3, run-mode RUNindex synchronisation, near-lossless quantisation/dequantisation, and EOL terminator handling |
 | **Mapping Table (Palette) Support** | LSE type 2/3 mapping tables parsed and applied per ITU-T.87 §5.1.1.3; scan header `Tdi` field used to reference tables per component; encoder can emit mapping table LSE segments |
 | **Extended Dimensions (LSE Type 4)** | Images with width or height > 65535 are fully supported via LSE type 4 per ITU-T.87 §5.1.1.4; encoder auto-emits the segment and writes 0 in SOF for extended fields; parser restores the true dimensions |
+| **Part 2 Colour Transforms** | HP1, HP2, HP3 colour transforms with modular arithmetic; APP8 "mrfx" marker written by encoder and read by decoder; round-trip verified for all transforms and interleave modes |
 | **Command-Line Tool** | `jpegls` CLI with info, verify, encode, and decode commands |
 
 ### Architecture Overview

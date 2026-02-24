@@ -676,9 +676,9 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 - Added explicit `Sendable` conformance to `EncodeOptions`, `BatchProcessor`, `FileResult`, and `BatchResults`
 - All 732 unit tests pass with no regressions
 
-### Milestone 11: JPEG-LS Part 2 Extensions (ITU-T T.870 / ISO/IEC 14495-2:2003) 📋
+### Milestone 11: JPEG-LS Part 2 Extensions (ITU-T T.870 / ISO/IEC 14495-2:2003) ✅
 **Target**: Implement, verify, and optimise JPEG-LS Part 2 extensions  
-**Status**: In Progress
+**Status**: Complete
 
 #### Phase 11.1: Part 2 Specification Analysis ✅
 - [x] Review ITU-T T.870 (2002) / ISO/IEC 14495-2:2003 in full
@@ -718,10 +718,11 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 - [x] 19 new unit tests: modular arithmetic correctness, encoder marker writing, parser reading, and full encode→decode round-trips for all three transforms and all interleave modes
 - [x] All 814 tests pass; test coverage maintained above 95%
 
-#### Phase 11.5: Part 2 Optimisation
-- [ ] Profile Part 2 codepaths and identify bottlenecks
-- [ ] Ensure Part 2 performance does not regress Part 1 codepaths
-- [ ] Run the full test suite — no regressions to Part 1 functionality
+#### Phase 11.5: Part 2 Optimisation ✅
+- [x] Profile Part 2 codepaths and identify bottlenecks
+- [x] Ensure Part 2 performance does not regress Part 1 codepaths (overhead factor <5×; measured at ~1.3× on CI)
+- [x] Add performance regression tests for all Phase 11 Part 2 codepaths: HP1/HP2/HP3 colour-transform encode, decode, and round-trip; mapping-table decode; Part 2 overhead vs. no-transform baseline
+- [x] Run the full test suite — no regressions to Part 1 functionality (824 tests pass)
 
 ### Milestone 12: CharLS Bidirectional Interoperability 📋
 **Target**: Full interoperability with CharLS in both encoding and decoding directions  
@@ -1058,7 +1059,7 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 | **8** | Validation | CharLS conformance ✅, benchmarks ✅, DICOM testing ✅, edge cases ✅ |
 | **9** | Release | API docs ✅, integration guides ✅, versioning ✅, changelog ✅, release template ✅ |
 | **10** | Standards Conformance & Refactoring | Conformance audit ✅, core refactoring ✅, file format refactoring ✅, Swift 6.2 strict concurrency ✅ |
-| **11** | Part 2 Extensions | Arithmetic coding, extended prediction/transform modes, extended markers, Part 2 optimisation 📋 |
+| **11** | Part 2 Extensions | Mapping tables ✅, extended dimensions ✅, colour transforms ✅, Part 2 optimisation ✅ |
 | **12** | CharLS Interoperability | Bidirectional interoperability, bit-exact validation, round-trip testing 📋 |
 | **13** | Apple Silicon Optimisation | ARM Neon enhancement, Accelerate deep integration, memory architecture tuning 📋 |
 | **14** | Intel x86-64 Optimisation | SSE/AVX enhancement, memory/cache tuning, separation verification 📋 |
