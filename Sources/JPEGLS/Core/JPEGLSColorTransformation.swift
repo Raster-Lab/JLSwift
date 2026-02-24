@@ -51,12 +51,30 @@ public enum JPEGLSColorTransformation: UInt8, Sendable, Equatable {
     /// Transforms RGB components before encoding. The transformation is lossless
     /// and reversible.
     ///
-    /// - Parameter components: Original component values [R, G, B] or single component
+    /// When `maxValue` is provided, transformed values are mapped modulo `maxValue + 1`
+    /// so they remain in `[0, maxValue]`, matching the JPEG-LS modular arithmetic used
+    /// during encoding. This is required when storing the result in a `MultiComponentImageData`
+    /// pixel buffer (ITU-T T.870 Annex A §A.2).
+    ///
+    /// When `maxValue` is `nil` (the default), the raw integer difference is returned
+    /// and may be negative.
+    ///
+    /// - Parameters:
+    ///   - components: Original component values [R, G, B] or single component
+    ///   - maxValue: Optional maximum sample value for modular reduction (e.g. 255 for 8-bit)
     /// - Returns: Transformed component values
     /// - Throws: `JPEGLSError.invalidComponentCount` if component count doesn't match transformation
-    public func transformForward(_ components: [Int]) throws -> [Int] {
+    public func transformForward(_ components: [Int], maxValue: Int? = nil) throws -> [Int] {
         guard isValid(forComponentCount: components.count) else {
             throw JPEGLSError.invalidComponentCount(count: components.count)
+        }
+        
+        let mod: (Int) -> Int
+        if let mv = maxValue {
+            let range = mv + 1
+            mod = { v in ((v % range) + range) % range }
+        } else {
+            mod = { v in v }
         }
         
         switch self {
@@ -67,19 +85,19 @@ public enum JPEGLSColorTransformation: UInt8, Sendable, Equatable {
             let r = components[0]
             let g = components[1]
             let b = components[2]
-            return [r - g, g, b - g]
+            return [mod(r - g), g, mod(b - g)]
             
         case .hp2:
             let r = components[0]
             let g = components[1]
             let b = components[2]
-            return [r - g, g, b - ((r + g) >> 1)]
+            return [mod(r - g), g, mod(b - ((r + g) >> 1))]
             
         case .hp3:
             let r = components[0]
             let g = components[1]
             let b = components[2]
-            return [r - b, g - ((r + b) >> 1), b]
+            return [mod(r - b), mod(g - ((r + b) >> 1)), b]
         }
     }
     
@@ -87,12 +105,30 @@ public enum JPEGLSColorTransformation: UInt8, Sendable, Equatable {
     ///
     /// Transforms encoded components back to original color space during decoding.
     ///
-    /// - Parameter components: Transformed component values
+    /// When `maxValue` is provided, intermediate and final values are reduced modulo
+    /// `maxValue + 1`. This is required when the input components are the modular-mapped
+    /// values produced by JPEG-LS decoding (ITU-T T.870 Annex A §A.2).
+    ///
+    /// When `maxValue` is `nil` (the default), straight integer arithmetic is used,
+    /// which is correct when the input contains the raw (possibly negative) transformed
+    /// values from `transformForward`.
+    ///
+    /// - Parameters:
+    ///   - components: Transformed component values
+    ///   - maxValue: Optional maximum sample value for modular reduction (e.g. 255 for 8-bit)
     /// - Returns: Original component values [R, G, B] or single component
     /// - Throws: `JPEGLSError.invalidComponentCount` if component count doesn't match transformation
-    public func transformInverse(_ components: [Int]) throws -> [Int] {
+    public func transformInverse(_ components: [Int], maxValue: Int? = nil) throws -> [Int] {
         guard isValid(forComponentCount: components.count) else {
             throw JPEGLSError.invalidComponentCount(count: components.count)
+        }
+        
+        let mod: (Int) -> Int
+        if let mv = maxValue {
+            let range = mv + 1
+            mod = { v in ((v % range) + range) % range }
+        } else {
+            mod = { v in v }
         }
         
         switch self {
@@ -103,15 +139,15 @@ public enum JPEGLSColorTransformation: UInt8, Sendable, Equatable {
             let rPrime = components[0]
             let gPrime = components[1]
             let bPrime = components[2]
-            return [rPrime + gPrime, gPrime, bPrime + gPrime]
+            return [mod(rPrime + gPrime), gPrime, mod(bPrime + gPrime)]
             
         case .hp2:
             let rPrime = components[0]
             let gPrime = components[1]
             let bPrime = components[2]
-            let r = rPrime + gPrime
+            let r = mod(rPrime + gPrime)
             let g = gPrime
-            let b = bPrime + ((r + g) >> 1)
+            let b = mod(bPrime + ((r + g) >> 1))
             return [r, g, b]
             
         case .hp3:
@@ -119,8 +155,8 @@ public enum JPEGLSColorTransformation: UInt8, Sendable, Equatable {
             let gPrime = components[1]
             let bPrime = components[2]
             let b = bPrime
-            let r = rPrime + b
-            let g = gPrime + ((r + b) >> 1)
+            let r = mod(rPrime + b)
+            let g = mod(gPrime + ((r + b) >> 1))
             return [r, g, b]
         }
     }

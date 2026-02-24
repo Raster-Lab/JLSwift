@@ -90,11 +90,65 @@ public struct JPEGLSDecoder: Sendable {
             )
         }
         
+        // Apply inverse colour transformation when signalled by an APP8 "mrfx" marker
+        // (ITU-T T.870 Annex A). The decoded pixel values are in [0, MAXVAL] (modular
+        // representation), so modular arithmetic must be used for the inverse transform.
+        let finalComponents: [MultiComponentImageData.ComponentData]
+        if parseResult.colorTransformation != .none && decodedComponents.count == 3 {
+            let maxValue = (1 << parseResult.frameHeader.bitsPerSample) - 1
+            finalComponents = try applyInverseColorTransform(
+                decodedComponents,
+                transform: parseResult.colorTransformation,
+                maxValue: maxValue
+            )
+        } else {
+            finalComponents = decodedComponents
+        }
+        
         // Create result
         return try MultiComponentImageData(
-            components: decodedComponents,
+            components: finalComponents,
             frameHeader: parseResult.frameHeader
         )
+    }
+    
+    /// Apply the inverse colour transformation to a set of decoded component arrays.
+    ///
+    /// - Parameters:
+    ///   - components: Decoded component data (must contain exactly 3 elements)
+    ///   - transform: Colour transform to invert
+    ///   - maxValue: Maximum sample value for modular arithmetic
+    /// - Returns: Component data with inverse transform applied
+    /// - Throws: `JPEGLSError` if the transform operation fails
+    private func applyInverseColorTransform(
+        _ components: [MultiComponentImageData.ComponentData],
+        transform: JPEGLSColorTransformation,
+        maxValue: Int
+    ) throws -> [MultiComponentImageData.ComponentData] {
+        let height = components[0].pixels.count
+        let width = components[0].pixels.first?.count ?? 0
+        
+        var c0 = components[0].pixels
+        var c1 = components[1].pixels
+        var c2 = components[2].pixels
+        
+        for row in 0..<height {
+            for col in 0..<width {
+                let original = try transform.transformInverse(
+                    [c0[row][col], c1[row][col], c2[row][col]],
+                    maxValue: maxValue
+                )
+                c0[row][col] = original[0]
+                c1[row][col] = original[1]
+                c2[row][col] = original[2]
+            }
+        }
+        
+        return [
+            MultiComponentImageData.ComponentData(id: components[0].id, pixels: c0),
+            MultiComponentImageData.ComponentData(id: components[1].id, pixels: c1),
+            MultiComponentImageData.ComponentData(id: components[2].id, pixels: c2)
+        ]
     }
     
     // MARK: - Scan Data Extraction

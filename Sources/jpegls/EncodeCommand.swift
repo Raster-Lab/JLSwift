@@ -75,8 +75,8 @@ extension JPEGLSCLITool {
             // Parse interleave mode
             let interleaveMode = try parseInterleaveMode(interleave)
             
-            // Parse color transformation (not yet used by encoder)
-            let _ = try parseColorTransform(colorTransform)
+            // Parse color transformation
+            let parsedColorTransform = try parseColorTransform(colorTransform)
             
             if verbose {
                 print("JPEG-LS Encoder")
@@ -155,7 +155,8 @@ extension JPEGLSCLITool {
             let config = try JPEGLSEncoder.Configuration(
                 near: near,
                 interleaveMode: actualInterleaveMode,
-                presetParameters: nil  // Custom presets not yet supported
+                presetParameters: nil,  // Custom presets not yet supported
+                colorTransformation: parsedColorTransform
             )
             
             // Log warning if custom parameters were requested but not applied

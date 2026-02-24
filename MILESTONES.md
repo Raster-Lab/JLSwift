@@ -707,11 +707,16 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 - [x] Update encoder to emit LSE type 4 when dimensions exceed 16-bit range
 - [x] Create unit tests for extended dimensions
 
-#### Phase 11.4: Additional Part 2 Colour Transforms
-- [ ] Review ITU-T T.870 Annex A for additional colour transform codes
-- [ ] Implement any additional colour transforms beyond HP1/HP2/HP3
-- [ ] Implement inverse transforms for decoding
-- [ ] Create unit tests for all additional colour transforms
+#### Phase 11.4: Additional Part 2 Colour Transforms ✅
+- [x] Review ITU-T T.870 Annex A for additional colour transform codes — HP1, HP2, and HP3 are the only transforms defined in Annex A; no additional transforms exist beyond these
+- [x] Add `maxValue` parameter to `transformForward()` and `transformInverse()` for modular arithmetic per ITU-T T.870 §A.2 (backward-compatible; `nil` default preserves existing behaviour)
+- [x] Implement APP8 "mrfx" marker writing in encoder — emitted before SOF when `colorTransformation != .none` per ITU-T T.870 Annex A
+- [x] Implement APP8 "mrfx" marker parsing in parser — extracts colour transform ID from `FF E8` + `"mrfx"` signature into `JPEGLSParseResult.colorTransformation`
+- [x] Wire up `JPEGLSEncoder.Configuration.colorTransformation` — encoder applies forward transform (mod MAXVAL+1) and writes APP8 marker
+- [x] Wire up `JPEGLSDecoder.decode()` — decoder reads APP8 "mrfx" and applies modular inverse transform after decoding
+- [x] Update `EncodeCommand.swift` to pass parsed colour transform to encoder configuration
+- [x] 35 new unit tests: modular arithmetic, APP8 marker writing/parsing, end-to-end round-trips for HP1/HP2/HP3 across all interleaving modes
+- [x] All 830 tests pass; test coverage maintained above 95%
 
 #### Phase 11.5: Part 2 Optimisation
 - [ ] Profile Part 2 codepaths and identify bottlenecks
