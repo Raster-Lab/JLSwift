@@ -286,14 +286,14 @@ struct ExtendedDimensionParserTests {
         var data = Data()
         // SOI
         data.append(contentsOf: [0xFF, 0xD8])
-        // LSE type 4 with Wxy = 8 (unsupported) — skip gracefully
-        // Ll = 2 + 1 + 1 + 8 + 8 = 20? But Wxy=8 is unusual; just build something invalid.
+        // LSE type 4 with unsupported Wxy=8 and Ll=6 to test graceful skip behaviour.
+        // Payload after the marker: Id(1) + Wxy(1) + 2 padding bytes = 4 bytes; Ll = 2+4 = 6.
         data.append(contentsOf: [0xFF, 0xF8])
         data.append(contentsOf: [0x00, 0x06])   // Ll = 6
-        data.append(0x04)                         // Id = 4
-        data.append(0x08)                         // Wxy = 8 (unsupported)
-        data.append(0x00)                         // 1 extra byte to fill Ll
-        data.append(0x00)                         // 1 extra byte to fill Ll (Ll-3=3 bytes remain: 1 Wxy already read, 2 more)
+        data.append(0x04)                         // Id = 4 (extended dimensions)
+        data.append(0x08)                         // Wxy = 8 (unsupported — triggers graceful skip)
+        data.append(0x00)                         // Padding bytes to complete segment payload.
+        data.append(0x00)
 
         // SOF with standard dimensions
         data.append(contentsOf: [0xFF, 0xF7])
