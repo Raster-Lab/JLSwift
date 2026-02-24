@@ -201,6 +201,72 @@ public struct JPEGLSEncoder: Sendable {
         writer.writeUInt16(UInt16(parameters.reset))
     }
     
+    /// Write a mapping table (LSE type 2) to the bitstream.
+    ///
+    /// Emits an LSE marker segment containing the mapping table specification.
+    /// If the table has more entries than can fit in a single LSE segment
+    /// (maximum payload ≈ 65530 bytes), the remainder is emitted as LSE type 3
+    /// (mapping table continuation) segments.
+    ///
+    /// - Parameters:
+    ///   - table: The mapping table to write.
+    ///   - writer: Destination bitstream writer.
+    func writeMappingTable(
+        _ table: JPEGLSMappingTable,
+        to writer: JPEGLSBitstreamWriter
+    ) {
+        let entryWidth = table.entryWidth
+        // Maximum entry bytes per segment. Ll is UInt16 (max 65535).
+        // Overhead for type 2: 1 (Id) + 1 (TID) + 1 (Wt) = 3 bytes counted in Ll.
+        // (Ll itself = 2 bytes also counted.) Max payload = 65535 - 2 - 3 = 65530 bytes.
+        let maxDataBytesPerSegment = 65530
+        let maxEntriesPerSegment = maxDataBytesPerSegment / entryWidth
+
+        // Always emit at least one LSE type 2 segment (even for an empty table, to
+        // declare the table ID and entry width).  Subsequent chunks are emitted as
+        // LSE type 3 (mapping table continuation) segments.
+        let chunks: [ArraySlice<Int>]
+        if table.entries.isEmpty {
+            chunks = [table.entries[0..<0]]
+        } else {
+            var slices: [ArraySlice<Int>] = []
+            var start = 0
+            while start < table.entries.count {
+                let end = min(start + maxEntriesPerSegment, table.entries.count)
+                slices.append(table.entries[start..<end])
+                start = end
+            }
+            chunks = slices
+        }
+
+        for (chunkIndex, chunk) in chunks.enumerated() {
+            // Build the segment payload without byte stuffing.
+            // Marker-segment payloads are raw data; stuffing only applies to scan data.
+            var payload = Data()
+            if chunkIndex == 0 {
+                // LSE type 2: Id + TID + Wt + entries
+                payload.append(JPEGLSExtensionType.mappingTable.rawValue)
+                payload.append(table.id)
+                payload.append(UInt8(entryWidth))
+            } else {
+                // LSE type 3: Id + TID + entries
+                payload.append(JPEGLSExtensionType.mappingTableContinuation.rawValue)
+                payload.append(table.id)
+            }
+            for entry in chunk {
+                if entryWidth == 1 {
+                    payload.append(UInt8(entry & 0xFF))
+                } else {
+                    payload.append(UInt8((entry >> 8) & 0xFF))
+                    payload.append(UInt8(entry & 0xFF))
+                }
+            }
+            // writeMarkerSegment writes raw payload bytes without marker stuffing,
+            // which is correct for all JPEG marker-segment payloads.
+            writer.writeMarkerSegment(marker: .jpegLSExtension, payload: payload)
+        }
+    }
+    
     /// Encode a single scan
     private func encodeScan(
         imageData: MultiComponentImageData,
@@ -249,7 +315,8 @@ public struct JPEGLSEncoder: Sendable {
         // Component selectors
         for component in scanHeader.components {
             writer.writeByte(component.id)
-            writer.writeByte(0)  // Mapping table selector (unused in JPEG-LS)
+            // Tdi field: mapping table ID (0 = no mapping table) per ITU-T.87 §5.1.2.
+            writer.writeByte(component.mappingTableID)
         }
         
         // NEAR parameter
