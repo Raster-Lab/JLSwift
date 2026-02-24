@@ -549,10 +549,9 @@ public struct JPEGLSDecoder: Sendable {
         
         // If run ends before end of line, decode interruption pixel
         if runLength < remainingInLine {
-            // Per ITU-T.87, interruption uses Golomb-Rice with k computed
-            // from run interruption context statistics
-            // Use a simple approach: k based on run context
-            let k = 0
+            // Per ITU-T.87 §4.5.3, the Golomb parameter for run interruption is
+            // computed adaptively from run interruption context statistics (A_ri, N_ri).
+            let k = context.computeRunInterruptionGolombK()
             
             // Read Golomb-Rice encoded interruption error
             let mappedError = try readGolombCode(reader: reader, k: k)
@@ -562,6 +561,9 @@ public struct JPEGLSDecoder: Sendable {
                 mappedError: mappedError,
                 runValue: runValue
             )
+            
+            // Update run interruption context statistics per ITU-T.87 §4.5.3
+            context.updateRunInterruptionContext(absError: abs(interruption.error))
             
             return (runLength, interruption.sample)
         }

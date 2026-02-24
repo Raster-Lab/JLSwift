@@ -45,6 +45,13 @@ public struct JPEGLSContextModel: Sendable {
     /// Used for run-length encoding context selection.
     private var runInterruptionIndex: [Int]
     
+    /// Run interruption accumulated absolute error (A_ri) per ITU-T.87 §4.5.3.
+    /// Initialised to A_init (same as regular context A initialisation).
+    private var runInterruptionA: Int
+    
+    /// Run interruption sample count (N_ri) per ITU-T.87 §4.5.3.
+    private var runInterruptionN: Int
+    
     /// Current run length counter
     private var runLength: Int
     
@@ -99,6 +106,10 @@ public struct JPEGLSContextModel: Sendable {
         
         // Initialize run-length state
         self.runInterruptionIndex = Array(repeating: 0, count: Self.runContextCount)
+        // Initialise run interruption statistics per ITU-T.87 §4.5.3.
+        // A_ri starts at A_init (same as regular context A); N_ri starts at 1.
+        self.runInterruptionA = max(2, (range + 32) / 64)
+        self.runInterruptionN = 1
         self.runLength = 0
         self.runIndex = 0
         
@@ -367,6 +378,47 @@ public struct JPEGLSContextModel: Sendable {
             return 0
         }
         return runInterruptionIndex[index]
+    }
+    
+    // MARK: - Run Interruption Context Statistics
+    
+    /// Compute the Golomb-Rice parameter k for run interruption coding.
+    ///
+    /// Per ITU-T.87 §4.5.3, the Golomb parameter for run interruption is the
+    /// smallest k such that N_ri × 2^k ≥ A_ri.
+    ///
+    /// - Returns: Golomb-Rice parameter k (non-negative integer)
+    public func computeRunInterruptionGolombK() -> Int {
+        let n = runInterruptionN
+        let a = runInterruptionA
+        guard n > 0 else { return 0 }
+        var k = 0
+        var threshold = n
+        while threshold < a && k < 16 {
+            threshold <<= 1
+            k += 1
+        }
+        return k
+    }
+    
+    /// Update run interruption context statistics after coding one interruption sample.
+    ///
+    /// Per ITU-T.87 §4.5.3, after coding each run interruption sample:
+    /// - A_ri += |Errval|
+    /// - N_ri += 1
+    /// - When N_ri reaches RESET: halve both A_ri and N_ri.
+    ///
+    /// - Parameter absError: Absolute value of the (sign-adjusted) prediction error
+    public mutating func updateRunInterruptionContext(absError: Int) {
+        runInterruptionA += absError
+        runInterruptionN += 1
+        if runInterruptionN >= parameters.reset {
+            runInterruptionA >>= 1
+            runInterruptionN >>= 1
+            if runInterruptionN == 0 {
+                runInterruptionN = 1
+            }
+        }
     }
 }
 

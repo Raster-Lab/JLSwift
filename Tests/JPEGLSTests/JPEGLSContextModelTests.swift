@@ -466,4 +466,101 @@ struct JPEGLSContextModelTests {
         #expect(context.getB(contextIndex: ctx2) == 8)
         #expect(context.getB(contextIndex: ctx3) == 13)
     }
+    
+    // MARK: - Run Interruption Context Statistics Tests
+    
+    @Test("Run interruption Golomb parameter initial value for 8-bit lossless")
+    func testRunInterruptionGolombKInitial8Bit() throws {
+        // For 8-bit lossless: RANGE = 256, A_init = max(2, (256+32)/64) = max(2,4) = 4, N=1
+        // k = smallest k s.t. N*2^k >= A_init → 1*2^2 = 4 >= 4 → k=2
+        let params = try JPEGLSPresetParameters.defaultParameters(bitsPerSample: 8)
+        let context = try JPEGLSContextModel(parameters: params, near: 0)
+        #expect(context.computeRunInterruptionGolombK() == 2)
+    }
+    
+    @Test("Run interruption Golomb parameter initial value for 16-bit lossless")
+    func testRunInterruptionGolombKInitial16Bit() throws {
+        // For 16-bit lossless: RANGE = 65536, A_init = max(2, (65536+32)/64) = max(2,1024) = 1024, N=1
+        // k = smallest k s.t. N*2^k >= A_init:
+        //   threshold=1: 1<1024→k=1,t=2; ...t=1024 at k=10; 1024<1024 is false → k=10
+        let params = try JPEGLSPresetParameters.defaultParameters(bitsPerSample: 16)
+        let context = try JPEGLSContextModel(parameters: params, near: 0)
+        let k = context.computeRunInterruptionGolombK()
+        #expect(k == 10)
+    }
+    
+    @Test("Run interruption Golomb parameter updates after context update")
+    func testRunInterruptionGolombKUpdates() throws {
+        let params = try JPEGLSPresetParameters.defaultParameters(bitsPerSample: 8)
+        var context = try JPEGLSContextModel(parameters: params, near: 0)
+        
+        let kInitial = context.computeRunInterruptionGolombK()
+        
+        // After updating with a large error, A_ri increases so k should increase
+        context.updateRunInterruptionContext(absError: 100)
+        let kAfterLargeError = context.computeRunInterruptionGolombK()
+        
+        // k can only increase or stay the same as A_ri grows
+        #expect(kAfterLargeError >= kInitial)
+    }
+    
+    @Test("Run interruption context statistics update per ITU-T.87")
+    func testRunInterruptionContextUpdate() throws {
+        // For 8-bit lossless: A_init=4, N_init=1
+        let params = try JPEGLSPresetParameters.defaultParameters(bitsPerSample: 8)
+        var context = try JPEGLSContextModel(parameters: params, near: 0)
+        
+        // Initial k should be 2 (A=4, N=1 → 2^2=4 >= 4)
+        #expect(context.computeRunInterruptionGolombK() == 2)
+        
+        // After one update with absError=0: A stays 4, N becomes 2
+        // k = smallest k s.t. 2*2^k >= 4 → 2*2^1=4 >= 4 → k=1
+        context.updateRunInterruptionContext(absError: 0)
+        #expect(context.computeRunInterruptionGolombK() == 1)
+        
+        // After another update with absError=0: A stays 4, N becomes 3
+        // k = smallest k s.t. 3*2^k >= 4 → 3*2^1=6 >= 4 → k=1
+        context.updateRunInterruptionContext(absError: 0)
+        #expect(context.computeRunInterruptionGolombK() == 1)
+    }
+    
+    @Test("Run interruption context resets when N reaches RESET")
+    func testRunInterruptionContextReset() throws {
+        let params = try JPEGLSPresetParameters(
+            maxValue: 255, threshold1: 3, threshold2: 7, threshold3: 21, reset: 4
+        )
+        var context = try JPEGLSContextModel(parameters: params, near: 0)
+        
+        // Repeatedly update to trigger the reset at N == RESET (4)
+        // Initial: A_init = max(2, (256+32)/64) = 4, N=1
+        // Update 1: A=4+5=9, N=2
+        context.updateRunInterruptionContext(absError: 5)
+        // Update 2: A=9+3=12, N=3
+        context.updateRunInterruptionContext(absError: 3)
+        // Update 3: N would become 4 == reset → halve: A=6, N=2
+        context.updateRunInterruptionContext(absError: 0)
+        
+        // After reset A=6, N=2 → k = smallest k s.t. 2*2^k >= 6 → 2*2^2=8 >= 6 → k=2
+        #expect(context.computeRunInterruptionGolombK() == 2)
+    }
+    
+    @Test("Run interruption round-trip: encoder and decoder use same k")
+    func testRunInterruptionRoundTripK() throws {
+        let params = try JPEGLSPresetParameters.defaultParameters(bitsPerSample: 8)
+        var encoderContext = try JPEGLSContextModel(parameters: params, near: 0)
+        var decoderContext = try JPEGLSContextModel(parameters: params, near: 0)
+        
+        // Both should produce identical initial k
+        #expect(encoderContext.computeRunInterruptionGolombK() ==
+                decoderContext.computeRunInterruptionGolombK())
+        
+        // After identical updates they should remain in sync
+        let errors = [3, 1, 7, 2, 5, 0, 4]
+        for e in errors {
+            encoderContext.updateRunInterruptionContext(absError: e)
+            decoderContext.updateRunInterruptionContext(absError: e)
+            #expect(encoderContext.computeRunInterruptionGolombK() ==
+                    decoderContext.computeRunInterruptionGolombK())
+        }
+    }
 }
