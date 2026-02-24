@@ -701,11 +701,11 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 - [x] 37 new unit tests covering table creation, validation, lookup, parser integration, encoder output, and decoder application (round-trip with inversion table)
 - [x] All 780 tests pass; test coverage maintained above 95%
 
-#### Phase 11.3: Extended Dimensions (LSE Type 4)
-- [ ] Implement parsing of LSE type 4 (extended X/Y dimensions > 65535)
-- [ ] Update frame header to support dimensions > 65535
-- [ ] Update encoder to emit LSE type 4 when dimensions exceed 16-bit range
-- [ ] Create unit tests for extended dimensions
+#### Phase 11.3: Extended Dimensions (LSE Type 4) ✅
+- [x] Implement parsing of LSE type 4 (extended X/Y dimensions > 65535)
+- [x] Update frame header to support dimensions > 65535
+- [x] Update encoder to emit LSE type 4 when dimensions exceed 16-bit range
+- [x] Create unit tests for extended dimensions
 
 #### Phase 11.4: Additional Part 2 Colour Transforms
 - [ ] Review ITU-T T.870 Annex A for additional colour transform codes

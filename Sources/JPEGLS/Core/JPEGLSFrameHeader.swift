@@ -59,10 +59,10 @@ public struct JPEGLSFrameHeader: Sendable, Equatable {
     /// Precision (bits per sample) - valid range: 2-16
     public let bitsPerSample: Int
     
-    /// Image height in pixels - valid range: 1-65535 (can be extended with LSE)
+    /// Image height in pixels - valid range: 1–65535 in standard SOF; up to 2^32–1 with LSE type 4
     public let height: Int
     
-    /// Image width in pixels - valid range: 1-65535 (can be extended with LSE)
+    /// Image width in pixels - valid range: 1–65535 in standard SOF; up to 2^32–1 with LSE type 4
     public let width: Int
     
     /// Number of components - valid range: 1-4 for baseline JPEG-LS
@@ -120,12 +120,15 @@ public struct JPEGLSFrameHeader: Sendable, Equatable {
             throw JPEGLSError.invalidBitsPerSample(bits: bitsPerSample)
         }
         
-        // Validate dimensions
+        // Validate dimensions.
+        // Standard JPEG-LS SOF supports up to 65535 per dimension; dimensions
+        // greater than 65535 use LSE type 4 (extended dimensions) per ITU-T.87 §5.1.1.4.
+        // Maximum supported dimension is 2^32 – 1 (32-bit LSE type 4 encoding).
         guard width > 0 && height > 0 else {
             throw JPEGLSError.invalidDimensions(width: width, height: height)
         }
         
-        guard width <= 65535 && height <= 65535 else {
+        guard width <= 0xFFFF_FFFF && height <= 0xFFFF_FFFF else {
             throw JPEGLSError.invalidDimensions(width: width, height: height)
         }
         

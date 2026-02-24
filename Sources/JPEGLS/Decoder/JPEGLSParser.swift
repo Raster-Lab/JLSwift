@@ -103,6 +103,8 @@ public final class JPEGLSParser {
         var mappingTables: [UInt8: JPEGLSMappingTable] = [:]
         var applicationMarkers: [(marker: JPEGLSMarker, data: Data)] = []
         var comments: [Data] = []
+        var extendedWidth: Int?
+        var extendedHeight: Int?
         
         // Parse marker segments until EOI
         while !reader.isAtEnd {
@@ -171,7 +173,7 @@ public final class JPEGLSParser {
                         reason: "Multiple SOF markers found"
                     )
                 }
-                frameHeader = try parseFrameHeader()
+                frameHeader = try parseFrameHeader(extendedWidth: extendedWidth, extendedHeight: extendedHeight)
                 
             case .startOfScan:
                 // Parse scan header
@@ -221,7 +223,9 @@ public final class JPEGLSParser {
                 try parseJPEGLSExtension(
                     frameHeader: frameHeader,
                     presetParameters: &presetParameters,
-                    mappingTables: &mappingTables
+                    mappingTables: &mappingTables,
+                    extendedWidth: &extendedWidth,
+                    extendedHeight: &extendedHeight
                 )
                 
             case .applicationMarker0, .applicationMarker1, .applicationMarker2,
@@ -294,15 +298,18 @@ public final class JPEGLSParser {
     }
     
     /// Parse frame header (SOF marker segment)
-    private func parseFrameHeader() throws -> JPEGLSFrameHeader {
+    private func parseFrameHeader(extendedWidth: Int? = nil, extendedHeight: Int? = nil) throws -> JPEGLSFrameHeader {
         let length = try reader.readUInt16()
         
         // Read precision (bits per sample)
         let bitsPerSample = Int(try reader.readByte())
         
-        // Read dimensions
-        let height = Int(try reader.readUInt16())
-        let width = Int(try reader.readUInt16())
+        // Read dimensions from SOF.  When a dimension is 0, the actual value comes
+        // from a preceding LSE type 4 (extended dimensions) segment per ITU-T.87 §5.1.1.4.
+        let sofHeight = Int(try reader.readUInt16())
+        let sofWidth  = Int(try reader.readUInt16())
+        let height = (sofHeight == 0) ? (extendedHeight ?? sofHeight) : sofHeight
+        let width  = (sofWidth  == 0) ? (extendedWidth  ?? sofWidth)  : sofWidth
         
         // Read component count
         let componentCount = Int(try reader.readByte())
@@ -401,7 +408,9 @@ public final class JPEGLSParser {
     private func parseJPEGLSExtension(
         frameHeader: JPEGLSFrameHeader?,
         presetParameters: inout JPEGLSPresetParameters?,
-        mappingTables: inout [UInt8: JPEGLSMappingTable]
+        mappingTables: inout [UInt8: JPEGLSMappingTable],
+        extendedWidth: inout Int?,
+        extendedHeight: inout Int?
     ) throws {
         let length = try reader.readUInt16()
         
@@ -516,9 +525,37 @@ public final class JPEGLSParser {
             mappingTables[tableID] = updatedTable
             
         case .extendedDimensions:
-            // Extended dimensions not yet supported - skip
-            let skipLength = Int(length) - 3
-            _ = try reader.readBytes(skipLength)
+            // Parse extended X/Y dimensions per ITU-T.87 §5.1.1.4.
+            // Format: Ll(2) + Id(1) + Wxy(1) + XSIZE(Wxy bytes) + YSIZE(Wxy bytes)
+            // remainingBytes = everything after Ll (2) and Id (1) that has already been read.
+            let remainingBytes = Int(length) - 3
+            guard remainingBytes >= 1 else {
+                throw JPEGLSError.invalidBitstreamStructure(
+                    reason: "Invalid LSE extended dimensions segment length: \(length)"
+                )
+            }
+            let wxy = Int(try reader.readByte())
+            // Wxy must be 1, 2, or 4 and the remaining bytes must be exactly 1 + 2*Wxy.
+            guard (wxy == 1 || wxy == 2 || wxy == 4) && remainingBytes == 1 + 2 * wxy else {
+                // Unsupported or malformed — skip remaining bytes gracefully.
+                let skipLength = remainingBytes - 1
+                if skipLength > 0 {
+                    _ = try reader.readBytes(skipLength)
+                }
+                return
+            }
+            // Read XSIZE (image width) as Wxy bytes, big-endian.
+            var xSize = 0
+            for _ in 0..<wxy {
+                xSize = (xSize << 8) | Int(try reader.readByte())
+            }
+            // Read YSIZE (image height) as Wxy bytes, big-endian.
+            var ySize = 0
+            for _ in 0..<wxy {
+                ySize = (ySize << 8) | Int(try reader.readByte())
+            }
+            extendedWidth  = xSize
+            extendedHeight = ySize
         }
     }
     

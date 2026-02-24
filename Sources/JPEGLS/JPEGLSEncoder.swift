@@ -82,6 +82,13 @@ public struct JPEGLSEncoder: Sendable {
         // Write SOI marker (Start of Image)
         writer.writeMarker(.startOfImage)
         
+        // Write LSE type 4 (extended dimensions) before SOF when either dimension > 65535
+        // per ITU-T.87 §5.1.1.4.
+        let frame = imageData.frameHeader
+        if frame.width > 65535 || frame.height > 65535 {
+            writeExtendedDimensions(frame, to: writer)
+        }
+        
         // Write frame header (SOF55)
         try writeFrameHeader(imageData.frameHeader, to: writer)
         
@@ -159,9 +166,9 @@ public struct JPEGLSEncoder: Sendable {
         // Precision (bits per sample)
         writer.writeByte(UInt8(frameHeader.bitsPerSample))
         
-        // Dimensions
-        writer.writeUInt16(UInt16(frameHeader.height))
-        writer.writeUInt16(UInt16(frameHeader.width))
+        // Dimensions — use 0 for any dimension > 65535 (encoded in preceding LSE type 4)
+        writer.writeUInt16(UInt16(frameHeader.height > 65535 ? 0 : frameHeader.height))
+        writer.writeUInt16(UInt16(frameHeader.width  > 65535 ? 0 : frameHeader.width))
         
         // Component count
         writer.writeByte(UInt8(frameHeader.componentCount))
@@ -199,6 +206,31 @@ public struct JPEGLSEncoder: Sendable {
         
         // RESET
         writer.writeUInt16(UInt16(parameters.reset))
+    }
+    
+    /// Write extended dimensions LSE type 4 marker segment per ITU-T.87 §5.1.1.4.
+    ///
+    /// Emitted before the SOF marker when either image dimension exceeds 65535.
+    /// The corresponding SOF fields for those dimensions will contain 0.
+    ///
+    /// - Parameters:
+    ///   - frameHeader: Frame header whose dimensions should be encoded.
+    ///   - writer: Destination bitstream writer.
+    private func writeExtendedDimensions(_ frameHeader: JPEGLSFrameHeader, to writer: JPEGLSBitstreamWriter) {
+        var payload = Data()
+        payload.append(JPEGLSExtensionType.extendedDimensions.rawValue)  // Id = 0x04
+        payload.append(4)  // Wxy = 4 (32-bit dimensions)
+        // XSIZE (width) as 4 bytes big-endian
+        payload.append(UInt8((frameHeader.width >> 24) & 0xFF))
+        payload.append(UInt8((frameHeader.width >> 16) & 0xFF))
+        payload.append(UInt8((frameHeader.width >> 8) & 0xFF))
+        payload.append(UInt8(frameHeader.width & 0xFF))
+        // YSIZE (height) as 4 bytes big-endian
+        payload.append(UInt8((frameHeader.height >> 24) & 0xFF))
+        payload.append(UInt8((frameHeader.height >> 16) & 0xFF))
+        payload.append(UInt8((frameHeader.height >> 8) & 0xFF))
+        payload.append(UInt8(frameHeader.height & 0xFF))
+        writer.writeMarkerSegment(marker: .jpegLSExtension, payload: payload)
     }
     
     /// Write a mapping table (LSE type 2) to the bitstream.

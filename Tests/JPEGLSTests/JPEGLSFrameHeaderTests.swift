@@ -66,12 +66,9 @@ struct JPEGLSFrameHeaderTests {
         #expect(throws: JPEGLSError.self) {
             try JPEGLSFrameHeader.grayscale(bitsPerSample: 8, width: 100, height: 0)
         }
-        #expect(throws: JPEGLSError.self) {
-            try JPEGLSFrameHeader.grayscale(bitsPerSample: 8, width: 65536, height: 100)
-        }
     }
     
-    @Test("Maximum valid dimensions")
+    @Test("Maximum standard SOF dimensions are valid (65535×65535)")
     func testMaximumDimensions() throws {
         let header = try JPEGLSFrameHeader.grayscale(
             bitsPerSample: 8,
@@ -80,6 +77,17 @@ struct JPEGLSFrameHeaderTests {
         )
         #expect(header.width == 65535)
         #expect(header.height == 65535)
+    }
+    
+    @Test("Extended dimensions > 65535 are valid for LSE type 4")
+    func testExtendedDimensions() throws {
+        let header = try JPEGLSFrameHeader.grayscale(
+            bitsPerSample: 8,
+            width: 100_000,
+            height: 80_000
+        )
+        #expect(header.width == 100_000)
+        #expect(header.height == 80_000)
     }
     
     @Test("Invalid component count throws error")
