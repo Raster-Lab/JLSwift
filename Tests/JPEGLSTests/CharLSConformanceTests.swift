@@ -481,7 +481,7 @@ struct CharLSBitExactComparisonTests {
     ]
     
     /// Test bit-exact comparison between decoded JPEG-LS and reference image
-    @Test("Bit-exact comparison with CharLS reference", .disabled("Decoder does not yet produce bit-exact output for CharLS reference files"), arguments: comparisonTestCases)
+    @Test("Bit-exact comparison with CharLS reference", arguments: comparisonTestCases)
     func testBitExactComparison(testCase: ComparisonTestCase) throws {
         // Skip sub-sampled tests for now
         guard !testCase.isSubSampled else {
@@ -561,7 +561,7 @@ struct CharLSBitExactComparisonTests {
     }
     
     /// Test that we can decode all CharLS reference files without errors
-    @Test("Decode all CharLS reference files", .disabled("Decoder encounters premature end of bitstream on some CharLS reference files"))
+    @Test("Decode all CharLS reference files", )
     func testDecodeAllReferenceFiles() throws {
         let decoder = JPEGLSDecoder()
         
