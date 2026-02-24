@@ -343,7 +343,8 @@ struct JPEGLSRunModeTests {
         
         let encoded = runMode.encodeRunInterruption(
             interruptionValue: 150,
-            runValue: 100
+            runValue: 100,
+            topValue: 100
         )
         
         #expect(encoded.interruptionValue == 150)
@@ -359,13 +360,14 @@ struct JPEGLSRunModeTests {
         
         let encoded = runMode.encodeRunInterruption(
             interruptionValue: 75,
-            runValue: 100
+            runValue: 100,
+            topValue: 100
         )
         
         #expect(encoded.interruptionValue == 75)
         #expect(encoded.prediction == 100)
-        #expect(encoded.error == -25)
-        #expect(encoded.mappedError == 49)  // -2 * (-25) - 1
+        #expect(encoded.error == 231)  // -25 + 256 (modular correction, RItype=1)
+        #expect(encoded.mappedError == 462)  // 2 * 231
     }
     
     @Test("Encode run interruption with zero error")
@@ -375,7 +377,8 @@ struct JPEGLSRunModeTests {
         
         let encoded = runMode.encodeRunInterruption(
             interruptionValue: 128,
-            runValue: 128
+            runValue: 128,
+            topValue: 128
         )
         
         #expect(encoded.error == 0)
@@ -390,12 +393,12 @@ struct JPEGLSRunModeTests {
         // Large positive error that exceeds half range
         let encoded = runMode.encodeRunInterruption(
             interruptionValue: 255,
-            runValue: 10
+            runValue: 10,
+            topValue: 10
         )
         
-        // Error = 245, range = 256, half = 128
-        // 245 > 127, so error -= 256 → -11
-        #expect(encoded.error == -11)
+        // Error = 245 (RItype=1, modular correction: 245 < 256, no wrap)
+        #expect(encoded.error == 245)
     }
     
     @Test("Encode run interruption with modular reduction (negative)")
@@ -406,11 +409,11 @@ struct JPEGLSRunModeTests {
         // Large negative error
         let encoded = runMode.encodeRunInterruption(
             interruptionValue: 10,
-            runValue: 255
+            runValue: 255,
+            topValue: 255
         )
         
-        // Error = -245, range = 256, -half = -128
-        // -245 < -128, so error += 256 → 11
+        // Error = 10-255 = -245, +256 = 11 (modular correction, RItype=1)
         #expect(encoded.error == 11)
     }
     
@@ -422,14 +425,16 @@ struct JPEGLSRunModeTests {
         // At minimum value
         let encoded1 = runMode.encodeRunInterruption(
             interruptionValue: 0,
-            runValue: 0
+            runValue: 0,
+            topValue: 0
         )
         #expect(encoded1.error == 0)
         
         // At maximum value
         let encoded2 = runMode.encodeRunInterruption(
             interruptionValue: 255,
-            runValue: 255
+            runValue: 255,
+            topValue: 255
         )
         #expect(encoded2.error == 0)
     }
@@ -646,7 +651,8 @@ struct JPEGLSRunModeTests {
         // Step 4: Encode the interruption
         let encodedInterruption = runMode.encodeRunInterruption(
             interruptionValue: 150,
-            runValue: 100
+            runValue: 100,
+            topValue: 100
         )
         #expect(encodedInterruption.error == 50)
         

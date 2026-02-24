@@ -644,12 +644,15 @@ public struct JPEGLSEncoder: Sendable {
                             
                             let interruption = runMode.encodeRunInterruption(
                                 interruptionValue: interruptionNeighbors.actual,
-                                runValue: runValue
+                                runValue: runValue,
+                                topValue: interruptionNeighbors.top
                             )
                             
+                            let riType = (abs(runValue - interruptionNeighbors.top) <= near) ? 1 : 0
                             writeRunInterruptionBits(
                                 mappedError: interruption.mappedError,
                                 absError: abs(interruption.error),
+                                riType: riType,
                                 context: &context,
                                 regularMode: regularMode,
                                 writer: writer
@@ -778,12 +781,15 @@ public struct JPEGLSEncoder: Sendable {
                                 
                                 let interruption = runMode.encodeRunInterruption(
                                     interruptionValue: interruptionNeighbors.actual,
-                                    runValue: runValue
+                                    runValue: runValue,
+                                    topValue: interruptionNeighbors.top
                                 )
                                 
+                                let riType = (abs(runValue - interruptionNeighbors.top) <= scanHeader.near) ? 1 : 0
                                 writeRunInterruptionBits(
                                     mappedError: interruption.mappedError,
                                     absError: abs(interruption.error),
+                                    riType: riType,
                                     context: &context,
                                     regularMode: regularMode,
                                     writer: writer
@@ -968,17 +974,19 @@ public struct JPEGLSEncoder: Sendable {
     /// - Parameters:
     ///   - mappedError: Non-negative mapped prediction error (MErrval)
     ///   - absError: Absolute value of the signed prediction error (for context update)
+    ///   - riType: Run interruption type (0 = Ra≠Rb, 1 = Ra==Rb)
     ///   - context: Context model (provides and receives run interruption stats)
     ///   - regularMode: Regular mode encoder (provides golombEncode helper)
     ///   - writer: Bitstream writer
     private func writeRunInterruptionBits(
         mappedError: Int,
         absError: Int,
+        riType: Int,
         context: inout JPEGLSContextModel,
         regularMode: JPEGLSRegularMode,
         writer: JPEGLSBitstreamWriter
     ) {
-        let k = context.computeRunInterruptionGolombK()
+        let k = context.computeRunInterruptionGolombK(riType: riType)
         let (unaryLength, remainder) = regularMode.golombEncode(value: mappedError, k: k)
         for _ in 0..<unaryLength {
             writer.writeBits(0, count: 1)
@@ -988,7 +996,7 @@ public struct JPEGLSEncoder: Sendable {
             writer.writeBits(UInt32(remainder), count: k)
         }
         // Update run interruption context statistics per ITU-T.87 §4.5.3
-        context.updateRunInterruptionContext(absError: absError)
+        context.updateRunInterruptionContext(absError: absError, riType: riType)
     }
     
     /// Write run termination and remainder bits to bitstream

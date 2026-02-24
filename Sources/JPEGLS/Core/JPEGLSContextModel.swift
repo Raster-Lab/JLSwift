@@ -46,11 +46,13 @@ public struct JPEGLSContextModel: Sendable {
     private var runInterruptionIndex: [Int]
     
     /// Run interruption accumulated absolute error (A_ri) per ITU-T.87 §4.5.3.
-    /// Initialised to A_init (same as regular context A initialisation).
-    private var runInterruptionA: Int
+    /// Two entries indexed by RItype (0 = Ra ≠ Rb, 1 = Ra == Rb).
+    /// Each initialised to A_init (same as regular context A initialisation).
+    private var runInterruptionA: [Int]
     
     /// Run interruption sample count (N_ri) per ITU-T.87 §4.5.3.
-    private var runInterruptionN: Int
+    /// Two entries indexed by RItype (0 = Ra ≠ Rb, 1 = Ra == Rb).
+    private var runInterruptionN: [Int]
     
     /// Current run length counter
     private var runLength: Int
@@ -107,9 +109,11 @@ public struct JPEGLSContextModel: Sendable {
         // Initialize run-length state
         self.runInterruptionIndex = Array(repeating: 0, count: Self.runContextCount)
         // Initialise run interruption statistics per ITU-T.87 §4.5.3.
-        // A_ri starts at A_init (same as regular context A); N_ri starts at 1.
-        self.runInterruptionA = max(2, (range + 32) / 64)
-        self.runInterruptionN = 1
+        // Two contexts indexed by RItype (0 = Ra≠Rb, 1 = Ra==Rb).
+        // A_ri starts at A_init; N_ri starts at 1 for each context.
+        let aInitVal = max(2, (range + 32) / 64)
+        self.runInterruptionA = [aInitVal, aInitVal]
+        self.runInterruptionN = [1, 1]
         self.runLength = 0
         self.runIndex = 0
         
@@ -385,12 +389,15 @@ public struct JPEGLSContextModel: Sendable {
     /// Compute the Golomb-Rice parameter k for run interruption coding.
     ///
     /// Per ITU-T.87 §4.5.3, the Golomb parameter for run interruption is the
-    /// smallest k such that N_ri × 2^k ≥ A_ri.
+    /// smallest k such that N_ri × 2^k ≥ A_ri. Two independent contexts are
+    /// maintained, one for each RItype (0 = Ra≠Rb, 1 = Ra==Rb).
     ///
+    /// - Parameter riType: Run interruption type (0 or 1). Defaults to 0.
     /// - Returns: Golomb-Rice parameter k (non-negative integer)
-    public func computeRunInterruptionGolombK() -> Int {
-        let n = runInterruptionN
-        let a = runInterruptionA
+    public func computeRunInterruptionGolombK(riType: Int = 0) -> Int {
+        let idx = max(0, min(1, riType))
+        let n = runInterruptionN[idx]
+        let a = runInterruptionA[idx]
         guard n > 0 else { return 0 }
         var k = 0
         var threshold = n
@@ -408,15 +415,18 @@ public struct JPEGLSContextModel: Sendable {
     /// - N_ri += 1
     /// - When N_ri reaches RESET: halve both A_ri and N_ri.
     ///
-    /// - Parameter absError: Absolute value of the (sign-adjusted) prediction error
-    public mutating func updateRunInterruptionContext(absError: Int) {
-        runInterruptionA += absError
-        runInterruptionN += 1
-        if runInterruptionN >= parameters.reset {
-            runInterruptionA >>= 1
-            runInterruptionN >>= 1
-            if runInterruptionN == 0 {
-                runInterruptionN = 1
+    /// - Parameters:
+    ///   - absError: Absolute value of the (sign-adjusted) prediction error
+    ///   - riType: Run interruption type (0 or 1). Defaults to 0.
+    public mutating func updateRunInterruptionContext(absError: Int, riType: Int = 0) {
+        let idx = max(0, min(1, riType))
+        runInterruptionA[idx] += absError
+        runInterruptionN[idx] += 1
+        if runInterruptionN[idx] >= parameters.reset {
+            runInterruptionA[idx] >>= 1
+            runInterruptionN[idx] >>= 1
+            if runInterruptionN[idx] == 0 {
+                runInterruptionN[idx] = 1
             }
         }
     }

@@ -147,36 +147,60 @@ public struct JPEGLSRunModeDecoder: Sendable {
     
     // MARK: - Run Interruption Decoding
     
-    /// Decode a run interruption sample.
+    /// Decode a run interruption sample per ITU-T.87 §A.7.
     ///
-    /// When a run is interrupted, the differing pixel value is encoded
-    /// using a prediction error similar to regular mode. This method
-    /// reverses that encoding.
+    /// When a run is interrupted, the differing pixel is encoded using a
+    /// prediction based on Ra (run value) and Rb (top pixel at the interruption
+    /// position). The prediction and sign depend on which is larger:
+    /// - If Ra ≥ Rb: Pred = Ra, Isign = +1
+    /// - If Ra < Rb: Pred = Rb, Isign = -1
     ///
-    /// Per ITU-T.87 Section 4.5.4:
-    /// - The prediction is the run value (Ra == Rb)
-    /// - MErrval is decoded using Golomb-Rice from bitstream
-    /// - Errval is unmapped from non-negative
-    /// - Sample = prediction + Errval
+    /// RItype (0 = Ra≠Rb, 1 = Ra==Rb) determines an additional ±1 correction
+    /// applied by the encoder to avoid redundant zero-coding in lossless mode.
     ///
     /// - Parameters:
     ///   - mappedError: Non-negative mapped error (MErrval) from bitstream
-    ///   - runValue: The value of the run (Ra == Rb)
+    ///   - runValue: Ra — the value of the run (left neighbour at run start)
+    ///   - topValue: Rb — the top (above) neighbour at the interruption position
     /// - Returns: Decoded run interruption result with sample value
     public func decodeRunInterruption(
         mappedError: Int,
-        runValue: Int
+        runValue: Int,
+        topValue: Int
     ) -> DecodedRunInterruption {
-        // The prediction is simply the run value
-        let prediction = runValue
+        // Determine RItype and prediction per ITU-T.87 §A.7
+        let riType = (abs(runValue - topValue) <= near) ? 1 : 0
+        let prediction: Int
+        let sign: Int
+        if runValue >= topValue {
+            prediction = runValue
+            sign = 1
+        } else {
+            prediction = topValue
+            sign = -1
+        }
         
-        // Unmap from non-negative to signed error
-        let error = unmapError(mappedError)
+        // Unmap MErrval to signed Errval
+        var errval: Int
+        if mappedError % 2 == 0 {
+            errval = mappedError / 2
+        } else {
+            errval = -((mappedError + 1) / 2)
+        }
         
-        // Compute raw sample value
-        var sample = prediction + error
+        // Reverse the RItype==0 encoder adjustment (encoder decremented Errval by 1 mod RANGE)
+        if riType == 0 {
+            errval += 1
+            let range = parameters.maxValue + 1
+            if errval > (range - 1) / 2 {
+                errval -= range
+            }
+        }
         
-        // Apply modular reduction if necessary
+        // Reconstruct sample: Tpred + Isign × Errval
+        var sample = prediction + sign * errval
+        
+        // Modular reduction
         let range = parameters.maxValue + 1
         if sample < 0 {
             sample += range
@@ -190,7 +214,7 @@ public struct JPEGLSRunModeDecoder: Sendable {
         return DecodedRunInterruption(
             prediction: prediction,
             mappedError: mappedError,
-            error: error,
+            error: errval,
             sample: sample
         )
     }
@@ -222,18 +246,20 @@ public struct JPEGLSRunModeDecoder: Sendable {
     ///   - unaryCount: Number of zeros in unary prefix (quotient)
     ///   - remainder: Binary remainder (k bits)
     ///   - k: Golomb-Rice parameter
-    ///   - runValue: The value of the run (Ra == Rb)
+    ///   - runValue: Ra — the value of the run (left neighbour at run start)
+    ///   - topValue: Rb — the top neighbour at the interruption position
     /// - Returns: Decoded run interruption result
     public func decodeRunInterruptionFromBits(
         unaryCount: Int,
         remainder: Int,
         k: Int,
-        runValue: Int
+        runValue: Int,
+        topValue: Int
     ) -> DecodedRunInterruption {
         // Reconstruct mapped error from Golomb-Rice encoding
         let mappedError = (unaryCount << k) | remainder
         
-        return decodeRunInterruption(mappedError: mappedError, runValue: runValue)
+        return decodeRunInterruption(mappedError: mappedError, runValue: runValue, topValue: topValue)
     }
     
     // MARK: - Context Adaptation
@@ -326,7 +352,8 @@ public struct JPEGLSRunModeDecoder: Sendable {
     ///   - continuationBits: Number of '1' bits representing full blocks
     ///   - remainder: Remainder bits
     ///   - runIndex: Current run index
-    ///   - runValue: The pixel value for the run (Ra == Rb)
+    ///   - runValue: Ra — the pixel value for the run
+    ///   - topValue: Rb — the top neighbour at the interruption position
     ///   - isRunTerminated: Whether the run was interrupted (not at end of line)
     ///   - interruptionMappedError: Mapped error for interruption sample (if terminated)
     /// - Returns: Complete decoded run result
@@ -335,6 +362,7 @@ public struct JPEGLSRunModeDecoder: Sendable {
         remainder: Int,
         runIndex: Int,
         runValue: Int,
+        topValue: Int,
         isRunTerminated: Bool,
         interruptionMappedError: Int?
     ) -> CompleteDecodedRun {
@@ -358,7 +386,8 @@ public struct JPEGLSRunModeDecoder: Sendable {
         if isRunTerminated, let mappedError = interruptionMappedError {
             let interruption = decodeRunInterruption(
                 mappedError: mappedError,
-                runValue: runValue
+                runValue: runValue,
+                topValue: topValue
             )
             interruptionSample = interruption.sample
             decodedInterruption = interruption

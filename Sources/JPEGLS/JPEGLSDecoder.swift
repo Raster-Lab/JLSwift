@@ -277,19 +277,24 @@ public struct JPEGLSDecoder: Sendable {
         let componentCount = scanHeader.componentCount
         
         // Initialize pixel buffers for all components
-        var componentPixels = (0..<componentCount).map { componentId in
+        var componentPixels = (0..<componentCount).map { _ in
             return Array(repeating: Array(repeating: 0, count: frameHeader.width), count: frameHeader.height)
         }
         
-        // Initialize shared decoder and context (one context shared across all components in interleaved mode)
+        // Initialize decoder and run decoder (stateless — safe to share across components)
         let decoder = try JPEGLSRegularModeDecoder(parameters: parameters, near: scanHeader.near)
         let runDecoder = try JPEGLSRunModeDecoder(parameters: parameters, near: scanHeader.near)
-        var context = try JPEGLSContextModel(parameters: parameters, near: scanHeader.near)
+        // Per ITU-T.87 §A.3.5, in line-interleaved (ILV=1) mode each component has its
+        // own independent context statistics, unlike sample-interleaved (ILV=2) which uses
+        // a single shared context cycling through components.
+        var contexts = try (0..<componentCount).map { _ in
+            try JPEGLSContextModel(parameters: parameters, near: scanHeader.near)
+        }
         
         // Decode line by line, all components per line
         for row in 0..<frameHeader.height {
             for componentIndex in 0..<componentCount {
-                // Decode one line for this component
+                // Decode one line for this component using its own context
                 try decodeLineForComponent(
                     reader: reader,
                     pixels: &componentPixels[componentIndex],
@@ -297,7 +302,7 @@ public struct JPEGLSDecoder: Sendable {
                     width: frameHeader.width,
                     decoder: decoder,
                     runDecoder: runDecoder,
-                    context: &context,
+                    context: &contexts[componentIndex],
                     scanHeader: scanHeader,
                     parameters: parameters
                 )
@@ -421,6 +426,10 @@ public struct JPEGLSDecoder: Sendable {
                         context: &context,
                         runValue: a,
                         remainingInLine: width - col,
+                        currentRow: row,
+                        currentCol: col,
+                        pixels: pixels,
+                        imageWidth: width,
                         parameters: parameters,
                         near: scanHeader.near
                     )
@@ -485,6 +494,10 @@ public struct JPEGLSDecoder: Sendable {
                     context: &context,
                     runValue: a,
                     remainingInLine: width - col,
+                    currentRow: row,
+                    currentCol: col,
+                    pixels: pixels,
+                    imageWidth: width,
                     parameters: parameters,
                     near: scanHeader.near
                 )
@@ -597,6 +610,10 @@ public struct JPEGLSDecoder: Sendable {
         context: inout JPEGLSContextModel,
         runValue: Int,
         remainingInLine: Int,
+        currentRow: Int,
+        currentCol: Int,
+        pixels: [[Int]],
+        imageWidth: Int,
         parameters: JPEGLSPresetParameters,
         near: Int
     ) throws -> (runLength: Int, interruptionPixel: Int?) {
@@ -610,21 +627,35 @@ public struct JPEGLSDecoder: Sendable {
         
         // If run ends before end of line, decode interruption pixel
         if runLength < remainingInLine {
+            // Determine Rb: top neighbour at the interruption position per ITU-T.87 §A.7
+            let interruptionCol = currentCol + runLength
+            let rb: Int
+            if currentRow > 0 {
+                let col = min(interruptionCol, imageWidth - 1)
+                rb = pixels[currentRow - 1][col]
+            } else {
+                rb = 0
+            }
+            
+            // RItype for k selection per ITU-T.87 §4.5.3
+            let riType = (abs(runValue - rb) <= near) ? 1 : 0
+            
             // Per ITU-T.87 §4.5.3, the Golomb parameter for run interruption is
             // computed adaptively from run interruption context statistics (A_ri, N_ri).
-            let k = context.computeRunInterruptionGolombK()
+            let k = context.computeRunInterruptionGolombK(riType: riType)
             
             // Read Golomb-Rice encoded interruption error
             let mappedError = try readGolombCode(reader: reader, k: k)
             
-            // Decode interruption sample
+            // Decode interruption sample with correct Rb
             let interruption = runDecoder.decodeRunInterruption(
                 mappedError: mappedError,
-                runValue: runValue
+                runValue: runValue,
+                topValue: rb
             )
             
             // Update run interruption context statistics per ITU-T.87 §4.5.3
-            context.updateRunInterruptionContext(absError: abs(interruption.error))
+            context.updateRunInterruptionContext(absError: abs(interruption.error), riType: riType)
             
             return (runLength, interruption.sample)
         }

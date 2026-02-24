@@ -302,7 +302,8 @@ struct JPEGLSRunModeDecoderTests {
         // mappedError = 100 → error = 50
         let decoded = decoder.decodeRunInterruption(
             mappedError: 100,
-            runValue: 100
+            runValue: 100,
+            topValue: 100
         )
         
         #expect(decoded.prediction == 100)
@@ -319,7 +320,8 @@ struct JPEGLSRunModeDecoderTests {
         // mappedError = 49 → error = -25
         let decoded = decoder.decodeRunInterruption(
             mappedError: 49,
-            runValue: 100
+            runValue: 100,
+            topValue: 100
         )
         
         #expect(decoded.prediction == 100)
@@ -335,7 +337,8 @@ struct JPEGLSRunModeDecoderTests {
         
         let decoded = decoder.decodeRunInterruption(
             mappedError: 0,
-            runValue: 128
+            runValue: 128,
+            topValue: 128
         )
         
         #expect(decoded.error == 0)
@@ -350,7 +353,8 @@ struct JPEGLSRunModeDecoderTests {
         // runValue=250, error=20 → 270 > 255, wraps to 14
         let decoded = decoder.decodeRunInterruption(
             mappedError: 40,  // 40/2 = 20
-            runValue: 250
+            runValue: 250,
+            topValue: 250
         )
         
         #expect(decoded.error == 20)
@@ -365,7 +369,8 @@ struct JPEGLSRunModeDecoderTests {
         // runValue=5, error=-10 → -5 < 0, wraps to 251
         let decoded = decoder.decodeRunInterruption(
             mappedError: 19,  // -(19+1)/2 = -10
-            runValue: 5
+            runValue: 5,
+            topValue: 5
         )
         
         #expect(decoded.error == -10)
@@ -378,11 +383,11 @@ struct JPEGLSRunModeDecoderTests {
         let decoder = try JPEGLSRunModeDecoder(parameters: params, near: 0)
         
         // At minimum value
-        let decoded1 = decoder.decodeRunInterruption(mappedError: 0, runValue: 0)
+        let decoded1 = decoder.decodeRunInterruption(mappedError: 0, runValue: 0, topValue: 0)
         #expect(decoded1.sample == 0)
         
         // At maximum value
-        let decoded2 = decoder.decodeRunInterruption(mappedError: 0, runValue: 255)
+        let decoded2 = decoder.decodeRunInterruption(mappedError: 0, runValue: 255, topValue: 255)
         #expect(decoded2.sample == 255)
     }
     
@@ -396,7 +401,8 @@ struct JPEGLSRunModeDecoderTests {
             unaryCount: 2,
             remainder: 4,
             k: 3,
-            runValue: 100
+            runValue: 100,
+            topValue: 100
         )
         
         #expect(decoded.mappedError == 20)
@@ -570,6 +576,7 @@ struct JPEGLSRunModeDecoderTests {
             remainder: 2,
             runIndex: 12,
             runValue: 100,
+            topValue: 100,
             isRunTerminated: false,
             interruptionMappedError: nil
         )
@@ -595,6 +602,7 @@ struct JPEGLSRunModeDecoderTests {
             remainder: 4,
             runIndex: 12,
             runValue: 100,
+            topValue: 100,
             isRunTerminated: true,
             interruptionMappedError: 60  // 60/2 = 30 → sample = 130
         )
@@ -618,6 +626,7 @@ struct JPEGLSRunModeDecoderTests {
             remainder: 0,
             runIndex: 5,
             runValue: 128,
+            topValue: 128,
             isRunTerminated: false,
             interruptionMappedError: nil
         )
@@ -707,12 +716,14 @@ struct JPEGLSRunModeDecoderTests {
         for (interruptionValue, runValue) in testCases {
             let encoded = encoder.encodeRunInterruption(
                 interruptionValue: interruptionValue,
-                runValue: runValue
+                runValue: runValue,
+                topValue: runValue
             )
             
             let decoded = decoder.decodeRunInterruption(
                 mappedError: encoded.mappedError,
-                runValue: runValue
+                runValue: runValue,
+                topValue: runValue
             )
             
             #expect(
@@ -778,7 +789,8 @@ struct JPEGLSRunModeDecoderTests {
         // Encode interruption
         let encodedInterruption = encoder.encodeRunInterruption(
             interruptionValue: interruptionValue,
-            runValue: runValue
+            runValue: runValue,
+            topValue: runValue
         )
         
         // Decode complete run
@@ -787,6 +799,7 @@ struct JPEGLSRunModeDecoderTests {
             remainder: encodedRun.remainder,
             runIndex: 12,
             runValue: runValue,
+            topValue: runValue,
             isRunTerminated: true,
             interruptionMappedError: encodedInterruption.mappedError
         )
@@ -939,7 +952,8 @@ struct JPEGLSRunModeDecoderTests {
         
         let decoded = decoder.decodeRunInterruption(
             mappedError: 10,
-            runValue: 100
+            runValue: 100,
+            topValue: 100
         )
         
         // Should work in near-lossless mode
@@ -962,7 +976,8 @@ struct JPEGLSRunModeDecoderTests {
         
         let decoded = decoder.decodeRunInterruption(
             mappedError: 0,
-            runValue: 32768
+            runValue: 32768,
+            topValue: 32768
         )
         
         #expect(decoded.sample == 32768)

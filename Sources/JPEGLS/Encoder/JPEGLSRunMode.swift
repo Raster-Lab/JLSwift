@@ -183,47 +183,66 @@ public struct JPEGLSRunMode: Sendable {
     
     // MARK: - Run Interruption
     
-    /// Encode a run interruption sample.
+    /// Encode a run interruption sample per ITU-T.87 §A.7.
     ///
-    /// When a run is interrupted by a different pixel value, that pixel
-    /// is encoded using a prediction and error mapping similar to regular mode,
-    /// but using a special run-interruption context.
+    /// When a run is interrupted by a different pixel value, that pixel is encoded
+    /// using a prediction based on Ra (run value) and Rb (top pixel at the
+    /// interruption position). The prediction and sign depend on which is larger:
+    /// - If Ra ≥ Rb: Pred = Ra, Isign = +1
+    /// - If Ra < Rb: Pred = Rb, Isign = -1
     ///
-    /// Per ITU-T.87 Section 4.5.4:
-    /// - Predict the interruption value using the run value (Ra == Rb)
-    /// - Compute prediction error: Errval = x - Ra
-    /// - Map to non-negative: MErrval
-    /// - Encode using Golomb-Rice with run-interruption context
+    /// RItype (0 = Ra≠Rb, 1 = Ra==Rb) determines a ±1 correction that removes
+    /// redundant zero-coding in lossless mode.
     ///
     /// - Parameters:
     ///   - interruptionValue: Actual pixel value that interrupted the run
-    ///   - runValue: The value of the run (Ra == Rb)
+    ///   - runValue: Ra — the value of the run (left neighbour at run start)
+    ///   - topValue: Rb — the top neighbour at the interruption position
     /// - Returns: Encoded interruption result
     public func encodeRunInterruption(
         interruptionValue: Int,
-        runValue: Int
+        runValue: Int,
+        topValue: Int
     ) -> EncodedRunInterruption {
-        // Simple prediction: use the run value
-        let prediction = runValue
+        // Determine RItype and prediction per ITU-T.87 §A.7
+        let riType = (abs(runValue - topValue) <= near) ? 1 : 0
+        let prediction: Int
+        let sign: Int
+        if runValue >= topValue {
+            prediction = runValue
+            sign = 1
+        } else {
+            prediction = topValue
+            sign = -1
+        }
         
-        // Compute prediction error
-        var error = interruptionValue - prediction
+        // Compute sign-adjusted error: errval = Isign × (x − Tpred)
+        var errval = sign * (interruptionValue - prediction)
         
-        // Apply modular reduction if near-lossless
+        // Modular correction: bring errval into [0, RANGE)
         let range = parameters.maxValue + 1
-        if error > (range - 1) / 2 {
-            error -= range
-        } else if error < -(range / 2) {
-            error += range
+        if errval < 0 {
+            errval += range
+        }
+        if errval >= range {
+            errval -= range
+        }
+        
+        // For RItype == 0: decrement by 1 (mod RANGE) to remove redundant zero-coding
+        if riType == 0 {
+            errval -= 1
+            if errval < 0 {
+                errval += range
+            }
         }
         
         // Map to non-negative for Golomb coding
-        let mappedError = mapErrorToNonNegative(error)
+        let mappedError = mapErrorToNonNegative(errval)
         
         return EncodedRunInterruption(
             interruptionValue: interruptionValue,
             prediction: prediction,
-            error: error,
+            error: errval,
             mappedError: mappedError
         )
     }
