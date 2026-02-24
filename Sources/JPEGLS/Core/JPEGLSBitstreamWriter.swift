@@ -40,27 +40,21 @@ public final class JPEGLSBitstreamWriter {
         return data.count
     }
     
-    /// Write a single byte to the stream
+    /// Write a single byte to the stream (no stuffing).
     ///
-    /// Performs marker stuffing if byte is 0xFF (writes 0xFF 0x00)
+    /// This method writes raw bytes for structured data (marker segments, headers).
+    /// Bit-level stuffing for compressed scan data is handled automatically by `writeBits`.
     ///
     /// - Parameter byte: The byte to write
     public func writeByte(_ byte: UInt8) {
         data.append(byte)
-        
-        // Marker stuffing: 0xFF -> 0xFF 0x00
-        if byte == JPEGLSMarker.markerPrefix {
-            data.append(0x00)
-        }
     }
     
-    /// Write multiple bytes to the stream
+    /// Write multiple bytes to the stream (no stuffing).
     ///
     /// - Parameter bytes: The bytes to write
     public func writeBytes(_ bytes: Data) {
-        for byte in bytes {
-            writeByte(byte)
-        }
+        data.append(contentsOf: bytes)
     }
     
     /// Write a 16-bit big-endian value
@@ -83,9 +77,15 @@ public final class JPEGLSBitstreamWriter {
         data.append(marker.rawValue)
     }
     
-    /// Write bits to the bitstream
+    /// Write bits to the bitstream with JPEG-LS bit-level stuffing.
     ///
-    /// Accumulates bits in buffer and writes complete bytes with stuffing
+    /// Accumulates bits in a buffer and flushes complete bytes. Implements bit-level
+    /// byte stuffing per ISO 14495-1 §9.1: when a byte of 0xFF is emitted, a 0 stuff bit
+    /// is inserted at the next bit position, so the subsequent byte has its MSB = 0
+    /// (the stuff bit) and its lower 7 bits carry real data.
+    ///
+    /// The decoder mirrors this: on reading 0xFF, if the next byte has MSB = 0 it is a
+    /// stuffed byte and its 7 lower bits are real data; if MSB = 1 it is a marker.
     ///
     /// - Parameters:
     ///   - bits: The bits to write as UInt32
@@ -94,32 +94,43 @@ public final class JPEGLSBitstreamWriter {
         guard count > 0 && count <= 32 else {
             return
         }
-        
+
         // Mask to get only the requested bits
-        let mask: UInt32 = (1 << count) - 1
+        let mask: UInt32 = count < 32 ? ((1 << count) - 1) : UInt32.max
         let maskedBits = bits & mask
-        
+
         // Add bits to buffer
         bitBuffer = (bitBuffer << count) | maskedBits
         bitsInBuffer += count
-        
-        // Write complete bytes
+
+        // Write complete bytes with bit-level stuffing
         while bitsInBuffer >= 8 {
             let shift = bitsInBuffer - 8
             let byte = UInt8((bitBuffer >> shift) & 0xFF)
-            writeByte(byte)
+            data.append(byte)
             bitsInBuffer -= 8
+
+            // Bit-level stuffing per ISO 14495-1 §9.1:
+            // After emitting a byte of 0xFF, insert a 0 stuff bit at the next bit position.
+            // The UInt32 buffer already has 0 in unused positions; we clear the specific bit
+            // at position `bitsInBuffer` (the new MSB of the valid range) to make it 0.
+            if byte == 0xFF {
+                bitBuffer &= ~(UInt32(1) << UInt32(bitsInBuffer))
+                bitsInBuffer += 1
+            }
         }
     }
     
     /// Flush remaining bits in buffer
     ///
-    /// Pads with zeros to complete the final byte
+    /// Pads with zeros to complete the final byte. No stuffing is applied to the
+    /// final flushed byte because it is immediately followed by a marker (whose
+    /// MSB = 1 signals to the decoder that it is not a stuffed byte).
     public func flush() {
         if bitsInBuffer > 0 {
             let shift = 8 - bitsInBuffer
             let byte = UInt8((bitBuffer << shift) & 0xFF)
-            writeByte(byte)
+            data.append(byte)
             bitBuffer = 0
             bitsInBuffer = 0
         }

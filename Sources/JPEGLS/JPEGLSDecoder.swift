@@ -173,27 +173,18 @@ public struct JPEGLSDecoder: Sendable {
                     // Now at start of scan data
                     let scanDataStart = position
                     
-                    // Find end of scan data (next VALID marker, not byte stuffing)
-                    // Extended stuffing rules for CharLS compatibility:
-                    //   - FF 00: Standard byte stuffing
-                    //   - FF 60-7F: CharLS escapes
-                    //   - FF XX where XX is not a valid marker: CharLS extended stuffing
+                    // Find end of scan data (next real marker, not stuffed byte).
+                    // Per ISO 14495-1 §9.1: a byte following 0xFF with MSB = 0 (< 0x80)
+                    // is a stuffed byte; MSB = 1 (≥ 0x80) is a real marker.
                     var scanDataEnd = position
                     while scanDataEnd < data.count - 1 {
                         if data[scanDataEnd] == 0xFF {
                             let nextByte = data[scanDataEnd + 1]
-                            
-                            // Check if nextByte is a valid JPEG-LS marker
-                            let isValidMarker = JPEGLSMarker(rawValue: nextByte) != nil
-                            let isStuffing = nextByte == 0x00 || 
-                                           (nextByte >= 0x60 && nextByte <= 0x7F) ||
-                                           !isValidMarker
-                            
-                            if !isStuffing {
-                                // Valid marker - scan data ends here
+                            if nextByte >= 0x80 {
+                                // Real marker — scan data ends here
                                 break
                             }
-                            // Stuffing - skip both bytes and continue
+                            // Stuffed byte (nextByte < 0x80) — skip both bytes and continue
                             scanDataEnd += 2
                         } else {
                             scanDataEnd += 1
