@@ -197,32 +197,21 @@ public final class JPEGLSParser {
                 let scanHeader = try parseScanHeader(frameHeader: frame)
                 scanHeaders.append(scanHeader)
                 
-                // Skip scan data until we hit a marker
-                // Scan data ends when we encounter a VALID marker (0xFF followed by known marker byte)
-                // Byte stuffing rules (extended for CharLS compatibility):
-                //   - FF 00: Standard JPEG-LS byte stuffing (0x00 is removed during decoding)
-                //   - FF 60-FF 7F: CharLS escape sequences (treated like byte stuffing)
-                //   - FF XX where XX is not a recognized marker: treated as stuffing (CharLS extension)
-                //   - FF XX where XX is a recognized marker: Real marker - terminates scan data
+                // Skip scan data until we hit a marker.
+                // Per ISO 14495-1 §9.1, a byte following 0xFF with MSB = 0 (value < 0x80)
+                // is a stuffed byte; with MSB = 1 (value ≥ 0x80) it is a real marker.
                 while !reader.isAtEnd {
                     let byte = try reader.readByte()
                     if byte == JPEGLSMarker.markerPrefix {
                         // Check next byte to determine if it's stuffing or a real marker
                         if let nextByte = reader.peekByte() {
-                            // Check if this is stuffing or a valid marker
-                            let isStuffing = nextByte == 0x00 || 
-                                           (nextByte >= 0x60 && nextByte <= 0x7F) ||
-                                           JPEGLSMarker(rawValue: nextByte) == nil
-                            
-                            if isStuffing {
-                                // Byte stuffing - skip the stuffed byte and continue reading scan data
-                                _ = try reader.readByte()
-                                continue
-                            } else {
-                                // Valid marker - back up to re-read the FF byte in the outer loop
+                            if nextByte >= 0x80 {
+                                // Real marker — back up to re-read the FF byte in the outer loop
                                 try reader.seek(to: reader.currentPosition - 1)
                                 break
                             }
+                            // nextByte < 0x80: stuffed byte — consume it and continue
+                            _ = try reader.readByte()
                         } else {
                             // End of stream
                             break

@@ -110,23 +110,26 @@ struct JPEGLSBitstreamReaderTests {
     
     @Test("Read bits across byte boundary")
     func testReadBitsAcrossByteBoundary() throws {
-        // 0xFF 0x00 is standard byte stuffing (represents a single 0xFF data byte).
-        // 0xAA follows as a separate data byte.
-        // Total bitstream after unstuffing: 11111111 10101010
+        // ISO 14495-1 §9.1 bit-level stuffing: FF 00 contributes 8 bits (FF) + 7 bits from
+        // the stuffed byte (0x00's lower 7 bits = 0000000), then 0xAA contributes 8 bits.
+        // Total 23-bit stream: 11111111 0000000 10101010
         let data = Data([0xFF, 0x00, 0xAA])
         let reader = JPEGLSBitstreamReader(data: data)
-        
+
         #expect(try reader.readBits(4) == 0xF)   // 1111
-        #expect(try reader.readBits(8) == 0xFA)  // 11111010
+        #expect(try reader.readBits(8) == 0xF0)  // 11110000
     }
-    
+
     @Test("Read bits handles byte stuffing")
     func testReadBitsHandlesStuffing() throws {
-        // 0xFF 0x00 should be treated as 0xFF
+        // ISO 14495-1 §9.1 bit-level stuffing: FF XX (XX < 0x80) contributes 8 + 7 = 15 bits.
+        // FF 00: 8 bits (11111111) + 7 bits from 0x00 (0000000), then AA: 8 bits (10101010).
+        // Total 23-bit stream: 11111111 0000000 10101010
         let data = Data([0xFF, 0x00, 0xAA])
         let reader = JPEGLSBitstreamReader(data: data)
-        
+
         #expect(try reader.readBits(8) == 0xFF)
+        #expect(try reader.readBits(7) == 0x00)  // 7 data bits from the stuffed 0x00
         #expect(try reader.readBits(8) == 0xAA)
     }
     
@@ -228,27 +231,27 @@ struct JPEGLSBitstreamWriterTests {
         #expect(data == Data([0x12, 0x34]))
     }
     
-    @Test("Write byte with marker stuffing")
-    func testWriteByteStuffing() throws {
+    @Test("Write byte does not add stuffing")
+    func testWriteByteNoStuffing() throws {
         let writer = JPEGLSBitstreamWriter()
-        
+
         writer.writeByte(0xFF)
         writer.writeByte(0xAA)
-        
-        // 0xFF should be stuffed as 0xFF 0x00
+
+        // writeByte is a plain byte-write for structured data; no stuffing added
         let data = try writer.getData()
-        #expect(data == Data([0xFF, 0x00, 0xAA]))
+        #expect(data == Data([0xFF, 0xAA]))
     }
-    
-    @Test("Write multiple bytes")
+
+    @Test("Write multiple bytes does not add stuffing")
     func testWriteBytes() throws {
         let writer = JPEGLSBitstreamWriter()
-        
+
         writer.writeBytes(Data([0x12, 0x34, 0xFF, 0x56]))
-        
-        // 0xFF should be stuffed
+
+        // writeBytes is a plain bulk write; no stuffing added
         let data = try writer.getData()
-        #expect(data == Data([0x12, 0x34, 0xFF, 0x00, 0x56]))
+        #expect(data == Data([0x12, 0x34, 0xFF, 0x56]))
     }
     
     @Test("Write 16-bit big-endian value")
@@ -297,30 +300,36 @@ struct JPEGLSBitstreamWriterTests {
         #expect(data == Data([0xB3]))
     }
     
-    @Test("Write bits across byte boundary")
+    @Test("Write bits across byte boundary with bit-level stuffing")
     func testWriteBitsAcrossByteBoundary() throws {
         let writer = JPEGLSBitstreamWriter()
-        
+
         writer.writeBits(0xF, count: 4)    // 1111
         writer.writeBits(0xF0, count: 8)   // 11110000
         writer.flush()
-        
-        // Result: 11111111 00000000 = 0xFF 0x00
+
+        // Combined 12 bits: 1111 1111 0000
+        // First 8 bits form 0xFF → emitted, then stuff bit (0) inserted.
+        // Remaining 5 bits after stuffing: stuff(0) + 0000 = 00000, padded to 0x00.
+        // Result: 0xFF then stuffed-byte 0x00.
         let data = try writer.getData()
-        #expect(data == Data([0xFF, 0x00, 0x00]))  // 0xFF stuffed + padding
+        #expect(data == Data([0xFF, 0x00]))
     }
-    
-    @Test("Write bits handles byte stuffing")
+
+    @Test("Write bits handles bit-level byte stuffing")
     func testWriteBitsStuffing() throws {
         let writer = JPEGLSBitstreamWriter()
-        
+
         writer.writeBits(0xFF, count: 8)
         writer.writeBits(0xAA, count: 8)
         writer.flush()
-        
-        // 0xFF should be stuffed
+
+        // Bit stream: 11111111 10101010 (16 bits).
+        // 0xFF emitted; stuff bit (0) inserted next.
+        // Next 7 bits of 0xAA (1010101) fill the stuffed byte: 0 1010101 = 0x55.
+        // Last bit of 0xAA (0) flushed, padded to 0x00.
         let data = try writer.getData()
-        #expect(data == Data([0xFF, 0x00, 0xAA]))
+        #expect(data == Data([0xFF, 0x55, 0x00]))
     }
     
     @Test("Flush pads with zeros")

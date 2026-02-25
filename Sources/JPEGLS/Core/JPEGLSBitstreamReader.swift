@@ -107,17 +107,22 @@ public final class JPEGLSBitstreamReader {
     
     /// Skip to the next marker in the stream
     ///
+    /// Uses the standard JPEG-LS stuffing rule (ISO 14495-1 §9.1): a byte following 0xFF
+    /// with MSB = 1 (value ≥ 0x80) is a marker; with MSB = 0 (value < 0x80) it is a
+    /// stuffed byte and the pair is skipped.
+    ///
     /// - Returns: The marker found
     /// - Throws: `JPEGLSError` if no marker found before end of stream
     public func findNextMarker() throws -> JPEGLSMarker {
         while !isAtEnd {
             let byte = try readByte()
             if byte == JPEGLSMarker.markerPrefix {
-                if let nextByte = peekByte(), nextByte != 0x00 {
-                    // This is a marker, read it
+                if let nextByte = peekByte(), nextByte >= 0x80 {
+                    // MSB = 1: real marker
                     position -= 1  // Back up to re-read the 0xFF
                     return try readMarker()
                 }
+                // MSB = 0: stuffed byte, skip and continue
             }
         }
         throw JPEGLSError.prematureEndOfStream
@@ -125,15 +130,16 @@ public final class JPEGLSBitstreamReader {
     
     /// Read bits from the bitstream
     ///
-    /// Handles byte stuffing including CharLS extensions:
-    /// - 0xFF 0x00: Standard JPEG-LS byte stuffing
-    /// - 0xFF 0x60-0x7F: CharLS escape sequences
-    /// - 0xFF 0xXX where 0xXX is not a recognised JPEG-LS marker: extended stuffing
-    ///   (used by the JPEG-LS conformance reference implementation and some encoders)
+    /// Implements JPEG-LS bit-level byte stuffing per ISO 14495-1 §9.1:
+    /// When a byte of 0xFF is read, the following byte is examined:
+    /// - If its MSB (bit 7) is 0: it is a stuffed byte. Bit 7 is the stuff bit (discarded);
+    ///   bits 6–0 are real data bits. Total contribution: 8 bits (0xFF) + 7 data bits = 15 bits.
+    /// - If its MSB (bit 7) is 1: it is the start of a marker. The 0xFF byte alone is added
+    ///   to the buffer; the following byte is not consumed. Decoding should terminate before
+    ///   consuming any marker bytes.
     ///
-    /// This logic mirrors the scan-boundary detection in `JPEGLSDecoder.extractScanData()`:
-    /// any `FF XX` that would NOT be treated as a real marker there must also be treated as
-    /// a stuffed byte here to keep the two code paths consistent.
+    /// All JPEG-LS markers have their second byte with MSB = 1 (values 0x80–0xFF).
+    /// All stuffed bytes have their second byte with MSB = 0 (values 0x00–0x7F).
     ///
     /// - Parameter count: Number of bits to read (1-32)
     /// - Returns: The bits as a UInt32
@@ -142,41 +148,49 @@ public final class JPEGLSBitstreamReader {
         guard count > 0 && count <= 32 else {
             throw JPEGLSError.internalError(reason: "Invalid bit count: \(count)")
         }
-        
+
         // Fill buffer if needed
-        while bitsInBuffer < count && !isAtEnd {
-            let byte = try readByte()
-            
-            // Handle byte stuffing (standard and CharLS/reference-implementation extensions).
-            // Any FF XX where XX does not correspond to a known JPEG-LS marker is treated as
-            // a stuffed byte: the XX byte is discarded and only FF contributes to the bitstream.
-            // This matches the extended stuffing detection in extractScanData().
-            if byte == 0xFF {
-                if let next = peekByte() {
-                    let isKnownMarker = JPEGLSMarker(rawValue: next) != nil
-                    if !isKnownMarker {
-                        _ = try readByte()  // Skip the stuffed byte
-                    }
-                    // If next byte IS a known marker, FF is end-of-scan data —
-                    // it will be added to the buffer but no valid code should consume it.
-                }
+        while bitsInBuffer < count {
+            guard position < data.count else {
+                break
             }
-            
+            let byte = data[position]
+            position += 1
+
+            // Bit-level stuffing per ISO 14495-1 §9.1:
+            // When a byte of 0xFF is read, peek at the next byte:
+            //   MSB = 0 (value < 0x80): stuffed byte — consume it, add 8 bits (FF) + 7 bits.
+            //   MSB = 1 (value >= 0x80): real marker — don't consume, add FF to buffer only.
+            if byte == 0xFF && position < data.count {
+                let next = data[position]
+                if next < 0x80 {
+                    // Stuffed byte: consume it, contribute 8 bits (FF) + 7 data bits.
+                    position += 1
+                    bitBuffer = (bitBuffer << 8) | UInt32(byte)
+                    bitsInBuffer += 8
+                    bitBuffer = (bitBuffer << 7) | UInt32(next & 0x7F)
+                    bitsInBuffer += 7
+                    continue
+                }
+                // next >= 0x80: real marker. FF is added to the buffer below but decoding
+                // should finish before consuming marker bytes.
+            }
+
             bitBuffer = (bitBuffer << 8) | UInt32(byte)
             bitsInBuffer += 8
         }
-        
+
         guard bitsInBuffer >= count else {
             throw JPEGLSError.prematureEndOfStream
         }
-        
-        // Extract bits
+
+        // Extract bits from the most-significant valid position.
         let shift = bitsInBuffer - count
-        let mask: UInt32 = (1 << count) - 1
+        let mask: UInt32 = count < 32 ? ((1 << count) - 1) : UInt32.max
         let bits = (bitBuffer >> shift) & mask
-        
+
         bitsInBuffer -= count
-        
+
         return bits
     }
     

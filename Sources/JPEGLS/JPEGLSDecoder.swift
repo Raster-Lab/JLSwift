@@ -173,27 +173,18 @@ public struct JPEGLSDecoder: Sendable {
                     // Now at start of scan data
                     let scanDataStart = position
                     
-                    // Find end of scan data (next VALID marker, not byte stuffing)
-                    // Extended stuffing rules for CharLS compatibility:
-                    //   - FF 00: Standard byte stuffing
-                    //   - FF 60-7F: CharLS escapes
-                    //   - FF XX where XX is not a valid marker: CharLS extended stuffing
+                    // Find end of scan data (next real marker, not stuffed byte).
+                    // Per ISO 14495-1 §9.1: a byte following 0xFF with MSB = 0 (< 0x80)
+                    // is a stuffed byte; MSB = 1 (≥ 0x80) is a real marker.
                     var scanDataEnd = position
                     while scanDataEnd < data.count - 1 {
                         if data[scanDataEnd] == 0xFF {
                             let nextByte = data[scanDataEnd + 1]
-                            
-                            // Check if nextByte is a valid JPEG-LS marker
-                            let isValidMarker = JPEGLSMarker(rawValue: nextByte) != nil
-                            let isStuffing = nextByte == 0x00 || 
-                                           (nextByte >= 0x60 && nextByte <= 0x7F) ||
-                                           !isValidMarker
-                            
-                            if !isStuffing {
-                                // Valid marker - scan data ends here
+                            if nextByte >= 0x80 {
+                                // Real marker — scan data ends here
                                 break
                             }
-                            // Stuffing - skip both bytes and continue
+                            // Stuffed byte (nextByte < 0x80) — skip both bytes and continue
                             scanDataEnd += 2
                         } else {
                             scanDataEnd += 1
@@ -343,6 +334,8 @@ public struct JPEGLSDecoder: Sendable {
         
         // Decode pixel by pixel, cycling through components
         for row in 0..<frameHeader.height {
+            // Per ITU-T.87 §4.5.1, RUNindex is reset to 0 at the start of each scan line.
+            context.setRunIndex(0)
             for col in 0..<frameHeader.width {
                 for componentIndex in 0..<componentCount {
                     // Get neighbors for this component
@@ -353,18 +346,42 @@ public struct JPEGLSDecoder: Sendable {
                         width: frameHeader.width
                     )
                     
-                    // Decode pixel
-                    let pixel = try decodeSinglePixel(
-                        reader: reader,
-                        decoder: decoder,
-                        runDecoder: runDecoder,
-                        context: &context,
-                        a: a, b: b, c: c, d: d,
-                        parameters: parameters,
-                        near: scanHeader.near
-                    )
+                    // Check for run mode: all quantized gradients are zero
+                    let (d1, d2, d3) = decoder.computeGradients(a: a, b: b, c: c, d: d)
+                    let q1 = decoder.quantizeGradient(d1)
+                    let q2 = decoder.quantizeGradient(d2)
+                    let q3 = decoder.quantizeGradient(d3)
                     
-                    componentPixels[componentIndex][row][col] = pixel
+                    if q1 == 0 && q2 == 0 && q3 == 0 {
+                        // Run mode: decode run for this component
+                        let runResult = try decodeRun(
+                            reader: reader,
+                            runDecoder: runDecoder,
+                            context: &context,
+                            runValue: a,
+                            remainingInLine: frameHeader.width - col,
+                            parameters: parameters,
+                            near: scanHeader.near
+                        )
+                        componentPixels[componentIndex][row][col] = a
+                        // For sample-interleaved mode, runs within a component are rare
+                        // and handled as single-pixel runs from the perspective of col advancement.
+                        // The run fills pixels but col still advances by 1 per sample position.
+                        _ = runResult
+                    } else {
+                        // Regular mode
+                        let pixel = try decodeSinglePixel(
+                            reader: reader,
+                            decoder: decoder,
+                            runDecoder: runDecoder,
+                            context: &context,
+                            a: a, b: b, c: c, d: d,
+                            parameters: parameters,
+                            near: scanHeader.near
+                        )
+                        
+                        componentPixels[componentIndex][row][col] = pixel
+                    }
                 }
             }
         }
@@ -402,6 +419,8 @@ public struct JPEGLSDecoder: Sendable {
         
         // Decode pixels in raster order
         for row in 0..<height {
+            // Per ITU-T.87 §4.5.1, RUNindex is reset to 0 at the start of each scan line.
+            context.setRunIndex(0)
             var col = 0
             while col < width {
                 // Get neighbor pixels
@@ -466,6 +485,8 @@ public struct JPEGLSDecoder: Sendable {
         scanHeader: JPEGLSScanHeader,
         parameters: JPEGLSPresetParameters
     ) throws {
+        // Per ITU-T.87 §4.5.1, RUNindex is reset to 0 at the start of each scan line.
+        context.setRunIndex(0)
         var col = 0
         while col < width {
             // Get neighbor pixels
