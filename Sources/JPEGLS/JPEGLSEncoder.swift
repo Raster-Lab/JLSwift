@@ -495,6 +495,9 @@ public struct JPEGLSEncoder: Sendable {
             near: scanHeader.near
         )
         
+        // Compute Golomb-Rice LIMIT parameters per ITU-T.87 §4.4
+        let (limit, qbppBits) = computeGolombLimit(parameters: parameters, near: scanHeader.near)
+        
         // Encode based on interleave mode
         switch scanHeader.interleaveMode {
         case .none:
@@ -504,7 +507,9 @@ public struct JPEGLSEncoder: Sendable {
                 regularMode: regularMode,
                 runMode: runMode,
                 context: &context,
-                writer: writer
+                writer: writer,
+                limit: limit,
+                qbppBits: qbppBits
             )
             
         case .line:
@@ -514,7 +519,9 @@ public struct JPEGLSEncoder: Sendable {
                 regularMode: regularMode,
                 runMode: runMode,
                 context: &context,
-                writer: writer
+                writer: writer,
+                limit: limit,
+                qbppBits: qbppBits
             )
             
         case .sample:
@@ -524,12 +531,42 @@ public struct JPEGLSEncoder: Sendable {
                 regularMode: regularMode,
                 runMode: runMode,
                 context: &context,
-                writer: writer
+                writer: writer,
+                limit: limit,
+                qbppBits: qbppBits
             )
         }
         
         // Flush any remaining bits
         writer.flush()
+    }
+
+    /// Compute the Golomb-Rice LIMIT and qbppBits for a scan per ITU-T.87 §4.4.
+    ///
+    /// - Parameters:
+    ///   - parameters: Preset coding parameters
+    ///   - near: Near-lossless parameter (0 for lossless)
+    /// - Returns: Tuple of (limit, qbppBits)
+    private func computeGolombLimit(
+        parameters: JPEGLSPresetParameters,
+        near: Int
+    ) -> (limit: Int, qbppBits: Int) {
+        let range: Int
+        if near == 0 {
+            range = parameters.maxValue + 1
+        } else {
+            let qstep = 2 * near + 1
+            range = (parameters.maxValue + 2 * near) / qstep + 1
+        }
+        var qbppBits = 0
+        var r = range - 1
+        while r > 0 {
+            qbppBits += 1
+            r >>= 1
+        }
+        qbppBits = max(qbppBits, 2)
+        let limit = 2 * (qbppBits + 8)
+        return (limit, qbppBits)
     }
     
     /// Encode non-interleaved scan (component by component)
@@ -539,7 +576,9 @@ public struct JPEGLSEncoder: Sendable {
         regularMode: JPEGLSRegularMode,
         runMode: JPEGLSRunMode,
         context: inout JPEGLSContextModel,
-        writer: JPEGLSBitstreamWriter
+        writer: JPEGLSBitstreamWriter,
+        limit: Int,
+        qbppBits: Int
     ) throws {
         guard scanHeader.componentCount == 1 else {
             throw JPEGLSError.encodingFailed(
@@ -652,7 +691,9 @@ public struct JPEGLSEncoder: Sendable {
                                 absError: abs(interruption.error),
                                 context: &context,
                                 regularMode: regularMode,
-                                writer: writer
+                                writer: writer,
+                                limit: limit,
+                                qbppBits: qbppBits
                             )
                             // Run interruption uses the exact (unquantised) original pixel
                             // value as its reconstructed value: the decoder will similarly
@@ -693,7 +734,9 @@ public struct JPEGLSEncoder: Sendable {
                         a: a, b: b, c: c, d: d,
                         regularMode: regularMode,
                         context: &context,
-                        writer: writer
+                        writer: writer,
+                        limit: limit,
+                        qbppBits: qbppBits
                     )
                     if near > 0 {
                         reconstructed[row][col] = rv
@@ -711,7 +754,9 @@ public struct JPEGLSEncoder: Sendable {
         regularMode: JPEGLSRegularMode,
         runMode: JPEGLSRunMode,
         context: inout JPEGLSContextModel,
-        writer: JPEGLSBitstreamWriter
+        writer: JPEGLSBitstreamWriter,
+        limit: Int,
+        qbppBits: Int
     ) throws {
         // Encode line by line, all components per line
         for row in 0..<buffer.height {
@@ -786,7 +831,9 @@ public struct JPEGLSEncoder: Sendable {
                                     absError: abs(interruption.error),
                                     context: &context,
                                     regularMode: regularMode,
-                                    writer: writer
+                                    writer: writer,
+                                    limit: limit,
+                                    qbppBits: qbppBits
                                 )
                                 
                                 col = interruptionCol + 1
@@ -819,7 +866,9 @@ public struct JPEGLSEncoder: Sendable {
                             d: neighbors.topRight,
                             regularMode: regularMode,
                             context: &context,
-                            writer: writer
+                            writer: writer,
+                            limit: limit,
+                            qbppBits: qbppBits
                         )
                         col += 1
                     }
@@ -829,37 +878,163 @@ public struct JPEGLSEncoder: Sendable {
     }
     
     /// Encode sample-interleaved scan
+    ///
+    /// Per ITU-T.87 §C.5, run mode is entered when ALL components at a sample
+    /// position have zero quantised gradients.  A single run length is then
+    /// written for all components, and each component's interruption sample is
+    /// encoded individually after the run.
     private func encodeSampleInterleaved(
         buffer: JPEGLSPixelBuffer,
         scanHeader: JPEGLSScanHeader,
         regularMode: JPEGLSRegularMode,
         runMode: JPEGLSRunMode,
         context: inout JPEGLSContextModel,
-        writer: JPEGLSBitstreamWriter
+        writer: JPEGLSBitstreamWriter,
+        limit: Int,
+        qbppBits: Int
     ) throws {
-        // Encode sample by sample, all components per pixel
+        let components = scanHeader.components
+
+        // Encode row by row
         for row in 0..<buffer.height {
-            for col in 0..<buffer.width {
-                for component in scanHeader.components {
+            var col = 0
+            while col < buffer.width {
+                // Check if ALL components have zero quantised gradients at (row, col)
+                var allGradientsZero = true
+                for component in components {
                     guard let neighbors = buffer.getNeighbors(
-                        componentId: component.id,
-                        row: row,
-                        column: col
+                        componentId: component.id, row: row, column: col
                     ) else {
                         throw JPEGLSError.encodingFailed(
                             reason: "Failed to get neighbors for pixel at (\(row), \(col))"
                         )
                     }
-                    encodePixel(
-                        actual: neighbors.actual,
-                        a: neighbors.left,
-                        b: neighbors.top,
-                        c: neighbors.topLeft,
-                        d: neighbors.topRight,
-                        regularMode: regularMode,
-                        context: &context,
-                        writer: writer
+                    let (d1, d2, d3) = regularMode.computeGradients(
+                        a: neighbors.left, b: neighbors.top,
+                        c: neighbors.topLeft, d: neighbors.topRight
                     )
+                    if regularMode.quantizeGradient(d1) != 0 ||
+                       regularMode.quantizeGradient(d2) != 0 ||
+                       regularMode.quantizeGradient(d3) != 0 {
+                        allGradientsZero = false
+                        break
+                    }
+                }
+
+                if allGradientsZero {
+                    // Run mode: detect the run length across all components simultaneously.
+                    // The run continues while every component's pixel equals its run value.
+                    var runValue: [Int] = []
+                    var componentLinePixels: [[Int]] = []
+                    for component in components {
+                        guard let neighbors = buffer.getNeighbors(
+                            componentId: component.id, row: row, column: col
+                        ) else {
+                            throw JPEGLSError.encodingFailed(
+                                reason: "Failed to get neighbors for run at (\(row), \(col))"
+                            )
+                        }
+                        runValue.append(neighbors.left)
+                        guard let allPixels = buffer.getComponentPixels(componentId: component.id) else {
+                            throw JPEGLSError.encodingFailed(reason: "Failed to get component pixels")
+                        }
+                        componentLinePixels.append(allPixels[row])
+                    }
+
+                    // Detect run: the minimum run length across all components
+                    let remainingInLine = buffer.width - col
+                    var runLength = remainingInLine
+                    for (cIdx, linePixels) in componentLinePixels.enumerated() {
+                        let compRun = runMode.detectRunLength(
+                            pixels: linePixels,
+                            startIndex: col,
+                            runValue: runValue[cIdx]
+                        )
+                        runLength = min(runLength, compRun)
+                    }
+                    let actualRunLength = min(runLength, remainingInLine)
+
+                    // Encode run length (same encoding as non-interleaved/line-interleaved)
+                    let encoded = runMode.encodeRunLength(
+                        runLength: actualRunLength,
+                        runIndex: context.currentRunIndex
+                    )
+                    for _ in 0..<encoded.continuationBits {
+                        writer.writeBits(1, count: 1)
+                    }
+
+                    if actualRunLength < remainingInLine {
+                        // Run interrupted — write termination and remainder
+                        writeRunTermination(encoded: encoded, writer: writer)
+
+                        // Encode interruption pixel for EACH component independently
+                        let interruptionCol = col + actualRunLength
+                        if interruptionCol < buffer.width {
+                            for (cIdx, component) in components.enumerated() {
+                                guard let intNeighbors = buffer.getNeighbors(
+                                    componentId: component.id,
+                                    row: row, column: interruptionCol
+                                ) else {
+                                    throw JPEGLSError.encodingFailed(
+                                        reason: "Failed to get interruption neighbors"
+                                    )
+                                }
+                                let interruption = runMode.encodeRunInterruption(
+                                    interruptionValue: intNeighbors.actual,
+                                    runValue: runValue[cIdx]
+                                )
+                                writeRunInterruptionBits(
+                                    mappedError: interruption.mappedError,
+                                    absError: abs(interruption.error),
+                                    context: &context,
+                                    regularMode: regularMode,
+                                    writer: writer,
+                                    limit: limit,
+                                    qbppBits: qbppBits
+                                )
+                            }
+                            col = interruptionCol + 1
+                        } else {
+                            col = interruptionCol
+                        }
+                    } else {
+                        if encoded.remainder > 0 {
+                            writeRunTermination(encoded: encoded, writer: writer)
+                        }
+                        col += actualRunLength
+                    }
+
+                    // Synchronise RUNindex with the decoder
+                    let finalRunIndex = min(encoded.runIndex + encoded.continuationBits, 31)
+                    if actualRunLength < remainingInLine || encoded.remainder > 0 {
+                        context.setRunIndex(max(finalRunIndex - 1, 0))
+                    } else {
+                        context.setRunIndex(finalRunIndex)
+                    }
+                } else {
+                    // Regular mode: encode each component at (row, col)
+                    for component in components {
+                        guard let neighbors = buffer.getNeighbors(
+                            componentId: component.id, row: row, column: col
+                        ) else {
+                            throw JPEGLSError.encodingFailed(
+                                reason: "Failed to get neighbors for pixel at (\(row), \(col))"
+                            )
+                        }
+                        encodePixel(
+                            actual: neighbors.actual,
+                            a: neighbors.left,
+                            b: neighbors.top,
+                            c: neighbors.topLeft,
+                            d: neighbors.topRight,
+                            regularMode: regularMode,
+                            context: &context,
+                            writer: writer,
+                            limit: limit,
+                            qbppBits: qbppBits
+                        )
+                    }
+                    col += 1
                 }
             }
         }
@@ -917,7 +1092,9 @@ public struct JPEGLSEncoder: Sendable {
         d: Int,
         regularMode: JPEGLSRegularMode,
         context: inout JPEGLSContextModel,
-        writer: JPEGLSBitstreamWriter
+        writer: JPEGLSBitstreamWriter,
+        limit: Int,
+        qbppBits: Int
     ) -> Int {
         // Regular mode encoding
         let encodedPixel = regularMode.encodePixel(
@@ -930,7 +1107,7 @@ public struct JPEGLSEncoder: Sendable {
         )
         
         // Write Golomb-Rice encoded bits
-        writeRegularModeBits(encodedPixel, to: writer)
+        writeRegularModeBits(encodedPixel, to: writer, limit: limit, qbppBits: qbppBits)
         
         // Update context
         context.updateContext(
@@ -942,28 +1119,34 @@ public struct JPEGLSEncoder: Sendable {
         return encodedPixel.reconstructedValue
     }
     
-    /// Write regular mode encoded bits to bitstream
+    /// Write regular mode encoded bits to bitstream, implementing the Golomb-Rice
+    /// LIMIT per ITU-T.87 §6.1.1.  When the unary prefix would equal or exceed
+    /// (LIMIT − qbppBits − 1), the limited binary code is written instead:
+    /// (LIMIT − qbppBits − 1) zero bits, then '1', then qbppBits bits for MErrval − 1.
     private func writeRegularModeBits(
         _ encoded: EncodedPixel,
-        to writer: JPEGLSBitstreamWriter
+        to writer: JPEGLSBitstreamWriter,
+        limit: Int,
+        qbppBits: Int
     ) {
-        // Write unary prefix (quotient)
-        for _ in 0..<encoded.unaryLength {
-            writer.writeBits(0, count: 1)
-        }
-        writer.writeBits(1, count: 1)  // Terminating 1
-        
-        // Write remainder (k bits)
-        if encoded.golombK > 0 {
-            writer.writeBits(UInt32(encoded.remainder), count: encoded.golombK)
+        let limitThreshold = limit - qbppBits - 1
+        if encoded.unaryLength >= limitThreshold {
+            // Limited binary code
+            for _ in 0..<limitThreshold { writer.writeBits(0, count: 1) }
+            writer.writeBits(1, count: 1)
+            writer.writeBits(UInt32(encoded.mappedError - 1), count: qbppBits)
+        } else {
+            // Standard Golomb-Rice code
+            for _ in 0..<encoded.unaryLength { writer.writeBits(0, count: 1) }
+            writer.writeBits(1, count: 1)
+            if encoded.golombK > 0 {
+                writer.writeBits(UInt32(encoded.remainder), count: encoded.golombK)
+            }
         }
     }
     
-    /// Write run interruption error to bitstream using adaptive Golomb-Rice encoding.
-    ///
-    /// Uses the run interruption context statistics from `context` to compute the
-    /// Golomb-Rice parameter k per ITU-T.87 §4.5.3, then updates the context
-    /// statistics with the absolute prediction error.
+    /// Write run interruption error to bitstream using adaptive Golomb-Rice encoding,
+    /// implementing the LIMIT per ITU-T.87 §4.5.3 and §6.1.1.
     ///
     /// - Parameters:
     ///   - mappedError: Non-negative mapped prediction error (MErrval)
@@ -971,21 +1154,31 @@ public struct JPEGLSEncoder: Sendable {
     ///   - context: Context model (provides and receives run interruption stats)
     ///   - regularMode: Regular mode encoder (provides golombEncode helper)
     ///   - writer: Bitstream writer
+    ///   - limit: LIMIT = 2 × (qbppBits + 8)
+    ///   - qbppBits: ⌈log₂(RANGE)⌉
     private func writeRunInterruptionBits(
         mappedError: Int,
         absError: Int,
         context: inout JPEGLSContextModel,
         regularMode: JPEGLSRegularMode,
-        writer: JPEGLSBitstreamWriter
+        writer: JPEGLSBitstreamWriter,
+        limit: Int,
+        qbppBits: Int
     ) {
         let k = context.computeRunInterruptionGolombK()
         let (unaryLength, remainder) = regularMode.golombEncode(value: mappedError, k: k)
-        for _ in 0..<unaryLength {
-            writer.writeBits(0, count: 1)
-        }
-        writer.writeBits(1, count: 1)
-        if k > 0 {
-            writer.writeBits(UInt32(remainder), count: k)
+        let limitThreshold = limit - qbppBits - 1
+        if unaryLength >= limitThreshold {
+            // Limited binary code
+            for _ in 0..<limitThreshold { writer.writeBits(0, count: 1) }
+            writer.writeBits(1, count: 1)
+            writer.writeBits(UInt32(mappedError - 1), count: qbppBits)
+        } else {
+            for _ in 0..<unaryLength { writer.writeBits(0, count: 1) }
+            writer.writeBits(1, count: 1)
+            if k > 0 {
+                writer.writeBits(UInt32(remainder), count: k)
+            }
         }
         // Update run interruption context statistics per ITU-T.87 §4.5.3
         context.updateRunInterruptionContext(absError: absError)

@@ -266,6 +266,7 @@ public struct JPEGLSDecoder: Sendable {
     ) throws -> [MultiComponentImageData.ComponentData] {
         let reader = JPEGLSBitstreamReader(data: scanData)
         let componentCount = scanHeader.componentCount
+        let (limit, qbppBits) = computeGolombLimit(parameters: parameters, near: scanHeader.near)
         
         // Initialize pixel buffers for all components
         var componentPixels = (0..<componentCount).map { componentId in
@@ -290,7 +291,9 @@ public struct JPEGLSDecoder: Sendable {
                     runDecoder: runDecoder,
                     context: &context,
                     scanHeader: scanHeader,
-                    parameters: parameters
+                    parameters: parameters,
+                    limit: limit,
+                    qbppBits: qbppBits
                 )
             }
         }
@@ -312,6 +315,11 @@ public struct JPEGLSDecoder: Sendable {
     // MARK: - Sample-Interleaved Decoding
     
     /// Decode sample-interleaved image (all components in one scan, pixel by pixel)
+    ///
+    /// Per ITU-T.87 §C.5, for ILV=2 run mode is entered when ALL components at
+    /// the current sample position have zero quantised gradients.  A single run
+    /// length is decoded for all components together, and when the run is
+    /// interrupted an interruption sample is decoded for each component in turn.
     private func decodeSampleInterleaved(
         frameHeader: JPEGLSFrameHeader,
         scanHeader: JPEGLSScanHeader,
@@ -321,6 +329,7 @@ public struct JPEGLSDecoder: Sendable {
     ) throws -> [MultiComponentImageData.ComponentData] {
         let reader = JPEGLSBitstreamReader(data: scanData)
         let componentCount = scanHeader.componentCount
+        let (limit, qbppBits) = computeGolombLimit(parameters: parameters, near: scanHeader.near)
         
         // Initialize pixel buffers for all components
         var componentPixels = (0..<componentCount).map { _ in
@@ -334,42 +343,82 @@ public struct JPEGLSDecoder: Sendable {
         
         // Decode pixel by pixel, cycling through components
         for row in 0..<frameHeader.height {
-            // Per ITU-T.87 §4.5.1, RUNindex is reset to 0 at the start of each scan line.
+            // Per ITU-T.87 §4.5.1, RUNindex is reset to 0 at the start of each MCU line.
             context.setRunIndex(0)
-            for col in 0..<frameHeader.width {
+            var col = 0
+            while col < frameHeader.width {
+                // Check run mode: ALL components must have zero quantised gradients at (row, col)
+                var allGradientsZero = true
                 for componentIndex in 0..<componentCount {
-                    // Get neighbors for this component
                     let (a, b, c, d) = getNeighbors(
                         pixels: componentPixels[componentIndex],
-                        row: row,
-                        col: col,
-                        width: frameHeader.width
+                        row: row, col: col, width: frameHeader.width
                     )
-                    
-                    // Check for run mode: all quantized gradients are zero
                     let (d1, d2, d3) = decoder.computeGradients(a: a, b: b, c: c, d: d)
                     let q1 = decoder.quantizeGradient(d1)
                     let q2 = decoder.quantizeGradient(d2)
                     let q3 = decoder.quantizeGradient(d3)
-                    
-                    if q1 == 0 && q2 == 0 && q3 == 0 {
-                        // Run mode: decode run for this component
-                        let runResult = try decodeRun(
-                            reader: reader,
-                            runDecoder: runDecoder,
-                            context: &context,
-                            runValue: a,
-                            remainingInLine: frameHeader.width - col,
-                            parameters: parameters,
-                            near: scanHeader.near
+                    if q1 != 0 || q2 != 0 || q3 != 0 {
+                        allGradientsZero = false
+                        break
+                    }
+                }
+
+                if allGradientsZero {
+                    // Run mode: decode ONE run length for all components simultaneously.
+                    // The run value for each component is its own left neighbour 'a'.
+                    let runValues = (0..<componentCount).map { ci in
+                        getNeighbors(
+                            pixels: componentPixels[ci],
+                            row: row, col: col, width: frameHeader.width
+                        ).a
+                    }
+                    let remainingInLine = frameHeader.width - col
+
+                    // Decode run length (uses component 0's run value as the reference value;
+                    // the actual run value per component is stored in runValues).
+                    let runLength = try readRunLength(
+                        reader: reader,
+                        runDecoder: runDecoder,
+                        context: &context,
+                        remainingInLine: remainingInLine
+                    )
+
+                    // Fill run pixels for all components
+                    for runOffset in 0..<runLength {
+                        let c = col + runOffset
+                        for componentIndex in 0..<componentCount {
+                            componentPixels[componentIndex][row][c] = runValues[componentIndex]
+                        }
+                    }
+                    var newCol = col + runLength
+
+                    // If run was interrupted (ended before the line), decode one
+                    // interruption sample per component.
+                    if runLength < remainingInLine && newCol < frameHeader.width {
+                        for componentIndex in 0..<componentCount {
+                            let k = context.computeRunInterruptionGolombK()
+                            let mappedError = try readGolombCode(
+                                reader: reader, k: k, limit: limit, qbppBits: qbppBits
+                            )
+                            let interruption = runDecoder.decodeRunInterruption(
+                                mappedError: mappedError,
+                                runValue: runValues[componentIndex]
+                            )
+                            context.updateRunInterruptionContext(absError: abs(interruption.error))
+                            componentPixels[componentIndex][row][newCol] = interruption.sample
+                        }
+                        newCol += 1
+                    }
+
+                    col = newCol
+                } else {
+                    // Regular mode: decode each component independently at (row, col)
+                    for componentIndex in 0..<componentCount {
+                        let (a, b, c, d) = getNeighbors(
+                            pixels: componentPixels[componentIndex],
+                            row: row, col: col, width: frameHeader.width
                         )
-                        componentPixels[componentIndex][row][col] = a
-                        // For sample-interleaved mode, runs within a component are rare
-                        // and handled as single-pixel runs from the perspective of col advancement.
-                        // The run fills pixels but col still advances by 1 per sample position.
-                        _ = runResult
-                    } else {
-                        // Regular mode
                         let pixel = try decodeSinglePixel(
                             reader: reader,
                             decoder: decoder,
@@ -377,11 +426,13 @@ public struct JPEGLSDecoder: Sendable {
                             context: &context,
                             a: a, b: b, c: c, d: d,
                             parameters: parameters,
-                            near: scanHeader.near
+                            near: scanHeader.near,
+                            limit: limit,
+                            qbppBits: qbppBits
                         )
-                        
                         componentPixels[componentIndex][row][col] = pixel
                     }
+                    col += 1
                 }
             }
         }
@@ -413,6 +464,7 @@ public struct JPEGLSDecoder: Sendable {
         let decoder = try JPEGLSRegularModeDecoder(parameters: parameters, near: scanHeader.near)
         let runDecoder = try JPEGLSRunModeDecoder(parameters: parameters, near: scanHeader.near)
         var context = try JPEGLSContextModel(parameters: parameters, near: scanHeader.near)
+        let (limit, qbppBits) = computeGolombLimit(parameters: parameters, near: scanHeader.near)
         
         // Initialize pixel buffer
         var pixels = Array(repeating: Array(repeating: 0, count: width), count: height)
@@ -441,7 +493,9 @@ public struct JPEGLSDecoder: Sendable {
                         runValue: a,
                         remainingInLine: width - col,
                         parameters: parameters,
-                        near: scanHeader.near
+                        near: scanHeader.near,
+                        limit: limit,
+                        qbppBits: qbppBits
                     )
                     
                     // Fill in run result
@@ -462,7 +516,9 @@ public struct JPEGLSDecoder: Sendable {
                         context: &context,
                         a: a, b: b, c: c, d: d,
                         parameters: parameters,
-                        near: scanHeader.near
+                        near: scanHeader.near,
+                        limit: limit,
+                        qbppBits: qbppBits
                     )
                     pixels[row][col] = pixel
                     col += 1
@@ -483,7 +539,9 @@ public struct JPEGLSDecoder: Sendable {
         runDecoder: JPEGLSRunModeDecoder,
         context: inout JPEGLSContextModel,
         scanHeader: JPEGLSScanHeader,
-        parameters: JPEGLSPresetParameters
+        parameters: JPEGLSPresetParameters,
+        limit: Int,
+        qbppBits: Int
     ) throws {
         // Per ITU-T.87 §4.5.1, RUNindex is reset to 0 at the start of each scan line.
         context.setRunIndex(0)
@@ -507,7 +565,9 @@ public struct JPEGLSDecoder: Sendable {
                     runValue: a,
                     remainingInLine: width - col,
                     parameters: parameters,
-                    near: scanHeader.near
+                    near: scanHeader.near,
+                    limit: limit,
+                    qbppBits: qbppBits
                 )
                 
                 // Fill in run result
@@ -528,7 +588,9 @@ public struct JPEGLSDecoder: Sendable {
                     context: &context,
                     a: a, b: b, c: c, d: d,
                     parameters: parameters,
-                    near: scanHeader.near
+                    near: scanHeader.near,
+                    limit: limit,
+                    qbppBits: qbppBits
                 )
                 
                 pixels[row][col] = pixel
@@ -577,7 +639,9 @@ public struct JPEGLSDecoder: Sendable {
         context: inout JPEGLSContextModel,
         a: Int, b: Int, c: Int, d: Int,
         parameters: JPEGLSPresetParameters,
-        near: Int
+        near: Int,
+        limit: Int,
+        qbppBits: Int
     ) throws -> Int {
         // Compute gradients
         let (d1, d2, d3) = decoder.computeGradients(a: a, b: b, c: c, d: d)
@@ -592,7 +656,7 @@ public struct JPEGLSDecoder: Sendable {
         let k = context.computeGolombParameter(contextIndex: contextIndex)
         
         // Read Golomb-Rice encoded error
-        let mappedError = try readGolombCode(reader: reader, k: k)
+        let mappedError = try readGolombCode(reader: reader, k: k, limit: limit, qbppBits: qbppBits)
         
         // Decode pixel using decoder
         let result = decoder.decodePixel(
@@ -619,7 +683,9 @@ public struct JPEGLSDecoder: Sendable {
         runValue: Int,
         remainingInLine: Int,
         parameters: JPEGLSPresetParameters,
-        near: Int
+        near: Int,
+        limit: Int,
+        qbppBits: Int
     ) throws -> (runLength: Int, interruptionPixel: Int?) {
         // Read run length (also updates context.runIndex)
         let runLength = try readRunLength(
@@ -636,7 +702,7 @@ public struct JPEGLSDecoder: Sendable {
             let k = context.computeRunInterruptionGolombK()
             
             // Read Golomb-Rice encoded interruption error
-            let mappedError = try readGolombCode(reader: reader, k: k)
+            let mappedError = try readGolombCode(reader: reader, k: k, limit: limit, qbppBits: qbppBits)
             
             // Decode interruption sample
             let interruption = runDecoder.decodeRunInterruption(
@@ -654,34 +720,80 @@ public struct JPEGLSDecoder: Sendable {
         return (runLength, nil)
     }
     
+    // MARK: - Golomb-Rice Limit Computation
+
+    /// Compute the Golomb-Rice bit-range parameter (qbppBits) and LIMIT for a scan.
+    ///
+    /// Per ITU-T.87 §4.4, LIMIT = 2 × (qbppBits + 8) where qbppBits = ⌈log₂(RANGE)⌉.
+    /// For lossless (NEAR = 0), RANGE = MAXVAL + 1 = 2^P, so qbppBits = P (bits per sample).
+    ///
+    /// - Parameters:
+    ///   - parameters: Preset coding parameters (MAXVAL, etc.)
+    ///   - near: Near-lossless parameter (0 for lossless)
+    /// - Returns: Tuple of (limit, qbppBits)
+    private func computeGolombLimit(
+        parameters: JPEGLSPresetParameters,
+        near: Int
+    ) -> (limit: Int, qbppBits: Int) {
+        let range: Int
+        if near == 0 {
+            range = parameters.maxValue + 1
+        } else {
+            let qstep = 2 * near + 1
+            range = (parameters.maxValue + 2 * near) / qstep + 1
+        }
+        // qbppBits = ⌈log₂(range)⌉
+        var qbppBits = 0
+        var r = range - 1
+        while r > 0 {
+            qbppBits += 1
+            r >>= 1
+        }
+        qbppBits = max(qbppBits, 2)
+        let limit = 2 * (qbppBits + 8)
+        return (limit, qbppBits)
+    }
+
     // MARK: - Golomb-Rice Decoding
     
-    /// Read Golomb-Rice encoded value from bitstream
+    /// Read Golomb-Rice encoded value from bitstream per ITU-T.87 §6.1.2.
     ///
-    /// Reads unary prefix followed by k remainder bits.
+    /// Implements the limited Golomb-Rice code: reads zeros until a '1' is found.
+    /// If the zero count reaches (LIMIT − qbppBits − 1) before the '1', the encoder
+    /// switched to a limited binary code; in that case qbppBits bits are read for
+    /// MErrval − 1.  Otherwise the standard code (quotient << k) | remainder is used.
     ///
     /// - Parameters:
     ///   - reader: Bitstream reader
-    ///   - k: Golomb parameter
-    /// - Returns: Mapped error value
+    ///   - k: Golomb-Rice parameter
+    ///   - limit: LIMIT = 2 × (qbppBits + 8)
+    ///   - qbppBits: ⌈log₂(RANGE)⌉ — bits needed to represent the full error range
+    /// - Returns: Mapped error value (MErrval)
     /// - Throws: `JPEGLSError` if reading fails
-    private func readGolombCode(reader: JPEGLSBitstreamReader, k: Int) throws -> Int {
-        // Read unary prefix (count zeros until 1)
+    private func readGolombCode(
+        reader: JPEGLSBitstreamReader,
+        k: Int,
+        limit: Int,
+        qbppBits: Int
+    ) throws -> Int {
+        let limitThreshold = limit - qbppBits - 1
+        // Read unary prefix (count zeros until first '1')
         var unaryCount = 0
-        while try reader.readBits(1) == 0 {
-            unaryCount += 1
-            // Limit check to prevent infinite loop on corrupted data
-            // For 16-bit images, mapped error can be up to 2*MAXVAL = 131070
-            // Using a higher limit (200000) to provide safety margin
-            guard unaryCount < 200000 else {
-                throw JPEGLSError.decodingFailed(reason: "Excessive unary prefix in Golomb code")
+        while true {
+            let bit = try reader.readBits(1)
+            if bit == 1 {
+                break
             }
+            unaryCount += 1
         }
-        
-        // Read k remainder bits
+        // Per ITU-T.87 §6.1.2: when unaryCount >= limitThreshold the encoder used
+        // the limited binary code — read qbppBits bits for MErrval − 1.
+        if unaryCount >= limitThreshold {
+            let rawValue = Int(try reader.readBits(qbppBits))
+            return rawValue + 1
+        }
+        // Standard Golomb-Rice code
         let remainder = k > 0 ? Int(try reader.readBits(k)) : 0
-        
-        // Compute mapped error: quotient * (1 << k) + remainder
         return (unaryCount << k) | remainder
     }
     
