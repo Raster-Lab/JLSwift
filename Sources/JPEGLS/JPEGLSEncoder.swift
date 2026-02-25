@@ -600,6 +600,8 @@ public struct JPEGLSEncoder: Sendable {
         
         // Encode pixels in raster order with run mode support
         for row in 0..<buffer.height {
+            // Per ITU-T.87 §4.5.1, RUNindex is reset to 0 at the start of each scan line.
+            context.setRunIndex(0)
             var col = 0
             while col < buffer.width {
                 guard let neighbors = buffer.getNeighbors(
@@ -761,6 +763,8 @@ public struct JPEGLSEncoder: Sendable {
         // Encode line by line, all components per line
         for row in 0..<buffer.height {
             for component in scanHeader.components {
+                // Per ITU-T.87 §4.5.1, RUNindex is reset to 0 at the start of each scan line.
+                context.setRunIndex(0)
                 var col = 0
                 while col < buffer.width {
                     guard let neighbors = buffer.getNeighbors(
@@ -897,6 +901,8 @@ public struct JPEGLSEncoder: Sendable {
 
         // Encode row by row
         for row in 0..<buffer.height {
+            // Per ITU-T.87 §4.5.1, RUNindex is reset to 0 at the start of each scan line.
+            context.setRunIndex(0)
             var col = 0
             while col < buffer.width {
                 // Check if ALL components have zero quantised gradients at (row, col)
