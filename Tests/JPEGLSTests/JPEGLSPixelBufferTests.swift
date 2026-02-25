@@ -154,9 +154,9 @@ struct JPEGLSPixelBufferTests {
         #expect(neighbors != nil)
         #expect(neighbors?.actual == 20)
         #expect(neighbors?.left == 10)
-        #expect(neighbors?.top == 10)  // Uses left pixel
-        #expect(neighbors?.topLeft == 10)  // Uses left pixel
-        #expect(neighbors?.topRight == 10)  // Uses left pixel
+        #expect(neighbors?.top == 0)
+        #expect(neighbors?.topLeft == 0)
+        #expect(neighbors?.topRight == 0)
     }
     
     @Test("Get neighbors for first column, not first row")

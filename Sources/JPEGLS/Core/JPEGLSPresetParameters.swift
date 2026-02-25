@@ -94,16 +94,12 @@ public struct JPEGLSPresetParameters: Sendable, Equatable {
         
         let maxValue = (1 << bitsPerSample) - 1
         
-        // Default threshold calculations per ITU-T.87
-        let factor = min(maxValue, 4095)
-        var threshold1 = max(2, (factor + 128) / 256)
-        var threshold2 = max(3, (factor + 64) / 128)
-        var threshold3 = max(4, (factor + 42) / 85)
-        
-        // Ensure thresholds are within valid range and properly ordered
-        threshold1 = min(threshold1, maxValue)
-        threshold2 = min(max(threshold2, threshold1), maxValue)
-        threshold3 = min(max(threshold3, threshold2), maxValue)
+        // Default threshold calculations per ITU-T.87 Annex C.2.4.1.1
+        // FACTOR = floor((min(MAXVAL, 4095) + 128) / 256)
+        let factor = (min(maxValue, 4095) + 128) / 256
+        let threshold1 = max(2, min(factor + 2, maxValue))
+        let threshold2 = max(3, min(4 * factor + 3, maxValue))
+        let threshold3 = max(4, min(17 * factor + 4, maxValue))
         
         // Default reset value
         let reset = 64

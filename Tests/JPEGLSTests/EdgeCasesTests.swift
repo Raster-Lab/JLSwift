@@ -201,7 +201,7 @@ struct EdgeCasesTests {
     
     // MARK: - Bitstream Writer Edge Cases
     
-    @Test("Bitstream writer marker stuffing for 0xFF")
+    @Test("Bitstream writer no stuffing for raw bytes via writeByte")
     func testBitstreamWriterMarkerStuffing() throws {
         let writer = JPEGLSBitstreamWriter()
         writer.writeByte(0xFF)
@@ -209,11 +209,10 @@ struct EdgeCasesTests {
         writer.flush()
         
         let data = try writer.getData()
-        // 0xFF should be stuffed as 0xFF 0x00
-        #expect(data.count == 3)
+        // writeByte writes raw bytes without stuffing (for marker segments/headers)
+        #expect(data.count == 2)
         #expect(data[0] == 0xFF)
-        #expect(data[1] == 0x00)
-        #expect(data[2] == 0x42)
+        #expect(data[1] == 0x42)
     }
     
     @Test("Bitstream writer with zero bits")
