@@ -77,8 +77,12 @@ JPEG-LS is a lossless/near-lossless compression standard specifically designed f
 | 11.3 | Extended Dimensions (LSE Type 4) | ✅ Complete | 100.00% |
 | 11.4 | Additional Part 2 Colour Transforms | ✅ Complete | 100.00% |
 | 11.5 | Part 2 Performance Regression Tests | ✅ Complete | 100.00% |
+| 12.1 | CharLS Decode Interoperability | ⏳ In Progress | — |
+| 12.2 | CharLS Encode Interoperability | ⏳ In Progress | — |
 
-**Overall Project Coverage: 95.80%** (exceeds 95% threshold) — 824 tests pass
+**Overall Project Coverage: 95.80%** (exceeds 95% threshold)
+
+**Recent conformance fixes** (PRs #74, #75, #76): Gradient quantization, context update/bias correction, error correction XOR, LIMIT computation, default thresholds, run interruption coding overhaul, encoder RUNindex reset, error mapping formula, and near-lossless boundary condition — all aligned with ITU-T.87 and CharLS reference implementation.
 
 *CLI executable target not included in coverage metrics (Swift Package Manager limitation), but validation logic thoroughly tested with 60 comprehensive tests.
 
@@ -98,7 +102,7 @@ JPEG-LS is a lossless/near-lossless compression standard specifically designed f
 | **Multi-Component Support** | Full RGB and grayscale encoding with all interleaving modes |
 | **Interleaving Modes** | None (separate scans), Line-interleaved, Sample-interleaved |
 | **Near-Lossless Support** | Configurable error tolerance encoding with NEAR parameter (1-255), with correct error quantisation per §4.2.2 and reconstructed-value tracking |
-| **ITU-T.87 Compliant** | Standard-conformant context index formula (365 contexts), A initialisation, sign-adjusted Golomb-Rice coding, bias correction per §4.3.3, run-mode RUNindex synchronisation, near-lossless quantisation/dequantisation, and EOL terminator handling |
+| **ITU-T.87 Compliant** | Standard-conformant context index formula (365 contexts), A initialisation, sign-adjusted Golomb-Rice coding, bias correction per §4.3.3, run-mode RUNindex synchronisation, near-lossless quantisation/dequantisation, EOL terminator handling, gradient quantization per Table A.7, error correction XOR per §A.4.1, dual-context run interruption coding per §A.7, and correct LIMIT/threshold computations |
 | **Mapping Table (Palette) Support** | LSE type 2/3 mapping tables parsed and applied per ITU-T.87 §5.1.1.3; scan header `Tdi` field used to reference tables per component; encoder can emit mapping table LSE segments |
 | **Extended Dimensions (LSE Type 4)** | Images with width or height > 65535 are fully supported via LSE type 4 per ITU-T.87 §5.1.1.4; encoder auto-emits the segment and writes 0 in SOF for extended fields; parser restores the true dimensions |
 | **Part 2 Colour Transforms** | HP1, HP2, HP3 colour transforms with modular arithmetic; APP8 "mrfx" marker written by encoder and read by decoder; round-trip verified for all transforms and interleave modes |
