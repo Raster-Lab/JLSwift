@@ -79,6 +79,7 @@ JPEG-LS is a lossless/near-lossless compression standard specifically designed f
 | 11.5 | Part 2 Performance Regression Tests | ✅ Complete | 100.00% |
 | 12.1 | CharLS Decode Interoperability | ⏳ In Progress | — |
 | 12.2 | CharLS Encode Interoperability | ⏳ In Progress | — |
+| 12.3 | Round-Trip Interoperability (JLSwift) | ⏳ In Progress | 100.00% |
 
 **Overall Project Coverage: 95.80%** (exceeds 95% threshold)
 
@@ -590,6 +591,11 @@ JLSwift includes comprehensive conformance testing using reference files from th
   - Pixel-by-pixel validation (lossless: exact match; near-lossless: error ≤ NEAR)
   - Non-default parameter tests validated against test8bs2.pgm reference
   - Flat-region (run mode) and near-lossless round-trip encoding/decoding verified correct
+- **Round-Trip Interoperability**: 33 JLSwift encode → decode → compare regression tests
+  - All bit depths (8/12/16-bit), grayscale and RGB, all interleave modes
+  - Color transforms (HP1, HP2, HP3)
+  - Medical imaging patterns (CT, MR, CR/DX, US, NM simulations)
+  - Edge cases (1×1, boundary values, single-row/column, checkerboard)
 
 The conformance tests are located in `Tests/JPEGLSTests/CharLSConformanceTests.swift` with reference fixtures in `Tests/JPEGLSTests/TestFixtures/`. These tests ensure compatibility with the JPEG-LS standard (ISO/IEC 14495-1:1999 / ITU-T.87) and provide a foundation for bit-exact comparison with CharLS output.
 
