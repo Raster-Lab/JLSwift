@@ -365,6 +365,10 @@ public struct JPEGLSRegularMode: Sendable {
             quantizedError: quantisedError
         )
         
+        // Store quantisedError (uncorrected, sign-denormalised) per ITU-T.87 §A.6.2.
+        // The XOR correction is only for mapping; context update uses the original
+        // error.  The caller's updateContext computes errval = sign × quantisedError
+        // = sign-normalised uncorrected error, matching CharLS behaviour.
         return EncodedPixel(
             contextIndex: contextIndex,
             sign: sign,
