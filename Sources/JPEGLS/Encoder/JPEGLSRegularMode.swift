@@ -213,10 +213,12 @@ public struct JPEGLSRegularMode: Sendable {
     
     /// Compute the reconstructed sample value that the decoder will produce.
     ///
-    /// Per ITU-T.87 Section 4.3.3, the encoder must track the reconstructed value
-    /// Rx to keep its context in sync with the decoder:
-    /// - For near-lossless: Rx = clamp(Px' + Errval' × (2·NEAR + 1), 0, MAXVAL)
-    /// - For lossless: Rx = actual (exact reconstruction)
+    /// Per ITU-T.87 Section A.4.4 (code segment A.7), the encoder must track
+    /// the reconstructed value Rx to keep its context in sync with the decoder:
+    /// - Rx = Px' + Errval' × (2·NEAR + 1)
+    /// - If Rx < −NEAR:       Rx += RANGE × (2·NEAR + 1)
+    /// - If Rx > MAXVAL+NEAR: Rx -= RANGE × (2·NEAR + 1)
+    /// - Clamp Rx to [0, MAXVAL]
     ///
     /// - Parameters:
     ///   - prediction: Bias-corrected prediction value (Px')
@@ -226,10 +228,12 @@ public struct JPEGLSRegularMode: Sendable {
         let dequantized = near > 0 ? quantizedError * qbpp : quantizedError
         var rv = prediction + dequantized
         // Apply modular correction matching the decoder's reconstructSample
-        if rv < 0 {
-            rv += range
-        } else if rv > parameters.maxValue {
-            rv -= range
+        // Per ITU-T.87 §A.4.4: wrap range is RANGE × (2·NEAR + 1), thresholds −NEAR and MAXVAL+NEAR.
+        let wrapRange = near == 0 ? range : range * qbpp
+        if rv < -near {
+            rv += wrapRange
+        } else if rv > parameters.maxValue + near {
+            rv -= wrapRange
         }
         return max(0, min(parameters.maxValue, rv))
     }
