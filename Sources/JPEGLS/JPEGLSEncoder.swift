@@ -604,15 +604,21 @@ public struct JPEGLSEncoder: Sendable {
         )
         
         // Encode pixels in raster order with run mode support
+        var prevRowEdge = 0
         for row in 0..<buffer.height {
             // Per ITU-T.87 §4.5.1, RUNindex is reset to 0 at the start of each scan line.
             context.setRunIndex(0)
+            let edgeForThisRow = prevRowEdge
+            if row > 0 {
+                prevRowEdge = buffer.getPixel(componentId: componentId, row: row - 1, column: 0) ?? 0
+            }
             var col = 0
             while col < buffer.width {
                 guard let neighbors = buffer.getNeighbors(
                     componentId: componentId,
                     row: row,
-                    column: col
+                    column: col,
+                    prevRowEdge: edgeForThisRow
                 ) else {
                     throw JPEGLSError.encodingFailed(
                         reason: "Failed to get neighbors for pixel at (\(row), \(col))"
@@ -681,7 +687,8 @@ public struct JPEGLSEncoder: Sendable {
                             guard let interruptionNeighbors = buffer.getNeighbors(
                                 componentId: componentId,
                                 row: row,
-                                column: interruptionCol
+                                column: interruptionCol,
+                                prevRowEdge: edgeForThisRow
                             ) else {
                                 throw JPEGLSError.encodingFailed(
                                     reason: "Failed to get neighbors for interruption pixel at (\(row), \(interruptionCol))"
@@ -776,16 +783,23 @@ public struct JPEGLSEncoder: Sendable {
         qbppBits: Int
     ) throws {
         // Encode line by line, all components per line
+        var prevRowEdges: [UInt8: Int] = [:]
+        for component in scanHeader.components { prevRowEdges[component.id] = 0 }
         for row in 0..<buffer.height {
             // Per ITU-T.87 §4.5.1, RUNindex is reset to 0 at the start of each scan line.
             context.setRunIndex(0)
             for component in scanHeader.components {
+                let edgeForThisRow = prevRowEdges[component.id] ?? 0
+                if row > 0 {
+                    prevRowEdges[component.id] = buffer.getPixel(componentId: component.id, row: row - 1, column: 0) ?? 0
+                }
                 var col = 0
                 while col < buffer.width {
                     guard let neighbors = buffer.getNeighbors(
                         componentId: component.id,
                         row: row,
-                        column: col
+                        column: col,
+                        prevRowEdge: edgeForThisRow
                     ) else {
                         throw JPEGLSError.encodingFailed(
                             reason: "Failed to get neighbors for pixel at (\(row), \(col))"
@@ -833,7 +847,8 @@ public struct JPEGLSEncoder: Sendable {
                                 guard let interruptionNeighbors = buffer.getNeighbors(
                                     componentId: component.id,
                                     row: row,
-                                    column: interruptionCol
+                                    column: interruptionCol,
+                                    prevRowEdge: edgeForThisRow
                                 ) else {
                                     throw JPEGLSError.encodingFailed(
                                         reason: "Failed to get neighbors for interruption pixel"
@@ -924,17 +939,29 @@ public struct JPEGLSEncoder: Sendable {
     ) throws {
         let components = scanHeader.components
 
+        // Track left-edge values per component for boundary Rc at col=0.
+        var prevRowEdges: [UInt8: Int] = [:]
+        for component in components { prevRowEdges[component.id] = 0 }
+
         // Encode row by row
         for row in 0..<buffer.height {
             // Per ITU-T.87 §4.5.1, RUNindex is reset to 0 at the start of each scan line.
             context.setRunIndex(0)
+            var edgesForThisRow: [UInt8: Int] = [:]
+            for component in components {
+                edgesForThisRow[component.id] = prevRowEdges[component.id] ?? 0
+                if row > 0 {
+                    prevRowEdges[component.id] = buffer.getPixel(componentId: component.id, row: row - 1, column: 0) ?? 0
+                }
+            }
             var col = 0
             while col < buffer.width {
                 // Check if ALL components have zero quantised gradients at (row, col)
                 var allGradientsZero = true
                 for component in components {
                     guard let neighbors = buffer.getNeighbors(
-                        componentId: component.id, row: row, column: col
+                        componentId: component.id, row: row, column: col,
+                        prevRowEdge: edgesForThisRow[component.id] ?? 0
                     ) else {
                         throw JPEGLSError.encodingFailed(
                             reason: "Failed to get neighbors for pixel at (\(row), \(col))"
@@ -959,7 +986,8 @@ public struct JPEGLSEncoder: Sendable {
                     var componentLinePixels: [[Int]] = []
                     for component in components {
                         guard let neighbors = buffer.getNeighbors(
-                            componentId: component.id, row: row, column: col
+                            componentId: component.id, row: row, column: col,
+                            prevRowEdge: edgesForThisRow[component.id] ?? 0
                         ) else {
                             throw JPEGLSError.encodingFailed(
                                 reason: "Failed to get neighbors for run at (\(row), \(col))"
@@ -1004,7 +1032,8 @@ public struct JPEGLSEncoder: Sendable {
                             for (cIdx, component) in components.enumerated() {
                                 guard let intNeighbors = buffer.getNeighbors(
                                     componentId: component.id,
-                                    row: row, column: interruptionCol
+                                    row: row, column: interruptionCol,
+                                    prevRowEdge: edgesForThisRow[component.id] ?? 0
                                 ) else {
                                     throw JPEGLSError.encodingFailed(
                                         reason: "Failed to get interruption neighbors"
@@ -1056,7 +1085,8 @@ public struct JPEGLSEncoder: Sendable {
                     // Regular mode: encode each component at (row, col)
                     for component in components {
                         guard let neighbors = buffer.getNeighbors(
-                            componentId: component.id, row: row, column: col
+                            componentId: component.id, row: row, column: col,
+                            prevRowEdge: edgesForThisRow[component.id] ?? 0
                         ) else {
                             throw JPEGLSError.encodingFailed(
                                 reason: "Failed to get neighbors for pixel at (\(row), \(col))"

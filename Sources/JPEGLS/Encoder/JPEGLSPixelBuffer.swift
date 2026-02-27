@@ -221,7 +221,8 @@ public struct JPEGLSPixelBuffer: Sendable {
     public func getNeighbors(
         componentId: UInt8,
         row: Int,
-        column: Int
+        column: Int,
+        prevRowEdge: Int = 0
     ) -> PixelNeighbors? {
         guard let pixels = componentPixels[componentId] else {
             return nil
@@ -233,7 +234,7 @@ public struct JPEGLSPixelBuffer: Sendable {
         
         let actual = pixels[row][column]
         
-        // Handle boundary conditions per ITU-T.87 Section 3.2
+        // Handle boundary conditions per CharLS / ITU-T.87 Section 3.2
         if row == 0 && column == 0 {
             // First pixel: all neighbors are 0
             return PixelNeighbors(
@@ -255,14 +256,14 @@ public struct JPEGLSPixelBuffer: Sendable {
                 topRight: 0
             )
         } else if column == 0 {
-            // First column: use top pixel for all left neighbors
+            // First column: Ra=Rb=top, Rc=prevRowEdge (per CharLS edge pixel logic)
             let top = pixels[row - 1][column]
             let topRight = (width > 1) ? pixels[row - 1][column + 1] : top
             return PixelNeighbors(
                 actual: actual,
                 left: top,
                 top: top,
-                topLeft: top,
+                topLeft: prevRowEdge,
                 topRight: topRight
             )
         } else {

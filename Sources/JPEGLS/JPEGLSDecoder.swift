@@ -282,9 +282,16 @@ public struct JPEGLSDecoder: Sendable {
         let runDecoder = try JPEGLSRunModeDecoder(parameters: parameters, near: scanHeader.near)
         var context = try JPEGLSContextModel(parameters: parameters, near: scanHeader.near)
         
+        // Track left-edge values per component for boundary Rc at col=0.
+        var prevRowEdges = Array(repeating: 0, count: componentCount)
+        
         // Decode line by line, all components per line
         for row in 0..<frameHeader.height {
             for componentIndex in 0..<componentCount {
+                let edgeForThisRow = prevRowEdges[componentIndex]
+                if row > 0 {
+                    prevRowEdges[componentIndex] = componentPixels[componentIndex][row - 1][0]
+                }
                 // Decode one line for this component
                 try decodeLineForComponent(
                     reader: reader,
@@ -297,7 +304,8 @@ public struct JPEGLSDecoder: Sendable {
                     scanHeader: scanHeader,
                     parameters: parameters,
                     limit: limit,
-                    qbppBits: qbppBits
+                    qbppBits: qbppBits,
+                    prevRowEdge: edgeForThisRow
                 )
             }
         }
@@ -345,10 +353,18 @@ public struct JPEGLSDecoder: Sendable {
         let runDecoder = try JPEGLSRunModeDecoder(parameters: parameters, near: scanHeader.near)
         var context = try JPEGLSContextModel(parameters: parameters, near: scanHeader.near)
         
+        // Track left-edge values per component for boundary Rc at col=0.
+        var prevRowEdges = Array(repeating: 0, count: componentCount)
+        
         // Decode pixel by pixel, cycling through components
         for row in 0..<frameHeader.height {
             // Per ITU-T.87 §4.5.1, RUNindex is reset to 0 at the start of each MCU line.
             context.setRunIndex(0)
+            // Capture and advance edge values per component.
+            var edgesForThisRow = prevRowEdges
+            for ci in 0..<componentCount {
+                if row > 0 { prevRowEdges[ci] = componentPixels[ci][row - 1][0] }
+            }
             var col = 0
             while col < frameHeader.width {
                 // Check run mode: ALL components must have zero quantised gradients at (row, col)
@@ -356,7 +372,8 @@ public struct JPEGLSDecoder: Sendable {
                 for componentIndex in 0..<componentCount {
                     let (a, b, c, d) = getNeighbors(
                         pixels: componentPixels[componentIndex],
-                        row: row, col: col, width: frameHeader.width
+                        row: row, col: col, width: frameHeader.width,
+                        prevRowEdge: edgesForThisRow[componentIndex]
                     )
                     let (d1, d2, d3) = decoder.computeGradients(a: a, b: b, c: c, d: d)
                     let q1 = decoder.quantizeGradient(d1)
@@ -374,7 +391,8 @@ public struct JPEGLSDecoder: Sendable {
                     let runValues = (0..<componentCount).map { ci in
                         getNeighbors(
                             pixels: componentPixels[ci],
-                            row: row, col: col, width: frameHeader.width
+                            row: row, col: col, width: frameHeader.width,
+                            prevRowEdge: edgesForThisRow[ci]
                         ).a
                     }
                     let remainingInLine = frameHeader.width - col
@@ -421,7 +439,8 @@ public struct JPEGLSDecoder: Sendable {
                     for componentIndex in 0..<componentCount {
                         let (a, b, c, d) = getNeighbors(
                             pixels: componentPixels[componentIndex],
-                            row: row, col: col, width: frameHeader.width
+                            row: row, col: col, width: frameHeader.width,
+                            prevRowEdge: edgesForThisRow[componentIndex]
                         )
                         let pixel = try decodeSinglePixel(
                             reader: reader,
@@ -474,14 +493,26 @@ public struct JPEGLSDecoder: Sendable {
         // Initialize pixel buffer
         var pixels = Array(repeating: Array(repeating: 0, count: width), count: height)
         
+        // Track the left-edge value for boundary Rc at col=0.
+        // In CharLS this is previous_line[0], which equals the first pixel of
+        // the row decoded TWO iterations ago (0 for rows 0 and 1).
+        var prevRowEdge = 0
+        
         // Decode pixels in raster order
         for row in 0..<height {
             // Per ITU-T.87 §4.5.1, RUNindex is reset to 0 at the start of each scan line.
             context.setRunIndex(0)
+            // Capture the edge value before this row updates it.
+            let edgeForThisRow = prevRowEdge
+            // After this row, the edge for the NEXT row becomes the first pixel
+            // of the current previous row (i.e., prev_row[0]).
+            if row > 0 {
+                prevRowEdge = pixels[row - 1][0]
+            }
             var col = 0
             while col < width {
                 // Get neighbor pixels
-                let (a, b, c, d) = getNeighbors(pixels: pixels, row: row, col: col, width: width)
+                let (a, b, c, d) = getNeighbors(pixels: pixels, row: row, col: col, width: width, prevRowEdge: edgeForThisRow)
                 
                 // Check for run mode: all quantized gradients are zero
                 let (d1, d2, d3) = decoder.computeGradients(a: a, b: b, c: c, d: d)
@@ -549,14 +580,15 @@ public struct JPEGLSDecoder: Sendable {
         scanHeader: JPEGLSScanHeader,
         parameters: JPEGLSPresetParameters,
         limit: Int,
-        qbppBits: Int
+        qbppBits: Int,
+        prevRowEdge: Int = 0
     ) throws {
         // Per ITU-T.87 §4.5.1, RUNindex is reset to 0 at the start of each scan line.
         context.setRunIndex(0)
         var col = 0
         while col < width {
             // Get neighbor pixels
-            let (a, b, c, d) = getNeighbors(pixels: pixels, row: row, col: col, width: width)
+            let (a, b, c, d) = getNeighbors(pixels: pixels, row: row, col: col, width: width, prevRowEdge: prevRowEdge)
             
             // Check for run mode: all quantized gradients are zero
             let (d1, d2, d3) = decoder.computeGradients(a: a, b: b, c: c, d: d)
@@ -769,6 +801,10 @@ public struct JPEGLSDecoder: Sendable {
                 riType: riType
             )
             
+            // Per CharLS, decrement RUNindex AFTER the interruption pixel
+            // is decoded (not during run-length reading).
+            context.decrementRunIndex()
+            
             return (runLength, sample)
         }
         
@@ -877,35 +913,38 @@ public struct JPEGLSDecoder: Sendable {
         var runLength = 0
         var runIndex = context.currentRunIndex
         
-        // Read continuation bits per ITU-T.87
-        // Each '1' bit adds 2^J[RUNindex] pixels to the run
-        while runLength < remainingInLine {
+        // Read continuation bits per CharLS / ITU-T.87 §A.7.1.
+        // Each '1' bit contributes min(2^J[RUNindex], remaining) pixels.
+        // run_index is only incremented when a FULL block is used.
+        while true {
+            let bit = try reader.readBits(1)
+            if bit == 0 {
+                break  // Run interrupted
+            }
             let j = runDecoder.computeJ(runIndex: runIndex)
             let blockSize = 1 << j  // 2^J
+            let count = min(blockSize, remainingInLine - runLength)
+            runLength += count
             
-            let bit = try reader.readBits(1)
-            if bit == 1 {
-                // Full block of pixels
-                runLength += blockSize
-                // Increment RUNindex per standard
-                if runIndex < 31 {
-                    runIndex += 1
-                }
-            } else {
-                // Run interrupted - read J remainder bits
-                let remainder = j > 0 ? Int(try reader.readBits(j)) : 0
-                runLength += remainder
-                // Decrement RUNindex per standard
-                if runIndex > 0 {
-                    runIndex -= 1
-                }
-                // Update context run index
-                context.setRunIndex(runIndex)
-                return min(runLength, remainingInLine)
+            // Only increment run_index when a full block was consumed
+            if count == blockSize && runIndex < 31 {
+                runIndex += 1
+            }
+            
+            if runLength >= remainingInLine {
+                break  // Run reached end of line
             }
         }
         
-        // Run reached end of line
+        if runLength < remainingInLine {
+            // Incomplete run — read J[RUNindex] remainder bits.
+            // Note: run_index is NOT decremented here; the caller decrements
+            // after the interruption pixel is decoded (matching CharLS).
+            let j = runDecoder.computeJ(runIndex: runIndex)
+            let remainder = j > 0 ? Int(try reader.readBits(j)) : 0
+            runLength += remainder
+        }
+        
         context.setRunIndex(runIndex)
         return min(runLength, remainingInLine)
     }
@@ -929,19 +968,24 @@ public struct JPEGLSDecoder: Sendable {
     
     /// Get neighbor pixels for gradient computation
     ///
-    /// Handles boundary conditions per ITU-T.87 Section 3.2.
+    /// Handles boundary conditions per CharLS / ITU-T.87 Section 3.2.
+    /// At col=0, row>0, the top-left (Rc) is the edge pixel from the
+    /// previous row — not the first pixel of the previous row.
     ///
     /// - Parameters:
     ///   - pixels: Current pixel buffer
     ///   - row: Current row
     ///   - col: Current column
     ///   - width: Image width (for top-right boundary check)
+    ///   - prevRowEdge: The left-edge value of the previous row (Rc at col=0).
+    ///                  Equals 0 for row 0–1, then first pixel of row r−2 for row r.
     /// - Returns: Tuple of (a, b, c, d) neighbor pixels
     private func getNeighbors(
         pixels: [[Int]],
         row: Int,
         col: Int,
-        width: Int
+        width: Int,
+        prevRowEdge: Int = 0
     ) -> (a: Int, b: Int, c: Int, d: Int) {
         if row == 0 && col == 0 {
             return (0, 0, 0, 0)
@@ -953,7 +997,7 @@ public struct JPEGLSDecoder: Sendable {
         } else if col == 0 {
             let top = pixels[row - 1][col]
             let topRight = (col + 1 < width) ? pixels[row - 1][col + 1] : top
-            return (top, top, top, topRight)
+            return (top, top, prevRowEdge, topRight)
         } else {
             let a = pixels[row][col - 1]      // Left
             let b = pixels[row - 1][col]      // Top
