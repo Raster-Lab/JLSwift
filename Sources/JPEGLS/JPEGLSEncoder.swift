@@ -119,7 +119,8 @@ public struct JPEGLSEncoder: Sendable {
         
         // Write preset parameters if custom or near-lossless
         let parameters = try configuration.presetParameters ?? JPEGLSPresetParameters.defaultParameters(
-            bitsPerSample: encodingData.frameHeader.bitsPerSample
+            bitsPerSample: encodingData.frameHeader.bitsPerSample,
+            near: configuration.near
         )
         
         if configuration.presetParameters != nil || configuration.near > 0 {
@@ -685,16 +686,26 @@ public struct JPEGLSEncoder: Sendable {
                                 )
                             }
                             
-                            let interruption = runMode.encodeRunInterruption(
-                                interruptionValue: interruptionNeighbors.actual,
-                                runValue: runValue
-                            )
+                            // Compute Rb at the interruption position
+                            let encRb: Int
+                            if row > 0 {
+                                if let compPixels = buffer.getComponentPixels(componentId: componentId) {
+                                    encRb = near > 0 ? reconstructed[row - 1][interruptionCol] : compPixels[row - 1][interruptionCol]
+                                } else {
+                                    encRb = 0
+                                }
+                            } else {
+                                encRb = 0
+                            }
                             
                             writeRunInterruptionBits(
-                                mappedError: interruption.mappedError,
-                                absError: abs(interruption.error),
+                                interruptionValue: interruptionNeighbors.actual,
+                                runValue: runValue,
+                                rb: encRb,
+                                near: near,
                                 context: &context,
                                 regularMode: regularMode,
+                                runMode: runMode,
                                 writer: writer,
                                 limit: limit,
                                 qbppBits: qbppBits
@@ -825,16 +836,26 @@ public struct JPEGLSEncoder: Sendable {
                                     )
                                 }
                                 
-                                let interruption = runMode.encodeRunInterruption(
-                                    interruptionValue: interruptionNeighbors.actual,
-                                    runValue: runValue
-                                )
+                                // Compute Rb at the interruption position
+                                let encRb2: Int
+                                if row > 0 {
+                                    if let compPixels = buffer.getComponentPixels(componentId: component.id) {
+                                        encRb2 = compPixels[row - 1][interruptionCol]
+                                    } else {
+                                        encRb2 = 0
+                                    }
+                                } else {
+                                    encRb2 = 0
+                                }
                                 
                                 writeRunInterruptionBits(
-                                    mappedError: interruption.mappedError,
-                                    absError: abs(interruption.error),
+                                    interruptionValue: interruptionNeighbors.actual,
+                                    runValue: runValue,
+                                    rb: encRb2,
+                                    near: scanHeader.near,
                                     context: &context,
                                     regularMode: regularMode,
+                                    runMode: runMode,
                                     writer: writer,
                                     limit: limit,
                                     qbppBits: qbppBits
@@ -983,15 +1004,25 @@ public struct JPEGLSEncoder: Sendable {
                                         reason: "Failed to get interruption neighbors"
                                     )
                                 }
-                                let interruption = runMode.encodeRunInterruption(
-                                    interruptionValue: intNeighbors.actual,
-                                    runValue: runValue[cIdx]
-                                )
+                                // Compute Rb at the interruption position
+                                let encRb3: Int
+                                if row > 0 {
+                                    if let compPixels = buffer.getComponentPixels(componentId: component.id) {
+                                        encRb3 = compPixels[row - 1][interruptionCol]
+                                    } else {
+                                        encRb3 = 0
+                                    }
+                                } else {
+                                    encRb3 = 0
+                                }
                                 writeRunInterruptionBits(
-                                    mappedError: interruption.mappedError,
-                                    absError: abs(interruption.error),
+                                    interruptionValue: intNeighbors.actual,
+                                    runValue: runValue[cIdx],
+                                    rb: encRb3,
+                                    near: scanHeader.near,
                                     context: &context,
                                     regularMode: regularMode,
+                                    runMode: runMode,
                                     writer: writer,
                                     limit: limit,
                                     qbppBits: qbppBits
@@ -1161,22 +1192,62 @@ public struct JPEGLSEncoder: Sendable {
     ///   - limit: LIMIT = 2 × (qbppBits + 8)
     ///   - qbppBits: ⌈log₂(RANGE)⌉
     private func writeRunInterruptionBits(
-        mappedError: Int,
-        absError: Int,
+        interruptionValue: Int,
+        runValue: Int,
+        rb: Int,
+        near: Int,
         context: inout JPEGLSContextModel,
         regularMode: JPEGLSRegularMode,
+        runMode: JPEGLSRunMode,
         writer: JPEGLSBitstreamWriter,
         limit: Int,
         qbppBits: Int
     ) {
-        let k = context.computeRunInterruptionGolombK()
-        let (unaryLength, remainder) = regularMode.golombEncode(value: mappedError, k: k)
-        let limitThreshold = limit - qbppBits - 1
+        let ra = runValue
+        let riType = (abs(ra - rb) <= near) ? 1 : 0
+        
+        // Prediction and error per CharLS
+        let prediction: Int
+        let errorValue: Int
+        if riType == 1 {
+            prediction = ra
+            errorValue = interruptionValue - prediction
+        } else {
+            prediction = rb
+            let raw = interruptionValue - prediction
+            errorValue = (rb >= ra) ? raw : -raw
+        }
+        
+        // Modular reduction
+        let range = parameters(regularMode).maxValue + 1
+        var reducedError = errorValue
+        if reducedError > (range - 1) / 2 {
+            reducedError -= range
+        } else if reducedError < -(range / 2) {
+            reducedError += range
+        }
+        
+        let k = context.computeRunInterruptionGolombK(riType: riType)
+        let map = context.computeRunInterruptionMap(errorValue: reducedError, k: k, riType: riType)
+        
+        // Map to non-negative with RItype offset per CharLS
+        let eMappedErrorValue: Int
+        if reducedError < 0 {
+            eMappedErrorValue = -2 * reducedError - 1 - riType + (map ? 1 : 0)
+        } else {
+            eMappedErrorValue = 2 * reducedError - riType + (map ? 1 : 0)
+        }
+        
+        // Adjusted limit for run interruption
+        let j = runMode.computeJ(runIndex: context.currentRunIndex)
+        let adjustedLimit = limit - j - 1
+        let limitThreshold = adjustedLimit - qbppBits - 1
+        
+        let (unaryLength, remainder) = regularMode.golombEncode(value: eMappedErrorValue, k: k)
         if unaryLength >= limitThreshold {
-            // Limited binary code
             for _ in 0..<limitThreshold { writer.writeBits(0, count: 1) }
             writer.writeBits(1, count: 1)
-            writer.writeBits(UInt32(mappedError - 1), count: qbppBits)
+            writer.writeBits(UInt32(eMappedErrorValue - 1), count: qbppBits)
         } else {
             for _ in 0..<unaryLength { writer.writeBits(0, count: 1) }
             writer.writeBits(1, count: 1)
@@ -1184,8 +1255,17 @@ public struct JPEGLSEncoder: Sendable {
                 writer.writeBits(UInt32(remainder), count: k)
             }
         }
-        // Update run interruption context statistics per ITU-T.87 §4.5.3
-        context.updateRunInterruptionContext(absError: absError)
+        
+        context.updateRunInterruptionContext(
+            errorValue: reducedError,
+            eMappedErrorValue: eMappedErrorValue,
+            riType: riType
+        )
+    }
+    
+    /// Helper to extract parameters from regular mode encoder
+    private func parameters(_ regularMode: JPEGLSRegularMode) -> JPEGLSPresetParameters {
+        regularMode.presetParameters
     }
     
     /// Write run termination and remainder bits to bitstream

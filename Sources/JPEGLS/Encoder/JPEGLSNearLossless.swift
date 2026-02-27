@@ -495,7 +495,7 @@ public struct NearLosslessConfiguration: Sendable, Equatable {
     /// - Returns: Default preset parameters for the configured bits per sample
     /// - Throws: `JPEGLSError.invalidBitsPerSample` if bits per sample is invalid
     public func createPresetParameters() throws -> JPEGLSPresetParameters {
-        return try JPEGLSPresetParameters.defaultParameters(bitsPerSample: bitsPerSample)
+        return try JPEGLSPresetParameters.defaultParameters(bitsPerSample: bitsPerSample, near: near)
     }
     
     /// Create a near-lossless encoder with this configuration.

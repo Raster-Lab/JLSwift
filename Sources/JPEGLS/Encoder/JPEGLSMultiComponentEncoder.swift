@@ -39,7 +39,8 @@ public struct JPEGLSMultiComponentEncoder: Sendable {
         
         // Create preset parameters from frame header using defaults
         self.parameters = try JPEGLSPresetParameters.defaultParameters(
-            bitsPerSample: frameHeader.bitsPerSample
+            bitsPerSample: frameHeader.bitsPerSample,
+            near: scanHeader.near
         )
     }
     

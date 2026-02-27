@@ -81,28 +81,49 @@ public struct JPEGLSPresetParameters: Sendable, Equatable {
     
     /// Compute default preset parameters for given bits per sample
     ///
-    /// These defaults are defined in ITU-T.87 Section 4.2 and provide good
-    /// compression performance for most natural images.
+    /// These defaults are defined in ITU-T.87 Table C.2 (§C.2.4.1.1) and provide
+    /// good compression performance for most natural images.
     ///
-    /// - Parameter bitsPerSample: Number of bits per sample (2-16)
+    /// The thresholds depend on NEAR (the near-lossless error bound) as well as
+    /// MAXVAL.  When NEAR = 0 (lossless), the standard formulas reduce to the
+    /// traditional defaults.
+    ///
+    /// - Parameters:
+    ///   - bitsPerSample: Number of bits per sample (2-16)
+    ///   - near: Near-lossless parameter (0 for lossless, default: 0)
     /// - Returns: Default preset parameters
     /// - Throws: `JPEGLSError.invalidBitsPerSample` if bits per sample is invalid
-    public static func defaultParameters(bitsPerSample: Int) throws -> JPEGLSPresetParameters {
+    public static func defaultParameters(bitsPerSample: Int, near: Int = 0) throws -> JPEGLSPresetParameters {
         guard bitsPerSample >= 2 && bitsPerSample <= 16 else {
             throw JPEGLSError.invalidBitsPerSample(bits: bitsPerSample)
         }
         
         let maxValue = (1 << bitsPerSample) - 1
         
-        // Default threshold calculations per ITU-T.87
-        let factor = min(maxValue, 4095)
-        var threshold1 = max(2, (factor + 128) / 256)
-        var threshold2 = max(3, (factor + 64) / 128)
-        var threshold3 = max(4, (factor + 42) / 85)
+        // FACTOR computation per ITU-T.87 Table C.2
+        let factor: Int
+        if maxValue >= 128 {
+            factor = (min(maxValue, 4095) + 128) / 256
+        } else {
+            factor = (256 + maxValue / 2) / (maxValue + 1)
+        }
         
-        // Ensure thresholds are within valid range and properly ordered
-        threshold1 = min(threshold1, maxValue)
+        // BASIC_T values from Table C.2
+        let basicT1 = 3
+        let basicT2 = 7
+        let basicT3 = 21
+        
+        // Threshold computation per ITU-T.87 Table C.2
+        // T1 = CLAMP(FACTOR*(BASIC_T1-2) + 2 + 3*NEAR, NEAR+1, MAXVAL)
+        // T2 = CLAMP(FACTOR*(BASIC_T2-3) + 3 + 5*NEAR, T1,     MAXVAL)
+        // T3 = CLAMP(FACTOR*(BASIC_T3-4) + 4 + 7*NEAR, T2,     MAXVAL)
+        var threshold1 = factor * (basicT1 - 2) + 2 + 3 * near
+        threshold1 = min(max(threshold1, near + 1), maxValue)
+        
+        var threshold2 = factor * (basicT2 - 3) + 3 + 5 * near
         threshold2 = min(max(threshold2, threshold1), maxValue)
+        
+        var threshold3 = factor * (basicT3 - 4) + 4 + 7 * near
         threshold3 = min(max(threshold3, threshold2), maxValue)
         
         // Default reset value
