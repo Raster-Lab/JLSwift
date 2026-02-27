@@ -496,7 +496,7 @@ public struct JPEGLSEncoder: Sendable {
         )
         
         // Compute Golomb-Rice LIMIT parameters per ITU-T.87 §4.4
-        let (limit, qbppBits) = computeGolombLimit(parameters: parameters, near: scanHeader.near)
+        let (limit, qbppBits) = computeGolombLimit(parameters: parameters, near: scanHeader.near, bitsPerSample: imageData.frameHeader.bitsPerSample)
         
         // Encode based on interleave mode
         switch scanHeader.interleaveMode {
@@ -543,13 +543,17 @@ public struct JPEGLSEncoder: Sendable {
 
     /// Compute the Golomb-Rice LIMIT and qbppBits for a scan per ITU-T.87 §4.4.
     ///
+    /// LIMIT = 2 × (bpp + max(8, bpp)) where bpp is the original bits per sample.
+    ///
     /// - Parameters:
     ///   - parameters: Preset coding parameters
     ///   - near: Near-lossless parameter (0 for lossless)
+    ///   - bitsPerSample: Original bits per sample from frame header
     /// - Returns: Tuple of (limit, qbppBits)
     private func computeGolombLimit(
         parameters: JPEGLSPresetParameters,
-        near: Int
+        near: Int,
+        bitsPerSample: Int
     ) -> (limit: Int, qbppBits: Int) {
         let range: Int
         if near == 0 {
@@ -565,7 +569,7 @@ public struct JPEGLSEncoder: Sendable {
             r >>= 1
         }
         qbppBits = max(qbppBits, 2)
-        let limit = 2 * (qbppBits + 8)
+        let limit = 2 * (bitsPerSample + max(8, bitsPerSample))
         return (limit, qbppBits)
     }
     

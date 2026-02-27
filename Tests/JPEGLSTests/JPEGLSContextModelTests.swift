@@ -159,9 +159,9 @@ struct JPEGLSContextModelTests {
         context.updateContext(contextIndex: contextIndex, predictionError: predictionError, sign: sign)
         
         // A += |error| = 4 + 5 = 9
-        // B += sign * error = 0 + 1*5 = 5; N becomes 2; B >= N → C += 1, B -= N → B = 3
+        // B += sign * error = 0 + 1*5 = 5; N becomes 2; B > 0 → B -= N = 3, B > 0 → B = 0, C += 1
         #expect(context.getA(contextIndex: contextIndex) == expectedAInit + 5)
-        #expect(context.getB(contextIndex: contextIndex) == 3)
+        #expect(context.getB(contextIndex: contextIndex) == 0)
         #expect(context.getC(contextIndex: contextIndex) == 1)
         #expect(context.getN(contextIndex: contextIndex) == 2)
     }
@@ -209,16 +209,18 @@ struct JPEGLSContextModelTests {
         let nAfterReset = context.getN(contextIndex: contextIndex)
         let aAfterReset = context.getA(contextIndex: contextIndex)
         
-        // N should be halved after reset
-        #expect(nAfterReset == resetValue / 2)
+        // After RESET-1 updates: N should be RESET (reset check is before N increment,
+        // so reset hasn't triggered yet)
+        #expect(nAfterReset == resetValue)
         
         // A should have been approximately halved from accumulated value
         #expect(aAfterReset > 0)
         
-        // Do one more update to verify context continues to work
+        // Do one more update — this triggers the reset (N=64 >= RESET),
+        // halving A, B, N, then incrementing N: N = 64/2 + 1 = 33
         context.updateContext(contextIndex: contextIndex, predictionError: 10, sign: 1)
-        #expect(context.getN(contextIndex: contextIndex) == nAfterReset + 1)
-        #expect(context.getA(contextIndex: contextIndex) == aAfterReset + 10)
+        #expect(context.getN(contextIndex: contextIndex) == nAfterReset / 2 + 1)
+        #expect(context.getA(contextIndex: contextIndex) == (aAfterReset + 10) >> 1)
     }
     
     @Test("Context B never becomes zero after reset")
@@ -230,7 +232,7 @@ struct JPEGLSContextModelTests {
         
         // Update once (B accumulates the prediction error)
         context.updateContext(contextIndex: contextIndex, predictionError: 1, sign: 1)
-        #expect(context.getB(contextIndex: contextIndex) == 1)
+        #expect(context.getB(contextIndex: contextIndex) == -1)
         
         // Continue updating until reset
         for _ in 1..<params.reset {
@@ -461,10 +463,10 @@ struct JPEGLSContextModelTests {
         #expect(context.getA(contextIndex: ctx2) == aInit + 10)
         #expect(context.getA(contextIndex: ctx3) == aInit + 15)
         
-        // B accumulates error minus bias corrections
-        #expect(context.getB(contextIndex: ctx1) == 3)
-        #expect(context.getB(contextIndex: ctx2) == 8)
-        #expect(context.getB(contextIndex: ctx3) == 13)
+        // B is clamped to 0 after positive bias correction per ITU-T.87 §A.6.3
+        #expect(context.getB(contextIndex: ctx1) == 0)
+        #expect(context.getB(contextIndex: ctx2) == 0)
+        #expect(context.getB(contextIndex: ctx3) == 0)
     }
     
     // MARK: - Run Interruption Context Statistics Tests

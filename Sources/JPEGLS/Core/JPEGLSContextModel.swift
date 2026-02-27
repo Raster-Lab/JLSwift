@@ -251,24 +251,15 @@ public struct JPEGLSContextModel: Sendable {
         // Update A (accumulated absolute prediction error) per ITU-T.87
         contextA[contextIndex] += abs(predictionError)
         
-        // Update B (bias accumulator) with sign-adjusted prediction error per ITU-T.87.
-        // The sign normalises the context so that a positive B means the prediction
-        // is systematically low; a negative B means it is systematically high.
-        contextB[contextIndex] += sign * predictionError
+        // Update B per ITU-T.87 §A.6.2: B[Q] += Errval × (2·NEAR + 1)
+        // The caller passes predictionError = sign × Errval (sign-denormalised),
+        // so sign × predictionError = Errval (sign-normalised error per the standard).
+        let errval = sign * predictionError
+        let bIncrement = errval * (2 * near + 1)
+        contextB[contextIndex] += bIncrement
         
-        // Update N (occurrence counter)
-        contextN[contextIndex] += 1
-        
-        // Bias correction per ITU-T.87 Section 4.3.3
-        if contextB[contextIndex] >= contextN[contextIndex] {
-            contextC[contextIndex] += 1
-            contextB[contextIndex] -= contextN[contextIndex]
-        } else if contextB[contextIndex] < -contextN[contextIndex] {
-            contextC[contextIndex] -= 1
-            contextB[contextIndex] += contextN[contextIndex]
-        }
-        
-        // Reset when N reaches RESET value per ITU-T.87 Section 4.3.4
+        // Reset when N reaches RESET value per ITU-T.87 Section A.6.2
+        // Reset check happens BEFORE N is incremented (per standard and CharLS).
         if contextN[contextIndex] >= parameters.reset {
             contextA[contextIndex] = contextA[contextIndex] >> 1
             contextB[contextIndex] = contextB[contextIndex] >> 1
@@ -277,6 +268,29 @@ public struct JPEGLSContextModel: Sendable {
             // Ensure N doesn't become zero
             if contextN[contextIndex] == 0 {
                 contextN[contextIndex] = 1
+            }
+        }
+        
+        // Increment N (after reset check, before bias correction)
+        contextN[contextIndex] += 1
+        
+        // Bias correction per ITU-T.87 Section A.6.3 (code segment A.13)
+        let n = contextN[contextIndex]
+        if contextB[contextIndex] + n <= 0 {
+            contextB[contextIndex] += n
+            if contextB[contextIndex] <= -n {
+                contextB[contextIndex] = -n + 1
+            }
+            if contextC[contextIndex] > -128 {
+                contextC[contextIndex] -= 1
+            }
+        } else if contextB[contextIndex] > 0 {
+            contextB[contextIndex] -= n
+            if contextB[contextIndex] > 0 {
+                contextB[contextIndex] = 0
+            }
+            if contextC[contextIndex] < 127 {
+                contextC[contextIndex] += 1
             }
         }
     }
@@ -311,6 +325,24 @@ public struct JPEGLSContextModel: Sendable {
         }
         
         return k
+    }
+    
+    /// Compute error correction for k=0 map swap per ITU-T.87 §A.4.1.
+    ///
+    /// Implements `bit_wise_sign(2·B + N − 1)` from the standard: returns −1
+    /// when the expression is negative (context B is significantly negative),
+    /// 0 otherwise.  Only applied when k=0 and near=0 (lossless mode).
+    ///
+    /// - Parameters:
+    ///   - contextIndex: Context index (0 to 364)
+    ///   - k: Current Golomb-Rice parameter
+    /// - Returns: Error correction value (-1 or 0) for XOR with signed error
+    public func getErrorCorrection(contextIndex: Int, k: Int) -> Int {
+        guard k == 0 && near == 0 else { return 0 }
+        guard contextIndex >= 0 && contextIndex < Self.regularContextCount else { return 0 }
+        let b = contextB[contextIndex]
+        let n = contextN[contextIndex]
+        return (2 * b + n - 1) < 0 ? -1 : 0
     }
     
     // MARK: - Run-Length Context
