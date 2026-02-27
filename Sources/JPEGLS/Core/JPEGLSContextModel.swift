@@ -335,10 +335,11 @@ public struct JPEGLSContextModel: Sendable {
         return k
     }
     
-    /// Compute error correction for k=0 map swap per ITU-T.87 §A.5.2.
+    /// Compute error correction for k=0 map swap per ITU-T.87 §A.5.2 / CharLS.
     ///
-    /// The standard condition is `2*B[Q] < -N[Q]` (equivalently `2*B[Q]+N[Q] < 0`).
-    /// Returns −1 when the condition holds (for XOR with signed error), 0 otherwise.
+    /// Returns `bit_wise_sign(2*B[Q] + N[Q] - 1)`, i.e. −1 when
+    /// `2*B[Q] + N[Q] <= 0` and 0 otherwise.  This matches the CharLS
+    /// reference implementation (`regular_mode_context::get_error_correction`).
     /// Only applied when k=0 and near=0 (lossless mode).
     ///
     /// - Parameters:
@@ -350,7 +351,7 @@ public struct JPEGLSContextModel: Sendable {
         guard contextIndex >= 0 && contextIndex < Self.regularContextCount else { return 0 }
         let b = contextB[contextIndex]
         let n = contextN[contextIndex]
-        return (2 * b + n) < 0 ? -1 : 0
+        return (2 * b + n - 1) < 0 ? -1 : 0
     }
     
     // MARK: - Run-Length Context
@@ -407,6 +408,16 @@ public struct JPEGLSContextModel: Sendable {
     /// - Parameter index: New run index value (0 to 31)
     public mutating func setRunIndex(_ index: Int) {
         runIndex = max(0, min(31, index))
+    }
+    
+    /// Decrement the run index by 1 (minimum 0).
+    ///
+    /// Per CharLS, the run index is decremented after a run interruption
+    /// pixel has been decoded — not during run-length reading.
+    public mutating func decrementRunIndex() {
+        if runIndex > 0 {
+            runIndex -= 1
+        }
     }
     
     /// Get run interruption index value.
