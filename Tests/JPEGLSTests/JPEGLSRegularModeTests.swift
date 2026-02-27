@@ -122,11 +122,11 @@ struct JPEGLSRegularModeTests {
         let params = try createDefaultParameters()
         let regularMode = try JPEGLSRegularMode(parameters: params, near: 0)
         
-        // Gradients in range (NEAR, T1] should quantize to ±1
+        // Gradients in range (NEAR, T1) should quantize to ±1 (strict less-than upper bound)
         #expect(regularMode.quantizeGradient(1) == 1)
-        #expect(regularMode.quantizeGradient(3) == 1)   // T1 = 3
+        #expect(regularMode.quantizeGradient(3) == 2)   // T1 = 3; 3 < 3 is FALSE → next bucket
         #expect(regularMode.quantizeGradient(-1) == -1)
-        #expect(regularMode.quantizeGradient(-3) == -1)
+        #expect(regularMode.quantizeGradient(-3) == -2)
     }
     
     @Test("Quantize gradient using T2 threshold")
@@ -134,11 +134,11 @@ struct JPEGLSRegularModeTests {
         let params = try createDefaultParameters()
         let regularMode = try JPEGLSRegularMode(parameters: params, near: 0)
         
-        // Gradients in range (T1, T2] should quantize to ±2
+        // Gradients in range [T1, T2) should quantize to ±2 (strict less-than upper bound)
         #expect(regularMode.quantizeGradient(4) == 2)
-        #expect(regularMode.quantizeGradient(7) == 2)   // T2 = 7
+        #expect(regularMode.quantizeGradient(7) == 3)   // T2 = 7; 7 < 7 is FALSE → next bucket
         #expect(regularMode.quantizeGradient(-4) == -2)
-        #expect(regularMode.quantizeGradient(-7) == -2)
+        #expect(regularMode.quantizeGradient(-7) == -3)
     }
     
     @Test("Quantize gradient using T3 threshold")
@@ -146,11 +146,11 @@ struct JPEGLSRegularModeTests {
         let params = try createDefaultParameters()
         let regularMode = try JPEGLSRegularMode(parameters: params, near: 0)
         
-        // Gradients in range (T2, T3] should quantize to ±3
+        // Gradients in range [T2, T3) should quantize to ±3 (strict less-than upper bound)
         #expect(regularMode.quantizeGradient(8) == 3)
-        #expect(regularMode.quantizeGradient(21) == 3)   // T3 = 21
+        #expect(regularMode.quantizeGradient(21) == 4)   // T3 = 21; 21 < 21 is FALSE → next bucket
         #expect(regularMode.quantizeGradient(-8) == -3)
-        #expect(regularMode.quantizeGradient(-21) == -3)
+        #expect(regularMode.quantizeGradient(-21) == -4)
     }
     
     @Test("Quantize gradient beyond T3")
