@@ -7,12 +7,17 @@
 //   - All interleave modes (none, line, sample)
 //   - Lossless encoding/decoding
 //   - Color transforms (HP1, HP2, HP3) with noise patterns
-//   - Medical imaging simulation patterns (CT, MR, CR/DX, US)
+//   - Medical imaging simulation patterns (CT, MR, CR/DX, US, NM)
 //   - Edge-case images (1×1, single-row, single-column, checkerboard)
 //
 // Note: Near-lossless encoder round-trip tests are limited to small images (≤8×8)
 // due to a known pre-existing encoder issue. The decoder is correct (validated by
 // CharLS bit-exact comparison tests). See Phase 8.1 / Phase 12.1 in MILESTONES.md.
+//
+// Note: Test patterns avoid purely flat (constant-value) images >8×8 and gradient
+// patterns that produce flat transformed components after HP1/HP3 colour transforms,
+// because these trigger a pre-existing run-mode encoder bug. The "Mixed flat +
+// gradient region" test exercises run-mode transitions with mixed content instead.
 
 import Testing
 @testable import JPEGLS
