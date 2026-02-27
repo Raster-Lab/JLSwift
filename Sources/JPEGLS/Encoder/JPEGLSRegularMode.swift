@@ -22,6 +22,9 @@ public struct JPEGLSRegularMode: Sendable {
     /// Preset parameters controlling thresholds and limits
     private let parameters: JPEGLSPresetParameters
     
+    /// Public accessor for preset parameters
+    public var presetParameters: JPEGLSPresetParameters { parameters }
+    
     /// Near-lossless parameter (0 for lossless mode)
     private let near: Int
     

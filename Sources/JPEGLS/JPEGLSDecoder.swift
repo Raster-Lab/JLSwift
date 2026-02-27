@@ -496,6 +496,9 @@ public struct JPEGLSDecoder: Sendable {
                         runDecoder: runDecoder,
                         context: &context,
                         runValue: a,
+                        row: row,
+                        col: col,
+                        previousRow: row > 0 ? pixels[row - 1] : nil,
                         remainingInLine: width - col,
                         parameters: parameters,
                         near: scanHeader.near,
@@ -568,6 +571,9 @@ public struct JPEGLSDecoder: Sendable {
                     runDecoder: runDecoder,
                     context: &context,
                     runValue: a,
+                    row: row,
+                    col: col,
+                    previousRow: row > 0 ? pixels[row - 1] : nil,
                     remainingInLine: width - col,
                     parameters: parameters,
                     near: scanHeader.near,
@@ -690,6 +696,9 @@ public struct JPEGLSDecoder: Sendable {
         runDecoder: JPEGLSRunModeDecoder,
         context: inout JPEGLSContextModel,
         runValue: Int,
+        row: Int,
+        col: Int,
+        previousRow: [Int]?,
         remainingInLine: Int,
         parameters: JPEGLSPresetParameters,
         near: Int,
@@ -706,23 +715,61 @@ public struct JPEGLSDecoder: Sendable {
         
         // If run ends before end of line, decode interruption pixel
         if runLength < remainingInLine {
-            // Per ITU-T.87 §4.5.3, the Golomb parameter for run interruption is
-            // computed adaptively from run interruption context statistics (A_ri, N_ri).
-            let k = context.computeRunInterruptionGolombK()
+            let ra = runValue
             
-            // Read Golomb-Rice encoded interruption error
-            let mappedError = try readGolombCode(reader: reader, k: k, limit: limit, qbppBits: qbppBits)
+            // Compute Rb at the interruption position (col + runLength in the previous row)
+            let interruptionCol = col + runLength
+            let rb: Int
+            if let prevRow = previousRow, interruptionCol < prevRow.count {
+                rb = prevRow[interruptionCol]
+            } else {
+                rb = 0  // First row or out of bounds
+            }
             
-            // Decode interruption sample
-            let interruption = runDecoder.decodeRunInterruption(
-                mappedError: mappedError,
-                runValue: runValue
+            // Determine RItype per ITU-T.87: type 1 if |Ra-Rb| <= NEAR
+            let riType = (abs(ra - rb) <= near) ? 1 : 0
+            
+            // Per ITU-T.87 §4.5.3 / CharLS, the Golomb parameter uses RItype-aware context
+            let k = context.computeRunInterruptionGolombK(riType: riType)
+            
+            // Per CharLS, the LIMIT for run interruption Golomb code is adjusted:
+            // limit_ri = LIMIT - J[RUNindex] - 1
+            let j = runDecoder.computeJ(runIndex: context.currentRunIndex)
+            let adjustedLimit = limit - j - 1
+            
+            // Read Golomb-Rice encoded interruption error (using adjusted limit)
+            let eMappedErrorValue = try readGolombCode(
+                reader: reader, k: k, limit: adjustedLimit, qbppBits: qbppBits
             )
             
-            // Update run interruption context statistics per ITU-T.87 §4.5.3
-            context.updateRunInterruptionContext(absError: abs(interruption.error))
+            // Per CharLS, compute error value with RItype offset:
+            // error = compute_error_value(eMappedErrorValue + riType, k)
+            let errorValue = context.computeRunInterruptionErrorValue(
+                temp: eMappedErrorValue + riType, k: k, riType: riType
+            )
             
-            return (runLength, interruption.sample)
+            // Prediction and sign correction per ITU-T.87 / CharLS
+            let prediction: Int
+            let sample: Int
+            if riType == 1 {
+                // RItype=1: predict from Ra, no sign correction
+                prediction = ra
+                sample = runDecoder.reconstructSample(prediction: prediction, error: errorValue)
+            } else {
+                // RItype=0: predict from Rb, apply sign(Rb-Ra)
+                prediction = rb
+                let signCorrectedError = errorValue * (rb >= ra ? 1 : -1)
+                sample = runDecoder.reconstructSample(prediction: prediction, error: signCorrectedError)
+            }
+            
+            // Update run interruption context statistics per CharLS
+            context.updateRunInterruptionContext(
+                errorValue: errorValue,
+                eMappedErrorValue: eMappedErrorValue,
+                riType: riType
+            )
+            
+            return (runLength, sample)
         }
         
         // Full run to end of line

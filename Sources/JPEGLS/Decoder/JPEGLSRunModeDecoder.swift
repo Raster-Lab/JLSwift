@@ -236,6 +236,26 @@ public struct JPEGLSRunModeDecoder: Sendable {
         return decodeRunInterruption(mappedError: mappedError, runValue: runValue)
     }
     
+    /// Reconstruct a sample from prediction and error with modular arithmetic.
+    ///
+    /// Per ITU-T.87, the reconstructed value uses modular arithmetic:
+    /// sample = (prediction + error) mod RANGE, clamped to [0, MAXVAL].
+    ///
+    /// - Parameters:
+    ///   - prediction: The prediction value (Ra or Rb depending on RItype)
+    ///   - error: Signed error value (possibly sign-corrected)
+    /// - Returns: Reconstructed sample value
+    public func reconstructSample(prediction: Int, error: Int) -> Int {
+        var sample = prediction + error
+        let range = parameters.maxValue + 1
+        if sample < 0 {
+            sample += range
+        } else if sample > parameters.maxValue {
+            sample -= range
+        }
+        return max(0, min(parameters.maxValue, sample))
+    }
+    
     // MARK: - Context Adaptation
     
     /// Update run index based on completed run length.

@@ -46,11 +46,17 @@ public struct JPEGLSContextModel: Sendable {
     private var runInterruptionIndex: [Int]
     
     /// Run interruption accumulated absolute error (A_ri) per ITU-T.87 §4.5.3.
-    /// Initialised to A_init (same as regular context A initialisation).
-    private var runInterruptionA: Int
+    /// Index 0 = RItype 0 (Ra ≠ Rb), Index 1 = RItype 1 (Ra ≈ Rb).
+    private var runInterruptionA: [Int]
     
     /// Run interruption sample count (N_ri) per ITU-T.87 §4.5.3.
-    private var runInterruptionN: Int
+    /// Index 0 = RItype 0, Index 1 = RItype 1.
+    private var runInterruptionN: [Int]
+    
+    /// Run interruption negative error count (nn) per ITU-T.87.
+    /// Used for map computation in run interruption coding.
+    /// Index 0 = RItype 0, Index 1 = RItype 1.
+    private var runInterruptionNN: [Int]
     
     /// Current run length counter
     private var runLength: Int
@@ -106,10 +112,12 @@ public struct JPEGLSContextModel: Sendable {
         
         // Initialize run-length state
         self.runInterruptionIndex = Array(repeating: 0, count: Self.runContextCount)
-        // Initialise run interruption statistics per ITU-T.87 §4.5.3.
-        // A_ri starts at A_init (same as regular context A); N_ri starts at 1.
-        self.runInterruptionA = max(2, (range + 32) / 64)
-        self.runInterruptionN = 1
+        // Initialise run interruption statistics per ITU-T.87 §4.5.3 / CharLS.
+        // Two contexts: index 0 for RItype=0, index 1 for RItype=1.
+        let riAInit = max(2, (range + 32) / 64)
+        self.runInterruptionA = [riAInit, riAInit]
+        self.runInterruptionN = [1, 1]
+        self.runInterruptionNN = [0, 0]
         self.runLength = 0
         self.runIndex = 0
         
@@ -416,41 +424,107 @@ public struct JPEGLSContextModel: Sendable {
     
     /// Compute the Golomb-Rice parameter k for run interruption coding.
     ///
-    /// Per ITU-T.87 §4.5.3, the Golomb parameter for run interruption is the
-    /// smallest k such that N_ri × 2^k ≥ A_ri.
+    /// Per ITU-T.87 §4.5.3 / CharLS `run_mode_context::compute_golomb_coding_parameter`:
+    /// For RItype=1: temp = A + (N >> 1), find smallest k such that N × 2^k ≥ temp
+    /// For RItype=0: temp = A, find smallest k such that N × 2^k ≥ temp
     ///
+    /// - Parameter riType: Run interruption type (0 or 1)
     /// - Returns: Golomb-Rice parameter k (non-negative integer)
-    public func computeRunInterruptionGolombK() -> Int {
-        let n = runInterruptionN
-        let a = runInterruptionA
+    public func computeRunInterruptionGolombK(riType: Int = 0) -> Int {
+        let idx = min(max(riType, 0), 1)
+        let n = runInterruptionN[idx]
+        let a = runInterruptionA[idx]
         guard n > 0 else { return 0 }
+        let temp = a + (n >> 1) * idx
         var k = 0
         var threshold = n
-        while threshold < a && k < 16 {
+        while threshold < temp && k < 32 {
             threshold <<= 1
             k += 1
         }
         return k
     }
     
+    /// Compute the error value from mapped error for run interruption.
+    ///
+    /// Per CharLS `run_mode_context::compute_error_value`:
+    /// Uses nn (negative error count) and k to determine the sign of the error.
+    ///
+    /// - Parameters:
+    ///   - temp: MErrval + riType (the adjusted mapped error)
+    ///   - k: Golomb-Rice parameter
+    ///   - riType: Run interruption type (0 or 1)
+    /// - Returns: Signed error value
+    public func computeRunInterruptionErrorValue(temp: Int, k: Int, riType: Int) -> Int {
+        let idx = min(max(riType, 0), 1)
+        let map = (temp & 1) != 0
+        let errorValueAbs = (temp + (map ? 1 : 0)) / 2
+        let nn = runInterruptionNN[idx]
+        let n = runInterruptionN[idx]
+        
+        if (k != 0 || (2 * nn >= n)) == map {
+            return -errorValueAbs
+        }
+        return errorValueAbs
+    }
+    
+    /// Compute the map value for run interruption error mapping (encoder).
+    ///
+    /// Per CharLS `run_mode_context::compute_map`:
+    ///
+    /// - Parameters:
+    ///   - errorValue: Signed error value
+    ///   - k: Golomb-Rice parameter
+    ///   - riType: Run interruption type (0 or 1)
+    /// - Returns: true if map applies
+    public func computeRunInterruptionMap(errorValue: Int, k: Int, riType: Int) -> Bool {
+        let idx = min(max(riType, 0), 1)
+        let nn = runInterruptionNN[idx]
+        let n = runInterruptionN[idx]
+        
+        if k == 0 && errorValue > 0 && 2 * nn < n { return true }
+        if errorValue < 0 && 2 * nn >= n { return true }
+        if errorValue < 0 && k != 0 { return true }
+        return false
+    }
+    
     /// Update run interruption context statistics after coding one interruption sample.
     ///
-    /// Per ITU-T.87 §4.5.3, after coding each run interruption sample:
-    /// - A_ri += |Errval|
-    /// - N_ri += 1
-    /// - When N_ri reaches RESET: halve both A_ri and N_ri.
+    /// Per CharLS `run_mode_context::update_variables` (Code segment A.23):
+    /// - Track negative error count (nn)
+    /// - Update A using (eMappedErrorValue + 1 - riType) >> 1
+    /// - Reset when N reaches RESET
     ///
-    /// - Parameter absError: Absolute value of the (sign-adjusted) prediction error
-    public mutating func updateRunInterruptionContext(absError: Int) {
-        runInterruptionA += absError
-        runInterruptionN += 1
-        if runInterruptionN >= parameters.reset {
-            runInterruptionA >>= 1
-            runInterruptionN >>= 1
-            if runInterruptionN == 0 {
-                runInterruptionN = 1
-            }
+    /// - Parameters:
+    ///   - errorValue: Signed prediction error
+    ///   - eMappedErrorValue: The raw Golomb-decoded mapped error (before riType offset)
+    ///   - riType: Run interruption type (0 or 1)
+    public mutating func updateRunInterruptionContext(errorValue: Int, eMappedErrorValue: Int, riType: Int) {
+        let idx = min(max(riType, 0), 1)
+        
+        if errorValue < 0 {
+            runInterruptionNN[idx] += 1
         }
+        
+        runInterruptionA[idx] += (eMappedErrorValue + 1 - idx) >> 1
+        
+        if runInterruptionN[idx] == parameters.reset {
+            runInterruptionA[idx] >>= 1
+            runInterruptionN[idx] >>= 1
+            runInterruptionNN[idx] >>= 1
+        }
+        
+        runInterruptionN[idx] += 1
+    }
+    
+    /// Legacy update method for backward compatibility with existing tests.
+    ///
+    /// - Parameter absError: Absolute value of the prediction error
+    @available(*, deprecated, message: "Use updateRunInterruptionContext(errorValue:eMappedErrorValue:riType:)")
+    public mutating func updateRunInterruptionContext(absError: Int) {
+        updateRunInterruptionContext(errorValue: absError > 0 ? absError : -absError,
+                                    eMappedErrorValue: 2 * absError,
+                                    riType: 0)
     }
 }
 
