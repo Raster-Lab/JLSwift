@@ -236,7 +236,8 @@ public struct JPEGLSDecoder: Sendable {
                 width: frameHeader.width,
                 height: frameHeader.height,
                 scanHeader: scanHeader,
-                parameters: parameters
+                parameters: parameters,
+                bitsPerSample: frameHeader.bitsPerSample
             )
             
             // Apply mapping table lookup if the component references one
@@ -266,7 +267,7 @@ public struct JPEGLSDecoder: Sendable {
     ) throws -> [MultiComponentImageData.ComponentData] {
         let reader = JPEGLSBitstreamReader(data: scanData)
         let componentCount = scanHeader.componentCount
-        let (limit, qbppBits) = computeGolombLimit(parameters: parameters, near: scanHeader.near)
+        let (limit, qbppBits) = computeGolombLimit(parameters: parameters, near: scanHeader.near, bitsPerSample: frameHeader.bitsPerSample)
         
         // Initialize pixel buffers for all components
         var componentPixels = (0..<componentCount).map { componentId in
@@ -329,7 +330,7 @@ public struct JPEGLSDecoder: Sendable {
     ) throws -> [MultiComponentImageData.ComponentData] {
         let reader = JPEGLSBitstreamReader(data: scanData)
         let componentCount = scanHeader.componentCount
-        let (limit, qbppBits) = computeGolombLimit(parameters: parameters, near: scanHeader.near)
+        let (limit, qbppBits) = computeGolombLimit(parameters: parameters, near: scanHeader.near, bitsPerSample: frameHeader.bitsPerSample)
         
         // Initialize pixel buffers for all components
         var componentPixels = (0..<componentCount).map { _ in
@@ -459,12 +460,13 @@ public struct JPEGLSDecoder: Sendable {
         width: Int,
         height: Int,
         scanHeader: JPEGLSScanHeader,
-        parameters: JPEGLSPresetParameters
+        parameters: JPEGLSPresetParameters,
+        bitsPerSample: Int
     ) throws -> [[Int]] {
         let decoder = try JPEGLSRegularModeDecoder(parameters: parameters, near: scanHeader.near)
         let runDecoder = try JPEGLSRunModeDecoder(parameters: parameters, near: scanHeader.near)
         var context = try JPEGLSContextModel(parameters: parameters, near: scanHeader.near)
-        let (limit, qbppBits) = computeGolombLimit(parameters: parameters, near: scanHeader.near)
+        let (limit, qbppBits) = computeGolombLimit(parameters: parameters, near: scanHeader.near, bitsPerSample: bitsPerSample)
         
         // Initialize pixel buffer
         var pixels = Array(repeating: Array(repeating: 0, count: width), count: height)
@@ -658,11 +660,15 @@ public struct JPEGLSDecoder: Sendable {
         // Read Golomb-Rice encoded error
         let mappedError = try readGolombCode(reader: reader, k: k, limit: limit, qbppBits: qbppBits)
         
+        // Compute error correction XOR per ITU-T.87 §A.4.1
+        let errorCorrection = context.getErrorCorrection(contextIndex: contextIndex, k: k)
+        
         // Decode pixel using decoder
         let result = decoder.decodePixel(
             mappedError: mappedError,
             a: a, b: b, c: c, d: d,
-            context: context
+            context: context,
+            errorCorrection: errorCorrection
         )
         
         // Update context
@@ -724,16 +730,18 @@ public struct JPEGLSDecoder: Sendable {
 
     /// Compute the Golomb-Rice bit-range parameter (qbppBits) and LIMIT for a scan.
     ///
-    /// Per ITU-T.87 §4.4, LIMIT = 2 × (qbppBits + 8) where qbppBits = ⌈log₂(RANGE)⌉.
-    /// For lossless (NEAR = 0), RANGE = MAXVAL + 1 = 2^P, so qbppBits = P (bits per sample).
+    /// Per ITU-T.87 §4.4, LIMIT = 2 × (bpp + max(8, bpp)) where bpp is the
+    /// original bits per sample, and qbppBits = ⌈log₂(RANGE)⌉.
     ///
     /// - Parameters:
     ///   - parameters: Preset coding parameters (MAXVAL, etc.)
     ///   - near: Near-lossless parameter (0 for lossless)
+    ///   - bitsPerSample: Original bits per sample from frame header
     /// - Returns: Tuple of (limit, qbppBits)
     private func computeGolombLimit(
         parameters: JPEGLSPresetParameters,
-        near: Int
+        near: Int,
+        bitsPerSample: Int
     ) -> (limit: Int, qbppBits: Int) {
         let range: Int
         if near == 0 {
@@ -750,7 +758,7 @@ public struct JPEGLSDecoder: Sendable {
             r >>= 1
         }
         qbppBits = max(qbppBits, 2)
-        let limit = 2 * (qbppBits + 8)
+        let limit = 2 * (bitsPerSample + max(8, bitsPerSample))
         return (limit, qbppBits)
     }
 

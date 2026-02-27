@@ -98,27 +98,17 @@ public struct JPEGLSRegularMode: Sendable {
     /// - Parameter gradient: Raw gradient value
     /// - Returns: Quantized gradient in range [-4, 4]
     public func quantizeGradient(_ gradient: Int) -> Int {
-        let absGrad = abs(gradient)
-        let sign = gradient >= 0 ? 1 : -1
-        
-        // Quantization per ITU-T.87 Section 4.3.1:
-        // Q = 0 if |d| <= NEAR
-        // Q = sign(d) × 1 if NEAR < |d| <= T1
-        // Q = sign(d) × 2 if T1 < |d| <= T2
-        // Q = sign(d) × 3 if T2 < |d| <= T3
-        // Q = sign(d) × 4 if T3 < |d|
-        
-        if absGrad <= near {
-            return 0
-        } else if absGrad <= parameters.threshold1 {
-            return sign * 1
-        } else if absGrad <= parameters.threshold2 {
-            return sign * 2
-        } else if absGrad <= parameters.threshold3 {
-            return sign * 3
-        } else {
-            return sign * 4
-        }
+        // Quantization per ITU-T.87 Table A.7 / CharLS quantize_gradient_org.
+        // Uses strict less-than for upper threshold boundaries.
+        if gradient <= -parameters.threshold3 { return -4 }
+        if gradient <= -parameters.threshold2 { return -3 }
+        if gradient <= -parameters.threshold1 { return -2 }
+        if gradient < -near { return -1 }
+        if gradient <= near { return 0 }
+        if gradient < parameters.threshold1 { return 1 }
+        if gradient < parameters.threshold2 { return 2 }
+        if gradient < parameters.threshold3 { return 3 }
+        return 4
     }
     
     // MARK: - MED Prediction
@@ -356,11 +346,15 @@ public struct JPEGLSRegularMode: Sendable {
         // error is always relative to the normalised (positive-sign) context.
         let error = sign * quantisedError
         
-        // Step 7: Map to non-negative for Golomb coding
-        let mappedError = mapErrorToNonNegative(error)
-        
-        // Step 8: Get Golomb parameter k from context
+        // Step 7: Get Golomb parameter k from context (needed for error correction)
         let k = context.computeGolombParameter(contextIndex: contextIndex)
+        
+        // Step 7a: Apply error correction XOR per ITU-T.87 §A.4.1
+        let errorCorrection = context.getErrorCorrection(contextIndex: contextIndex, k: k)
+        let correctedError = error ^ errorCorrection
+        
+        // Step 8: Map to non-negative for Golomb coding
+        let mappedError = mapErrorToNonNegative(correctedError)
         
         // Step 9: Encode using Golomb-Rice
         let (unaryLength, remainder) = golombEncode(value: mappedError, k: k)

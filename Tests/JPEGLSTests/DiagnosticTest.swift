@@ -66,7 +66,8 @@ struct DiagnosticTest {
             r >>= 1
         }
         qbppBits = max(qbppBits, 2)
-        let limit = 2 * (qbppBits + 8)
+        let bpp = parseResult.frameHeader.bitsPerSample
+        let limit = 2 * (bpp + max(8, bpp))
         
         print("RANGE=\(range), qbppBits=\(qbppBits), LIMIT=\(limit)")
         
@@ -164,10 +165,12 @@ struct DiagnosticTest {
                         let k = context.computeGolombParameter(contextIndex: contextIndex)
                         let mappedError = try readGolomb(reader: reader, k: k, limit: limit, qbppBits: qbppBits)
                         
+                        let errorCorrection = context.getErrorCorrection(contextIndex: contextIndex, k: k)
                         let result = decoder.decodePixel(
                             mappedError: mappedError,
                             a: a, b: b, c: c, d: d,
-                            context: context
+                            context: context,
+                            errorCorrection: errorCorrection
                         )
                         
                         context.updateContext(

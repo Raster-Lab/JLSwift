@@ -101,27 +101,17 @@ public struct JPEGLSRegularModeDecoder: Sendable {
     /// - Parameter gradient: Raw gradient value
     /// - Returns: Quantized gradient in range [-4, 4]
     public func quantizeGradient(_ gradient: Int) -> Int {
-        let absGrad = abs(gradient)
-        let sign = gradient >= 0 ? 1 : -1
-        
-        // Quantization per ITU-T.87 Section 4.3.1:
-        // Q = 0 if |d| <= NEAR
-        // Q = sign(d) × 1 if NEAR < |d| <= T1
-        // Q = sign(d) × 2 if T1 < |d| <= T2
-        // Q = sign(d) × 3 if T2 < |d| <= T3
-        // Q = sign(d) × 4 if T3 < |d|
-        
-        if absGrad <= near {
-            return 0
-        } else if absGrad <= parameters.threshold1 {
-            return sign * 1
-        } else if absGrad <= parameters.threshold2 {
-            return sign * 2
-        } else if absGrad <= parameters.threshold3 {
-            return sign * 3
-        } else {
-            return sign * 4
-        }
+        // Quantization per ITU-T.87 Table A.7 / CharLS quantize_gradient_org.
+        // Uses strict less-than for upper threshold boundaries.
+        if gradient <= -parameters.threshold3 { return -4 }
+        if gradient <= -parameters.threshold2 { return -3 }
+        if gradient <= -parameters.threshold1 { return -2 }
+        if gradient < -near { return -1 }
+        if gradient <= near { return 0 }
+        if gradient < parameters.threshold1 { return 1 }
+        if gradient < parameters.threshold2 { return 2 }
+        if gradient < parameters.threshold3 { return 3 }
+        return 4
     }
     
     // MARK: - MED Prediction
@@ -303,7 +293,8 @@ public struct JPEGLSRegularModeDecoder: Sendable {
         b: Int,
         c: Int,
         d: Int,
-        context: JPEGLSContextModel
+        context: JPEGLSContextModel,
+        errorCorrection: Int = 0
     ) -> DecodedPixel {
         // Step 1: Compute local gradients
         let (d1, d2, d3) = computeGradients(a: a, b: b, c: c, d: d)
@@ -329,7 +320,11 @@ public struct JPEGLSRegularModeDecoder: Sendable {
         )
         
         // Step 6: Unmap error from non-negative to signed (sign-adjusted Errval)
-        let signAdjustedError = unmapError(mappedError)
+        var signAdjustedError = unmapError(mappedError)
+        
+        // Step 6b: Apply error correction XOR per ITU-T.87 §A.4.1.
+        // When k=0 and lossless, the map swap flips the error sign for biased contexts.
+        signAdjustedError = signAdjustedError ^ errorCorrection
         
         // Step 6a: Undo sign normalisation to recover the raw prediction error.
         // The encoder negated the error when the context sign was -1, so to
