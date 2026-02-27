@@ -239,13 +239,15 @@ public struct JPEGLSRegularModeDecoder: Sendable {
     
     /// Reconstruct the sample value from prediction and error.
     ///
-    /// Per ITU-T.87 Section 4.2.2, the sample value is computed as:
-    /// - For lossless:    x = Px' + Errval
-    /// - For near-lossless: x = Px' + Errval × (2·NEAR + 1)
+    /// Per ITU-T.87 Section A.4.4 (code segment A.7):
+    /// - Rx = Px' + Errval × (2·NEAR + 1)
+    /// - If Rx < −NEAR:       Rx += RANGE × (2·NEAR + 1)
+    /// - If Rx > MAXVAL+NEAR: Rx -= RANGE × (2·NEAR + 1)
+    /// - Clamp Rx to [0, MAXVAL]
     ///
-    /// With modular arithmetic to handle wraparound:
-    /// - If result < 0: result += RANGE
-    /// - If result > MAXVAL: result -= RANGE
+    /// For lossless (NEAR=0) this simplifies to:
+    /// - Rx = Px' + Errval
+    /// - Modular wrap with RANGE = MAXVAL + 1
     ///
     /// - Parameters:
     ///   - prediction: Bias-corrected prediction value
@@ -255,11 +257,13 @@ public struct JPEGLSRegularModeDecoder: Sendable {
         let dequantized = dequantizeError(error)
         var sample = prediction + dequantized
         
-        // Apply modular arithmetic for near-lossless
-        if sample < 0 {
-            sample += range
-        } else if sample > parameters.maxValue {
-            sample -= range
+        // Per ITU-T.87 §A.4.4 / CharLS fix_reconstructed_value:
+        // wrap range is RANGE × (2·NEAR + 1); thresholds are −NEAR and MAXVAL+NEAR.
+        let wrapRange = near == 0 ? range : range * qbpp
+        if sample < -near {
+            sample += wrapRange
+        } else if sample > parameters.maxValue + near {
+            sample -= wrapRange
         }
         
         // Clamp to valid range [0, MAXVAL]

@@ -136,11 +136,12 @@ public struct JPEGLSNearLossless: Sendable {
     
     /// Compute the reconstructed value for decoder tracking.
     ///
-    /// Per ITU-T.87 Section 4.3.3, the encoder must track what the decoder
-    /// will reconstruct to maintain context synchronization:
-    /// - Rx = clamp(Px + DerrVal, 0, MAXVAL)
-    ///
-    /// where DerrVal = Errval' * (2*NEAR + 1)
+    /// Per ITU-T.87 Section A.4.4 (code segment A.7), the encoder must track
+    /// what the decoder will reconstruct to maintain context synchronization:
+    /// - Rx = Px + Errval' × (2·NEAR + 1)
+    /// - If Rx < −NEAR:       Rx += RANGE × (2·NEAR + 1)
+    /// - If Rx > MAXVAL+NEAR: Rx -= RANGE × (2·NEAR + 1)
+    /// - Clamp Rx to [0, MAXVAL]
     ///
     /// - Parameters:
     ///   - prediction: Bias-corrected prediction value
@@ -148,9 +149,16 @@ public struct JPEGLSNearLossless: Sendable {
     /// - Returns: Reconstructed value (clamped to [0, MAXVAL])
     public func computeReconstructedValue(prediction: Int, quantizedError: Int) -> Int {
         let dequantizedError = dequantizePredictionError(quantizedError)
-        let reconstructed = prediction + dequantizedError
+        var reconstructed = prediction + dequantizedError
         
-        // Clamp to valid sample range
+        // Per ITU-T.87 §A.4.4: wrap range is RANGE × (2·NEAR + 1)
+        let wrapRange = range * quantizationDivisor
+        if reconstructed < -near {
+            reconstructed += wrapRange
+        } else if reconstructed > maxValue + near {
+            reconstructed -= wrapRange
+        }
+        
         return clampToRange(reconstructed)
     }
     

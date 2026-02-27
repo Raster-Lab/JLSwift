@@ -285,9 +285,15 @@ public struct JPEGLSDecoder: Sendable {
         // Track left-edge values per component for boundary Rc at col=0.
         var prevRowEdges = Array(repeating: 0, count: componentCount)
         
+        // Per-component RUNindex per CharLS: each component line preserves its own run index.
+        var componentRunIndex = Array(repeating: 0, count: componentCount)
+        
         // Decode line by line, all components per line
         for row in 0..<frameHeader.height {
             for componentIndex in 0..<componentCount {
+                // Restore this component's run index
+                context.setRunIndex(componentRunIndex[componentIndex])
+                
                 let edgeForThisRow = prevRowEdges[componentIndex]
                 if row > 0 {
                     prevRowEdges[componentIndex] = componentPixels[componentIndex][row - 1][0]
@@ -307,6 +313,9 @@ public struct JPEGLSDecoder: Sendable {
                     qbppBits: qbppBits,
                     prevRowEdge: edgeForThisRow
                 )
+                
+                // Save this component's run index
+                componentRunIndex[componentIndex] = context.currentRunIndex
             }
         }
         
@@ -358,8 +367,8 @@ public struct JPEGLSDecoder: Sendable {
         
         // Decode pixel by pixel, cycling through components
         for row in 0..<frameHeader.height {
-            // Per ITU-T.87 §4.5.1, RUNindex is reset to 0 at the start of each MCU line.
-            context.setRunIndex(0)
+            // Note: RUNindex is NOT reset per line. Per ITU-T.87 §A.7.1 and CharLS,
+            // RUNindex persists across scan lines; it is only initialised to 0 at scan start.
             // Capture and advance edge values per component.
             var edgesForThisRow = prevRowEdges
             for ci in 0..<componentCount {
@@ -417,19 +426,43 @@ public struct JPEGLSDecoder: Sendable {
 
                     // If run was interrupted (ended before the line), decode one
                     // interruption sample per component.
+                    // Per CharLS triplet handling: all components use riType=0 context,
+                    // prediction = rb (from previous row), with sign(rb - ra) correction.
                     if runLength < remainingInLine && newCol < frameHeader.width {
+                        let j = runDecoder.computeJ(runIndex: context.currentRunIndex)
+                        let adjustedLimit = limit - j - 1
+                        
                         for componentIndex in 0..<componentCount {
-                            let k = context.computeRunInterruptionGolombK()
-                            let mappedError = try readGolombCode(
-                                reader: reader, k: k, limit: limit, qbppBits: qbppBits
+                            let ra = runValues[componentIndex]
+                            let rb: Int
+                            if row > 0 && newCol < frameHeader.width {
+                                rb = componentPixels[componentIndex][row - 1][newCol]
+                            } else {
+                                rb = 0
+                            }
+                            
+                            let riType = 0  // Always riType=0 for multi-component
+                            let k = context.computeRunInterruptionGolombK(riType: riType)
+                            let eMappedErrorValue = try readGolombCode(
+                                reader: reader, k: k, limit: adjustedLimit, qbppBits: qbppBits
                             )
-                            let interruption = runDecoder.decodeRunInterruption(
-                                mappedError: mappedError,
-                                runValue: runValues[componentIndex]
+                            
+                            let errorValue = context.computeRunInterruptionErrorValue(
+                                temp: eMappedErrorValue + riType, k: k, riType: riType
                             )
-                            context.updateRunInterruptionContext(absError: abs(interruption.error))
-                            componentPixels[componentIndex][row][newCol] = interruption.sample
+                            
+                            let signCorrectedError = errorValue * (rb >= ra ? 1 : -1)
+                            let sample = runDecoder.reconstructSample(prediction: rb, error: signCorrectedError)
+                            
+                            context.updateRunInterruptionContext(
+                                errorValue: errorValue,
+                                eMappedErrorValue: eMappedErrorValue,
+                                riType: riType
+                            )
+                            componentPixels[componentIndex][row][newCol] = sample
                         }
+                        // Per CharLS, decrement RUNindex after the interruption pixel(s).
+                        context.decrementRunIndex()
                         newCol += 1
                     }
 
@@ -500,8 +533,8 @@ public struct JPEGLSDecoder: Sendable {
         
         // Decode pixels in raster order
         for row in 0..<height {
-            // Per ITU-T.87 §4.5.1, RUNindex is reset to 0 at the start of each scan line.
-            context.setRunIndex(0)
+            // Note: RUNindex is NOT reset per line. Per ITU-T.87 §A.7.1 and CharLS,
+            // RUNindex persists across scan lines; it is only initialised to 0 at scan start.
             // Capture the edge value before this row updates it.
             let edgeForThisRow = prevRowEdge
             // After this row, the edge for the NEXT row becomes the first pixel
@@ -583,8 +616,8 @@ public struct JPEGLSDecoder: Sendable {
         qbppBits: Int,
         prevRowEdge: Int = 0
     ) throws {
-        // Per ITU-T.87 §4.5.1, RUNindex is reset to 0 at the start of each scan line.
-        context.setRunIndex(0)
+        // Note: RUNindex is NOT reset per line. Per ITU-T.87 §A.7.1 and CharLS,
+        // RUNindex persists across scan lines; it is only initialised to 0 at scan start.
         var col = 0
         while col < width {
             // Get neighbor pixels

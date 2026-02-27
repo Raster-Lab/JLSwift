@@ -238,20 +238,36 @@ public struct JPEGLSRunModeDecoder: Sendable {
     
     /// Reconstruct a sample from prediction and error with modular arithmetic.
     ///
-    /// Per ITU-T.87, the reconstructed value uses modular arithmetic:
-    /// sample = (prediction + error) mod RANGE, clamped to [0, MAXVAL].
+    /// Per ITU-T.87 §A.4.4 / CharLS fix_reconstructed_value:
+    /// - Rx = prediction + error × (2·NEAR + 1)
+    /// - If Rx < −NEAR:       Rx += RANGE × (2·NEAR + 1)
+    /// - If Rx > MAXVAL+NEAR: Rx -= RANGE × (2·NEAR + 1)
+    /// - Clamp Rx to [0, MAXVAL]
+    ///
+    /// For lossless (NEAR=0), the quantisation step is 1 and thresholds collapse
+    /// to 0 and MAXVAL, matching the original formulation.
     ///
     /// - Parameters:
     ///   - prediction: The prediction value (Ra or Rb depending on RItype)
     ///   - error: Signed error value (possibly sign-corrected)
     /// - Returns: Reconstructed sample value
     public func reconstructSample(prediction: Int, error: Int) -> Int {
-        var sample = prediction + error
-        let range = parameters.maxValue + 1
-        if sample < 0 {
-            sample += range
-        } else if sample > parameters.maxValue {
-            sample -= range
+        let qbpp = near == 0 ? 1 : (2 * near + 1)
+        let dequantized = error * qbpp
+        var sample = prediction + dequantized
+        
+        // Per ITU-T.87 §A.4.4 / CharLS fix_reconstructed_value
+        let range: Int
+        if near == 0 {
+            range = parameters.maxValue + 1
+        } else {
+            range = (parameters.maxValue + 2 * near) / qbpp + 1
+        }
+        let wrapRange = range * qbpp
+        if sample < -near {
+            sample += wrapRange
+        } else if sample > parameters.maxValue + near {
+            sample -= wrapRange
         }
         return max(0, min(parameters.maxValue, sample))
     }

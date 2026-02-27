@@ -606,8 +606,8 @@ public struct JPEGLSEncoder: Sendable {
         // Encode pixels in raster order with run mode support
         var prevRowEdge = 0
         for row in 0..<buffer.height {
-            // Per ITU-T.87 §4.5.1, RUNindex is reset to 0 at the start of each scan line.
-            context.setRunIndex(0)
+            // Note: RUNindex is NOT reset per line. Per ITU-T.87 §A.7.1 and CharLS,
+            // RUNindex persists across scan lines; it is only initialised to 0 at scan start.
             let edgeForThisRow = prevRowEdge
             if row > 0 {
                 prevRowEdge = buffer.getPixel(componentId: componentId, row: row - 1, column: 0) ?? 0
@@ -707,7 +707,7 @@ public struct JPEGLSEncoder: Sendable {
                                 encRb = 0
                             }
                             
-                            writeRunInterruptionBits(
+                            let rv = writeRunInterruptionBits(
                                 interruptionValue: interruptionNeighbors.actual,
                                 runValue: runValue,
                                 rb: encRb,
@@ -719,11 +719,9 @@ public struct JPEGLSEncoder: Sendable {
                                 limit: limit,
                                 qbppBits: qbppBits
                             )
-                            // Run interruption uses the exact (unquantised) original pixel
-                            // value as its reconstructed value: the decoder will similarly
-                            // reconstruct it without quantisation rounding.
+                            // Track what the decoder will reconstruct.
                             if near > 0 {
-                                reconstructed[row][interruptionCol] = interruptionNeighbors.actual
+                                reconstructed[row][interruptionCol] = rv
                             }
                             col = interruptionCol + 1
                         } else {
@@ -785,10 +783,15 @@ public struct JPEGLSEncoder: Sendable {
         // Encode line by line, all components per line
         var prevRowEdges: [UInt8: Int] = [:]
         for component in scanHeader.components { prevRowEdges[component.id] = 0 }
+        // Per-component RUNindex per CharLS: each component line preserves its own run index.
+        var componentRunIndex: [UInt8: Int] = [:]
+        for component in scanHeader.components { componentRunIndex[component.id] = 0 }
         for row in 0..<buffer.height {
-            // Per ITU-T.87 §4.5.1, RUNindex is reset to 0 at the start of each scan line.
-            context.setRunIndex(0)
+            // Note: RUNindex is NOT reset per line. Per ITU-T.87 §A.7.1 and CharLS,
+            // RUNindex persists across scan lines; it is only initialised to 0 at scan start.
             for component in scanHeader.components {
+                // Restore this component's run index
+                context.setRunIndex(componentRunIndex[component.id] ?? 0)
                 let edgeForThisRow = prevRowEdges[component.id] ?? 0
                 if row > 0 {
                     prevRowEdges[component.id] = buffer.getPixel(componentId: component.id, row: row - 1, column: 0) ?? 0
@@ -917,6 +920,8 @@ public struct JPEGLSEncoder: Sendable {
                         col += 1
                     }
                 }
+                // Save this component's run index
+                componentRunIndex[component.id] = context.currentRunIndex
             }
         }
     }
@@ -945,8 +950,8 @@ public struct JPEGLSEncoder: Sendable {
 
         // Encode row by row
         for row in 0..<buffer.height {
-            // Per ITU-T.87 §4.5.1, RUNindex is reset to 0 at the start of each scan line.
-            context.setRunIndex(0)
+            // Note: RUNindex is NOT reset per line. Per ITU-T.87 §A.7.1 and CharLS,
+            // RUNindex persists across scan lines; it is only initialised to 0 at scan start.
             var edgesForThisRow: [UInt8: Int] = [:]
             for component in components {
                 edgesForThisRow[component.id] = prevRowEdges[component.id] ?? 0
@@ -1060,7 +1065,8 @@ public struct JPEGLSEncoder: Sendable {
                                     runMode: runMode,
                                     writer: writer,
                                     limit: limit,
-                                    qbppBits: qbppBits
+                                    qbppBits: qbppBits,
+                                    overrideRiType: 0  // Per CharLS: triplet always uses riType=0
                                 )
                             }
                             col = interruptionCol + 1
@@ -1227,6 +1233,7 @@ public struct JPEGLSEncoder: Sendable {
     ///   - writer: Bitstream writer
     ///   - limit: LIMIT = 2 × (qbppBits + 8)
     ///   - qbppBits: ⌈log₂(RANGE)⌉
+    @discardableResult
     private func writeRunInterruptionBits(
         interruptionValue: Int,
         runValue: Int,
@@ -1237,31 +1244,49 @@ public struct JPEGLSEncoder: Sendable {
         runMode: JPEGLSRunMode,
         writer: JPEGLSBitstreamWriter,
         limit: Int,
-        qbppBits: Int
-    ) {
+        qbppBits: Int,
+        overrideRiType: Int? = nil
+    ) -> Int {
         let ra = runValue
-        let riType = (abs(ra - rb) <= near) ? 1 : 0
+        let riType = overrideRiType ?? ((abs(ra - rb) <= near) ? 1 : 0)
         
         // Prediction and error per CharLS
         let prediction: Int
-        let errorValue: Int
+        let rawError: Int
         if riType == 1 {
             prediction = ra
-            errorValue = interruptionValue - prediction
+            rawError = interruptionValue - prediction
         } else {
             prediction = rb
             let raw = interruptionValue - prediction
-            errorValue = (rb >= ra) ? raw : -raw
+            rawError = (rb >= ra) ? raw : -raw
         }
         
-        // Modular reduction
-        let range = parameters(regularMode).maxValue + 1
-        var reducedError = errorValue
-        if reducedError > (range - 1) / 2 {
-            reducedError -= range
-        } else if reducedError < -(range / 2) {
-            reducedError += range
+        // Quantize and modular-reduce per CharLS compute_error_value
+        let params = parameters(regularMode)
+        let qbpp = near > 0 ? (2 * near + 1) : 1
+        let range: Int
+        if near == 0 {
+            range = params.maxValue + 1
+        } else {
+            range = (params.maxValue + 2 * near) / qbpp + 1
         }
+        
+        // Quantize for near-lossless (identity for lossless)
+        var reducedError: Int
+        if near > 0 {
+            if rawError >= 0 {
+                reducedError = (rawError + near) / qbpp
+            } else {
+                reducedError = -((abs(rawError) + near) / qbpp)
+            }
+        } else {
+            reducedError = rawError
+        }
+        
+        // Modular reduction with RANGE
+        if reducedError < 0 { reducedError += range }
+        if reducedError >= ((range + 1) / 2) { reducedError -= range }
         
         let k = context.computeRunInterruptionGolombK(riType: riType)
         let map = context.computeRunInterruptionMap(errorValue: reducedError, k: k, riType: riType)
@@ -1293,6 +1318,20 @@ public struct JPEGLSEncoder: Sendable {
             eMappedErrorValue: eMappedErrorValue,
             riType: riType
         )
+        
+        // Compute what the decoder will reconstruct
+        let dequantized = reducedError * qbpp
+        let signedError: Int
+        if riType == 1 {
+            signedError = dequantized
+        } else {
+            signedError = dequantized * (rb >= ra ? 1 : -1)
+        }
+        var rv = prediction + signedError
+        let wrapRange = range * qbpp
+        if rv < -near { rv += wrapRange }
+        else if rv > params.maxValue + near { rv -= wrapRange }
+        return max(0, min(params.maxValue, rv))
     }
     
     /// Helper to extract parameters from regular mode encoder
