@@ -605,6 +605,8 @@ public struct JPEGLSEncoder: Sendable {
         
         // Encode pixels in raster order with run mode support
         for row in 0..<buffer.height {
+            // Per ITU-T.87 §4.5.1, RUNindex is reset to 0 at the start of each scan line.
+            context.setRunIndex(0)
             var col = 0
             while col < buffer.width {
                 guard let neighbors = buffer.getNeighbors(
@@ -775,6 +777,8 @@ public struct JPEGLSEncoder: Sendable {
     ) throws {
         // Encode line by line, all components per line
         for row in 0..<buffer.height {
+            // Per ITU-T.87 §4.5.1, RUNindex is reset to 0 at the start of each scan line.
+            context.setRunIndex(0)
             for component in scanHeader.components {
                 var col = 0
                 while col < buffer.width {
@@ -922,6 +926,8 @@ public struct JPEGLSEncoder: Sendable {
 
         // Encode row by row
         for row in 0..<buffer.height {
+            // Per ITU-T.87 §4.5.1, RUNindex is reset to 0 at the start of each scan line.
+            context.setRunIndex(0)
             var col = 0
             while col < buffer.width {
                 // Check if ALL components have zero quantised gradients at (row, col)
@@ -1094,7 +1100,7 @@ public struct JPEGLSEncoder: Sendable {
             return (0, 0, 0, 0)
         } else if row == 0 {
             let left = reconstructed[row][col - 1]
-            return (left, left, left, left)
+            return (left, 0, 0, 0)
         } else if col == 0 {
             let top = reconstructed[row - 1][col]
             let topRight = (width > 1) ? reconstructed[row - 1][col + 1] : top
@@ -1230,13 +1236,9 @@ public struct JPEGLSEncoder: Sendable {
         let k = context.computeRunInterruptionGolombK(riType: riType)
         let map = context.computeRunInterruptionMap(errorValue: reducedError, k: k, riType: riType)
         
-        // Map to non-negative with RItype offset per CharLS
-        let eMappedErrorValue: Int
-        if reducedError < 0 {
-            eMappedErrorValue = -2 * reducedError - 1 - riType + (map ? 1 : 0)
-        } else {
-            eMappedErrorValue = 2 * reducedError - riType + (map ? 1 : 0)
-        }
+        // Map to non-negative per CharLS encode_run_interruption_error:
+        // e_mapped = 2 * |error| - riType - map
+        let eMappedErrorValue = 2 * abs(reducedError) - riType - (map ? 1 : 0)
         
         // Adjusted limit for run interruption
         let j = runMode.computeJ(runIndex: context.currentRunIndex)
