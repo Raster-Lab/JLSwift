@@ -728,23 +728,27 @@ public struct JPEGLSEncoder: Sendable {
                             col = interruptionCol
                         }
                     } else {
-                        // Run reaches end of line.  Only write the termination bit if
-                        // there is a partial-block remainder — when the run exactly fills
-                        // the line with full blocks the decoder exits the run-length loop
-                        // at the last '1' bit and never reads a '0' terminator.
+                        // Run reaches end of line.
+                        // Per ITU-T.87 §A.7.1 / CharLS: for a partial last block at
+                        // EOL, write one '1' bit (the partial-continuation bit).  The
+                        // decoder reads the '1', adds min(2^J, remaining)=remaining,
+                        // sees the line is full, and exits without reading J remainder
+                        // bits.  Do NOT write a '0' termination bit or J bits here.
+                        // For an exact full-block fill no extra bit is needed — the
+                        // decoder exits after the last full-block '1' bit.
                         if encoded.remainder > 0 {
-                            writeRunTermination(encoded: encoded, writer: writer)
+                            writer.writeBits(1, count: 1)
                         }
                         col += actualRunLength
                     }
                     
                     // Update RUNindex to stay in sync with the decoder.
-                    // The decoder increments runIndex after each '1' bit and decrements
-                    // it when it reads the '0' terminator (interrupted runs and EOL with
-                    // a partial block).  Exact-block EOL runs leave the index at the
-                    // post-increment level.
+                    // For interrupted runs the decoder decrements after the interruption
+                    // pixel; for EOL runs (both exact and partial) the index is left at
+                    // the post-full-block level (partial blocks do not increment the
+                    // index, and there is no decrement at EOL).
                     let finalRunIndex = min(encoded.runIndex + encoded.continuationBits, 31)
-                    if actualRunLength < remainingInLine || encoded.remainder > 0 {
+                    if actualRunLength < remainingInLine {
                         context.setRunIndex(max(finalRunIndex - 1, 0))
                     } else {
                         context.setRunIndex(finalRunIndex)
@@ -888,17 +892,17 @@ public struct JPEGLSEncoder: Sendable {
                                 col = interruptionCol
                             }
                         } else {
-                            // EOL: only write the terminator when there is a partial-block
-                            // remainder — exact-block EOL runs need no terminator.
+                            // EOL: write one '1' bit for a partial last block; no bit
+                            // needed for an exact full-block fill (per ITU-T.87 §A.7.1).
                             if encoded.remainder > 0 {
-                                writeRunTermination(encoded: encoded, writer: writer)
+                                writer.writeBits(1, count: 1)
                             }
                             col += actualRunLength
                         }
                         
                         // Synchronise RUNindex with the decoder.
                         let finalRunIndex = min(encoded.runIndex + encoded.continuationBits, 31)
-                        if actualRunLength < remainingInLine || encoded.remainder > 0 {
+                        if actualRunLength < remainingInLine {
                             context.setRunIndex(max(finalRunIndex - 1, 0))
                         } else {
                             context.setRunIndex(finalRunIndex)
@@ -1074,15 +1078,17 @@ public struct JPEGLSEncoder: Sendable {
                             col = interruptionCol
                         }
                     } else {
+                        // EOL: write one '1' bit for a partial last block; no bit
+                        // needed for an exact full-block fill (per ITU-T.87 §A.7.1).
                         if encoded.remainder > 0 {
-                            writeRunTermination(encoded: encoded, writer: writer)
+                            writer.writeBits(1, count: 1)
                         }
                         col += actualRunLength
                     }
 
                     // Synchronise RUNindex with the decoder
                     let finalRunIndex = min(encoded.runIndex + encoded.continuationBits, 31)
-                    if actualRunLength < remainingInLine || encoded.remainder > 0 {
+                    if actualRunLength < remainingInLine {
                         context.setRunIndex(max(finalRunIndex - 1, 0))
                     } else {
                         context.setRunIndex(finalRunIndex)
