@@ -370,7 +370,17 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 - [x] **NEW**: Implement bit-exact comparison test infrastructure (10 test cases ready)
 - [x] **NEW**: Extend parser to handle CharLS byte stuffing (`FF XX` where XX is not a valid marker)
 - [x] **NEW**: Fix LSE preset parameters length validation (changed from 11 to 13 bytes)
-- [ ] Complete decoder support for CharLS encoding patterns (in progress — decoder pixel drift under investigation)
+- [x] **NEW**: Fix gradient quantization boundaries — strict `<` for positive thresholds per Table A.7 (PR #74)
+- [x] **NEW**: Fix context update order & bias correction — reset check before N increment per §A.6.2 (PR #74)
+- [x] **NEW**: Implement error correction XOR (`bit_wise_sign(2·B + N − 1)`) for k=0 lossless per §A.4.1/§A.5.2 (PR #74)
+- [x] **NEW**: Fix LIMIT computation — `2*(bpp+max(8,bpp))` per §A.2.1, corrects 12-bit+ (PR #74)
+- [x] **NEW**: Fix default threshold computation (Table C.2) — correct FACTOR multiplier formula with NEAR parameter (PR #75)
+- [x] **NEW**: Fix error correction condition — `(2*B + N) < 0` strict less-than per §A.5.2 (PR #75)
+- [x] **NEW**: Overhaul run interruption coding (§A.7) — dual RItype contexts, adjusted LIMIT (`LIMIT-J[RUNindex]-1`), RItype-aware k, nn-based map, `sign(Rb-Ra)` correction (PR #75)
+- [x] **NEW**: Fix encoder RUNindex reset — `context.setRunIndex(0)` at start of each scan line in all 3 interleave modes per §4.5.1 (PR #76)
+- [x] **NEW**: Fix encoder run interruption error mapping — `2*|error| - riType - map` matching CharLS (PR #76)
+- [x] **NEW**: Fix near-lossless boundary condition — row 0, col > 0 returns `(left, 0, 0, 0)` matching decoder (PR #76)
+- [ ] Complete CharLS bit-exact validation (in progress — encoder scan data diverges from CharLS at byte 551 for 12-bit test image; remaining issue in regular-mode or context-update logic)
 - [x] Document CharLS compatibility in parser code comments
 
 **Implementation Details:**
@@ -385,13 +395,22 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
   - CharLS extended: `FF XX` where XX is not a valid marker (used for scan boundary detection in parser)
   - Bitstream reader handles `FF 00` and `FF 60-7F` stuffing during decoding
 - **Bit-Exact Comparison Infrastructure**: Complete test suite ready for validation
-  - `CharLSBitExactComparisonTests` with 10 test cases (currently disabled pending decoder improvements)
+  - `CharLSBitExactComparisonTests` with 10 test cases (currently disabled pending further alignment work)
   - Compares decoded pixels against reference PGM/PPM files
   - Supports lossless (exact match) and near-lossless (error ≤ NEAR) validation
-  - Tests disabled due to decoder pixel drift — decoder needs further work for CharLS pattern support
+- **ITU-T.87 Conformance Fixes** (PRs #74, #75, #76):
+  - Gradient quantization: strict `<` on positive thresholds, `<=` on negative thresholds per Table A.7
+  - Context update: reset check before N increment; bias correction conditions `B+N≤0` / `B>0`; B clamped to `[-N+1, 0]`
+  - Error correction: `bit_wise_sign(2·B + N − 1)` XOR applied when k=0 and NEAR=0
+  - LIMIT: `2*(bpp+max(8,bpp))` — identical for ≤8-bit, fixes 12-bit+ (e.g., LIMIT=48 instead of 40)
+  - Default thresholds: `FACTOR*(BASIC_Tn-2)+2+offset*NEAR` per Table C.2; 8-bit=(3,7,21), 12-bit=(18,67,276)
+  - Run interruption: dual RItype contexts (0: Ra≠Rb, 1: Ra≈Rb), adjusted LIMIT, RItype-dependent k, nn-based map, Rb/Ra prediction, `(eMapped+1-riType)>>1` context update
+  - Encoder: RUNindex reset per scan line, correct error mapping formula `2*|error|-riType-map`
+  - Encoder: near-lossless boundary for row 0 returns `(left, 0, 0, 0)` matching ITU-T.87 §3.2
 - All 12 CharLS reference files now parse successfully
 - Run mode test expectations corrected to match ITU-T.87 Annex J table
-- Overall project coverage maintained at >95% (682 total tests, all passing with known-limitation tests properly disabled)
+- Known remaining issue: encoder scan data diverges from CharLS at byte 551 for 256×256 12-bit natural test image (regular-mode or context-update logic)
+- Overall project coverage maintained at >95%
 
 #### Phase 8.2: Performance Benchmarking ✅
 - [x] Create comprehensive benchmark suite (18 benchmarks)
@@ -724,12 +743,13 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 - [x] Add performance regression tests for all Phase 11 Part 2 codepaths: HP1/HP2/HP3 colour-transform encode, decode, and round-trip; mapping-table decode; Part 2 overhead vs. no-transform baseline
 - [x] Run the full test suite — no regressions to Part 1 functionality (824 tests pass)
 
-### Milestone 12: CharLS Bidirectional Interoperability 📋
+### Milestone 12: CharLS Bidirectional Interoperability ⏳
 **Target**: Full interoperability with CharLS in both encoding and decoding directions  
-**Status**: Not Started
+**Status**: In Progress (prerequisite conformance fixes completed in PRs #74, #75, #76)
 
-#### Phase 12.1: CharLS Decode Interoperability (CharLS-encoded → JLSwift-decoded)
-- [ ] Resolve existing decoder pixel drift issues with CharLS-encoded files
+#### Phase 12.1: CharLS Decode Interoperability (CharLS-encoded → JLSwift-decoded) ⏳
+- [x] Fix decoder pixel drift root causes — gradient quantization, context update, error correction, LIMIT, default thresholds, run interruption coding (PRs #74, #75)
+- [ ] Resolve remaining decoder divergence for 12-bit natural images (byte 551 drift)
 - [ ] Enable and pass all currently disabled CharLS bit-exact comparison tests
 - [ ] Validate decoding of all 12 CharLS reference files to bit-exact output
 - [ ] Test decoding of CharLS-encoded 8-bit and 16-bit grayscale images
@@ -738,7 +758,8 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 - [ ] Test decoding of CharLS-encoded images with non-default preset parameters
 - [ ] Test decoding of CharLS-encoded images with colour transformations
 
-#### Phase 12.2: CharLS Encode Interoperability (JLSwift-encoded → CharLS-decoded)
+#### Phase 12.2: CharLS Encode Interoperability (JLSwift-encoded → CharLS-decoded) ⏳
+- [x] Fix encoder conformance — RUNindex reset, run interruption error mapping, near-lossless boundary (PR #76)
 - [ ] Create test infrastructure to invoke CharLS decoder on JLSwift-encoded output
 - [ ] Validate that CharLS can decode all JLSwift-encoded lossless output (bit-exact)
 - [ ] Validate that CharLS can decode JLSwift-encoded near-lossless output (error ≤ NEAR)
@@ -1060,7 +1081,7 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 | **9** | Release | API docs ✅, integration guides ✅, versioning ✅, changelog ✅, release template ✅ |
 | **10** | Standards Conformance & Refactoring | Conformance audit ✅, core refactoring ✅, file format refactoring ✅, Swift 6.2 strict concurrency ✅ |
 | **11** | Part 2 Extensions | Mapping tables ✅, extended dimensions ✅, colour transforms ✅, Part 2 optimisation ✅ |
-| **12** | CharLS Interoperability | Bidirectional interoperability, bit-exact validation, round-trip testing 📋 |
+| **12** | CharLS Interoperability | Conformance fixes ✅, bidirectional interoperability, bit-exact validation, round-trip testing ⏳ |
 | **13** | Apple Silicon Optimisation | ARM Neon enhancement, Accelerate deep integration, memory architecture tuning 📋 |
 | **14** | Intel x86-64 Optimisation | SSE/AVX enhancement, memory/cache tuning, separation verification 📋 |
 | **15** | GPU Compute | Metal pipeline enhancement, Vulkan compute support (Linux/Windows), GPU testing 📋 |
