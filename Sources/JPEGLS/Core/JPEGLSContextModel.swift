@@ -327,11 +327,11 @@ public struct JPEGLSContextModel: Sendable {
         return k
     }
     
-    /// Compute error correction for k=0 map swap per ITU-T.87 §A.4.1.
+    /// Compute error correction for k=0 map swap per ITU-T.87 §A.5.2.
     ///
-    /// Implements `bit_wise_sign(2·B + N − 1)` from the standard: returns −1
-    /// when the expression is negative (context B is significantly negative),
-    /// 0 otherwise.  Only applied when k=0 and near=0 (lossless mode).
+    /// The standard condition is `2*B[Q] < -N[Q]` (equivalently `2*B[Q]+N[Q] < 0`).
+    /// Returns −1 when the condition holds (for XOR with signed error), 0 otherwise.
+    /// Only applied when k=0 and near=0 (lossless mode).
     ///
     /// - Parameters:
     ///   - contextIndex: Context index (0 to 364)
@@ -342,7 +342,7 @@ public struct JPEGLSContextModel: Sendable {
         guard contextIndex >= 0 && contextIndex < Self.regularContextCount else { return 0 }
         let b = contextB[contextIndex]
         let n = contextN[contextIndex]
-        return (2 * b + n - 1) < 0 ? -1 : 0
+        return (2 * b + n) < 0 ? -1 : 0
     }
     
     // MARK: - Run-Length Context

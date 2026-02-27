@@ -119,7 +119,8 @@ public struct JPEGLSEncoder: Sendable {
         
         // Write preset parameters if custom or near-lossless
         let parameters = try configuration.presetParameters ?? JPEGLSPresetParameters.defaultParameters(
-            bitsPerSample: encodingData.frameHeader.bitsPerSample
+            bitsPerSample: encodingData.frameHeader.bitsPerSample,
+            near: configuration.near
         )
         
         if configuration.presetParameters != nil || configuration.near > 0 {

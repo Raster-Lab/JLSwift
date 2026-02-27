@@ -36,9 +36,12 @@ public struct JPEGLSDecoder: Sendable {
         let parser = JPEGLSParser(data: data)
         let parseResult = try parser.parse()
         
-        // Get preset parameters (default or custom)
+        // Get preset parameters (default or custom).  The NEAR parameter affects
+        // the default thresholds per ITU-T.87 Table C.2, so it must be supplied.
+        let near = parseResult.scanHeaders.first?.near ?? 0
         let parameters = try parseResult.presetParameters ?? JPEGLSPresetParameters.defaultParameters(
-            bitsPerSample: parseResult.frameHeader.bitsPerSample
+            bitsPerSample: parseResult.frameHeader.bitsPerSample,
+            near: near
         )
         
         // Extract scan data from bitstream
