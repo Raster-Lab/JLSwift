@@ -606,8 +606,8 @@ public struct JPEGLSEncoder: Sendable {
         // Encode pixels in raster order with run mode support
         var prevRowEdge = 0
         for row in 0..<buffer.height {
-            // Per ITU-T.87 §4.5.1, RUNindex is reset to 0 at the start of each scan line.
-            context.setRunIndex(0)
+            // Note: RUNindex is NOT reset per line. Per ITU-T.87 §A.7.1 and CharLS,
+            // RUNindex persists across scan lines; it is only initialised to 0 at scan start.
             let edgeForThisRow = prevRowEdge
             if row > 0 {
                 prevRowEdge = buffer.getPixel(componentId: componentId, row: row - 1, column: 0) ?? 0
@@ -785,10 +785,15 @@ public struct JPEGLSEncoder: Sendable {
         // Encode line by line, all components per line
         var prevRowEdges: [UInt8: Int] = [:]
         for component in scanHeader.components { prevRowEdges[component.id] = 0 }
+        // Per-component RUNindex per CharLS: each component line preserves its own run index.
+        var componentRunIndex: [UInt8: Int] = [:]
+        for component in scanHeader.components { componentRunIndex[component.id] = 0 }
         for row in 0..<buffer.height {
-            // Per ITU-T.87 §4.5.1, RUNindex is reset to 0 at the start of each scan line.
-            context.setRunIndex(0)
+            // Note: RUNindex is NOT reset per line. Per ITU-T.87 §A.7.1 and CharLS,
+            // RUNindex persists across scan lines; it is only initialised to 0 at scan start.
             for component in scanHeader.components {
+                // Restore this component's run index
+                context.setRunIndex(componentRunIndex[component.id] ?? 0)
                 let edgeForThisRow = prevRowEdges[component.id] ?? 0
                 if row > 0 {
                     prevRowEdges[component.id] = buffer.getPixel(componentId: component.id, row: row - 1, column: 0) ?? 0
@@ -917,6 +922,8 @@ public struct JPEGLSEncoder: Sendable {
                         col += 1
                     }
                 }
+                // Save this component's run index
+                componentRunIndex[component.id] = context.currentRunIndex
             }
         }
     }
@@ -945,8 +952,8 @@ public struct JPEGLSEncoder: Sendable {
 
         // Encode row by row
         for row in 0..<buffer.height {
-            // Per ITU-T.87 §4.5.1, RUNindex is reset to 0 at the start of each scan line.
-            context.setRunIndex(0)
+            // Note: RUNindex is NOT reset per line. Per ITU-T.87 §A.7.1 and CharLS,
+            // RUNindex persists across scan lines; it is only initialised to 0 at scan start.
             var edgesForThisRow: [UInt8: Int] = [:]
             for component in components {
                 edgesForThisRow[component.id] = prevRowEdges[component.id] ?? 0
