@@ -20,7 +20,7 @@ The following files contain x86-64-specific code and should be removed entirely:
 
 1. **`Sources/JPEGLS/Platform/x86_64/X86_64Accelerator.swift`**
    - Primary x86-64 SIMD accelerator implementation
-   - Contains SSE/AVX-optimized gradient computation, MED prediction, and quantization
+   - Contains SSE/AVX-optimised gradient computation, MED prediction, and quantisation
    - 78 lines of code (100% coverage)
    - **Action**: Delete entire file and directory
 
@@ -315,14 +315,14 @@ After x86-64 removal, the project will:
 ### What Is Lost
 
 After removal:
-- ❌ Native x86-64 SSE/AVX SIMD optimizations
+- ❌ Native x86-64 SSE/AVX SIMD optimisations
 - ❌ Intel Mac hardware acceleration
-- ❌ Linux x86-64 performance optimizations
+- ❌ Linux x86-64 performance optimisations
 - ❌ Cross-platform benchmarking capabilities
 
 On non-ARM64 platforms, the `ScalarAccelerator` will be used, which:
 - Provides correct, reference implementation
-- Has lower performance than SIMD-optimized versions
+- Has lower performance than SIMD-optimised versions
 - Is fully tested and maintains correctness
 
 ### Performance Considerations

@@ -23,7 +23,7 @@ This document provides a comprehensive specification for implementing the high-l
 2. **Scan Data Extraction**: Parser skips over actual encoded bitstream
 3. **Pixel Decoding Loop**: No orchestration of decoder components with bitstream
 4. **Golomb-Rice Reading**: No integration between bitstream reader and decoder math
-5. **Neighbor Management**: No tracking of reconstructed pixels during decoding
+5. **Neighbour Management**: No tracking of reconstructed pixels during decoding
 6. **Interleaving Support**: MultiComponentDecoder only validates, doesn't decode
 
 ## Implementation Requirements
@@ -61,7 +61,7 @@ public struct JPEGLSDecoder: Sendable {
 - Extract scan data from bitstream
 - Orchestrate pixel-by-pixel decoding
 - Manage component interleaving
-- Apply inverse color transformations
+- Apply inverse colour transformations
 - Return reconstructed pixel data
 
 ### 2. Scan Data Extraction
@@ -192,7 +192,7 @@ private func decodeNoneInterleaved(
 }
 ```
 
-### 5. Neighbor Pixel Management
+### 5. Neighbour Pixel Management
 
 ```swift
 private func getNeighbors(
@@ -231,7 +231,7 @@ private func getNeighbors(
 
 **Sample-Interleaved:**
 - Decode pixels in order: comp0[0,0], comp1[0,0], comp2[0,0], comp0[0,1], ...
-- Neighbors must be from the same component
+- Neighbours must be from the same component
 
 ### 7. Run Mode Decoding
 
@@ -243,9 +243,9 @@ private func getNeighbors(
 
 **Reference**: `JPEGLSRunModeDecoder` has all math; just needs bitstream integration.
 
-### 8. Color Transformation
+### 8. Colour Transformation
 
-After decoding, apply inverse color transformation if specified:
+After decoding, apply inverse colour transformation if specified:
 - HP1: Y → RGB
 - HP2: Ls-Rs → RGB
 - HP3: YCbCr → RGB
@@ -314,7 +314,7 @@ Code already exists in `JPEGLSMultiComponentDecoder` (lines 219-326).
 ### Phase 2: Regular Mode Decoding (Estimated: 4-6 hours)
 - [ ] Implement Golomb-Rice code reading
 - [ ] Implement pixel decoding loop for regular mode only
-- [ ] Handle neighbor pixels correctly
+- [ ] Handle neighbour pixels correctly
 - [ ] Add tests for flat and gradient images
 
 ### Phase 3: Run Mode Support (Estimated: 2-3 hours)
@@ -348,8 +348,8 @@ Code already exists in `JPEGLSMultiComponentDecoder` (lines 219-326).
 |------|--------|------------|
 | Golomb-Rice code reading bugs | High | Extensive unit tests, comparison with encoder output |
 | Context synchronization errors | High | Step-by-step verification against encoder |
-| Neighbor pixel tracking bugs | Medium | Comprehensive boundary condition tests |
-| Performance issues | Medium | Benchmark early, optimize incrementally |
+| Neighbour pixel tracking bugs | Medium | Comprehensive boundary condition tests |
+| Performance issues | Medium | Benchmark early, optimise incrementally |
 | CharLS incompatibility | Low | Parser already handles CharLS extensions |
 
 ## Success Criteria

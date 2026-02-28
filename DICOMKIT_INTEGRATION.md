@@ -13,7 +13,7 @@ This guide demonstrates how to integrate JLSwift JPEG-LS compression into DICOM 
   - [Transfer Syntax Selection](#transfer-syntax-selection)
 - [Advanced Integration](#advanced-integration)
   - [Multi-Frame DICOM Images](#multi-frame-dicom-images)
-  - [Color DICOM Images](#color-dicom-images)
+  - [Colour DICOM Images](#color-dicom-images)
   - [Near-Lossless Compression](#near-lossless-compression)
   - [Custom Preset Parameters](#custom-preset-parameters)
 - [DICOM Modality Examples](#dicom-modality-examples)
@@ -43,9 +43,9 @@ JPEG-LS is a standard compression codec for DICOM medical imaging defined by two
 JLSwift implements the full JPEG-LS standard (ISO/IEC 14495-1:1999 / ITU-T.87) in pure Swift, making it ideal for integration with DICOMkit:
 
 - **No C dependencies** — simplifies deployment and auditing
-- **Apple Silicon optimized** — ARM NEON/SIMD acceleration
+- **Apple Silicon optimised** — ARM NEON/SIMD acceleration
 - **Memory efficient** — buffer pooling and tile-based processing for large images
-- **Standards compliant** — full support for all JPEG-LS interleaving modes and color transforms
+- **Standards compliant** — full support for all JPEG-LS interleaving modes and colour transforms
 
 ## Prerequisites
 
@@ -327,9 +327,9 @@ func encodeMultiFrameDICOM(
 }
 ```
 
-### Color DICOM Images
+### Colour DICOM Images
 
-Handle color DICOM images (e.g., pathology slides, dermatology):
+Handle colour DICOM images (e.g., pathology slides, dermatology):
 
 ```swift
 import JPEGLS
@@ -473,7 +473,7 @@ func createCustomPreset(
 
 ### CT (Computed Tomography)
 
-CT images are typically 16-bit grayscale with signed pixel values:
+CT images are typically 16-bit greyscale with signed pixel values:
 
 ```swift
 import JPEGLS
@@ -579,7 +579,7 @@ func encodeMRImage(
 
 ### CR/DX (Digital Radiography)
 
-Digital radiography images are typically high-resolution grayscale:
+Digital radiography images are typically high-resolution greyscale:
 
 ```swift
 import JPEGLS
@@ -625,7 +625,7 @@ func encodeCRImage(
 
 ### US (Ultrasound)
 
-Ultrasound images may be grayscale or color, often with multiple frames:
+Ultrasound images may be greyscale or colour, often with multiple frames:
 
 ```swift
 import JPEGLS

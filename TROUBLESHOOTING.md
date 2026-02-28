@@ -307,7 +307,7 @@ perf report
 - Hardware (Apple Silicon > Intel > Others)
 - Image content (flat regions > gradients > noise)
 - Bit depth (8-bit > 12-bit > 16-bit)
-- Component count (grayscale > RGB)
+- Component count (greyscale > RGB)
 - Build configuration (release > debug)
 
 **Expected ranges** (release build):
@@ -654,7 +654,7 @@ let testData = try MultiComponentImageData.grayscale(
 
 - **[README.md](README.md)**: Project overview
 - **[GETTING_STARTED.md](GETTING_STARTED.md)**: Quick start guide
-- **[PERFORMANCE_TUNING.md](PERFORMANCE_TUNING.md)**: Performance optimization
+- **[PERFORMANCE_TUNING.md](PERFORMANCE_TUNING.md)**: Performance optimisation
 - **[MILESTONES.md](MILESTONES.md)**: Development roadmap
 - **[API Documentation](https://developer.apple.com/documentation/docc)**: Generate with `swift package generate-documentation`
 

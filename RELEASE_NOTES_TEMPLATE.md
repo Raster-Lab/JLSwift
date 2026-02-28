@@ -83,7 +83,7 @@ Use this template when creating GitHub releases for JLSwift.
 ### Memory Usage
 
 - Reduced memory usage by X% for large images through [feature]
-- Improved cache efficiency by Y% with [optimization]
+- Improved cache efficiency by Y% with [optimisation]
 
 ## Breaking Changes
 
@@ -154,8 +154,8 @@ The binary will be at `.build/release/jpegls`.
 
 - **Swift**: 6.2 or later
 - **Platforms**: macOS 12+, iOS 15+, Linux
-- **Primary**: Apple Silicon (M1/M2/M3) with ARM64 optimizations
-- **Secondary**: x86-64 (Intel Macs, Linux) with SSE/AVX optimizations
+- **Primary**: Apple Silicon (M1/M2/M3) with ARM64 optimisations
+- **Secondary**: x86-64 (Intel Macs, Linux) with SSE/AVX optimisations
 
 ## Documentation
 
@@ -195,7 +195,7 @@ let encoder = JPEGLSEncoder()
 // ... code example
 ```
 
-### Example 2: Performance Optimization
+### Example 2: Performance Optimisation
 
 ```swift
 import JPEGLS
@@ -246,7 +246,7 @@ let processor = JPEGLSTileProcessor(/* ... */)
 - Focus on bug fixes and minor improvements
 - Keep release notes brief
 - No breaking changes
-- Emphasize stability and reliability
+- Emphasise stability and reliability
 
 **Minor Releases (0.X.0):**
 - Highlight new features and enhancements
@@ -263,6 +263,6 @@ let processor = JPEGLSTileProcessor(/* ... */)
 
 **Pre-release Versions:**
 - Clearly mark as alpha, beta, or RC
-- Emphasize testing and feedback
+- Emphasise testing and feedback
 - Document known limitations
 - Set expectations appropriately

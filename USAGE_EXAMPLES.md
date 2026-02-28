@@ -5,7 +5,7 @@ Comprehensive real-world examples demonstrating how to use JLSwift for JPEG-LS c
 ## Table of Contents
 
 - [Basic Examples](#basic-examples)
-  - [Simple Grayscale Encoding](#simple-grayscale-encoding)
+  - [Simple Greyscale Encoding](#simple-greyscale-encoding)
   - [RGB Image Encoding](#rgb-image-encoding)
   - [Near-Lossless Compression](#near-lossless-compression)
   - [Decoding JPEG-LS Files](#decoding-jpeg-ls-files)
@@ -15,7 +15,7 @@ Comprehensive real-world examples demonstrating how to use JLSwift for JPEG-LS c
   - [Large Image Processing with Tiling](#large-image-processing-with-tiling)
   - [Custom Preset Parameters](#custom-preset-parameters)
   - [Multi-Component with Different Interleaving](#multi-component-with-different-interleaving)
-- [Performance Optimization Examples](#performance-optimization-examples)
+- [Performance Optimisation Examples](#performance-optimisation-examples)
   - [Using Buffer Pooling](#using-buffer-pooling)
   - [Cache-Friendly Data Layout](#cache-friendly-data-layout)
   - [Platform-Specific Acceleration](#platform-specific-acceleration)
@@ -30,9 +30,9 @@ Comprehensive real-world examples demonstrating how to use JLSwift for JPEG-LS c
 
 ## Basic Examples
 
-### Simple Grayscale Encoding
+### Simple Greyscale Encoding
 
-Encode a simple 8-bit grayscale image to JPEG-LS format:
+Encode a simple 8-bit greyscale image to JPEG-LS format:
 
 ```swift
 import JPEGLS
@@ -520,7 +520,7 @@ try processLargeImageWithTiles()
 
 ### Custom Preset Parameters
 
-Use custom preset parameters for specialized compression:
+Use custom preset parameters for specialised compression:
 
 ```swift
 import JPEGLS
@@ -662,11 +662,11 @@ func createRGBTestImage(width: Int, height: Int) -> ([[Int]], [[Int]], [[Int]]) 
 try compareInterleavingModes()
 ```
 
-## Performance Optimization Examples
+## Performance Optimisation Examples
 
 ### Using Buffer Pooling
 
-Optimize performance with buffer reuse:
+Optimise performance with buffer reuse:
 
 ```swift
 import JPEGLS
@@ -1295,7 +1295,7 @@ fi
 
 - [README.md](README.md) - Project overview and features
 - [GETTING_STARTED.md](GETTING_STARTED.md) - Quick start guide
-- [PERFORMANCE_TUNING.md](PERFORMANCE_TUNING.md) - Performance optimization
+- [PERFORMANCE_TUNING.md](PERFORMANCE_TUNING.md) - Performance optimisation
 - [TROUBLESHOOTING.md](TROUBLESHOOTING.md) - Common issues and solutions
 - [MILESTONES.md](MILESTONES.md) - Development roadmap
 
@@ -1330,7 +1330,7 @@ See [Copilot Instructions](.github/copilot-instructions.md) for coding guideline
 - **[GETTING_STARTED.md](GETTING_STARTED.md)** - Quick start guide with basic examples
 - **[SWIFTUI_EXAMPLES.md](SWIFTUI_EXAMPLES.md)** - SwiftUI integration guide for iOS/macOS apps
 - **[APPKIT_EXAMPLES.md](APPKIT_EXAMPLES.md)** - AppKit integration guide for macOS applications
-- **[PERFORMANCE_TUNING.md](PERFORMANCE_TUNING.md)** - Performance optimization and benchmarking
+- **[PERFORMANCE_TUNING.md](PERFORMANCE_TUNING.md)** - Performance optimisation and benchmarking
 - **[TROUBLESHOOTING.md](TROUBLESHOOTING.md)** - Common issues and solutions
 
 ---

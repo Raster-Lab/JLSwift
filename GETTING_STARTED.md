@@ -83,7 +83,7 @@ print("Encoded \(statistics.pixelsEncoded) pixels")
 
 ### Using the Library
 
-#### Encoding a Grayscale Image
+#### Encoding a Greyscale Image
 
 ```swift
 import JPEGLS
@@ -252,7 +252,7 @@ jpegls batch info "*.jls" --parallelism 4
 
 ## Core Concepts
 
-### Image Data Organization
+### Image Data Organisation
 
 JLSwift uses 2D arrays to represent image data:
 
@@ -382,7 +382,7 @@ defer {
 }
 ```
 
-### Pattern 3: Platform-Optimized Operations
+### Pattern 3: Platform-Optimised Operations
 
 Automatically use hardware acceleration:
 
@@ -453,7 +453,7 @@ do {
 - **[README.md](README.md)**: Detailed feature documentation
 - **[USAGE_EXAMPLES.md](USAGE_EXAMPLES.md)**: Comprehensive real-world usage examples
 - **[MILESTONES.md](MILESTONES.md)**: Development roadmap and progress
-- **[PERFORMANCE_TUNING.md](PERFORMANCE_TUNING.md)**: Performance optimization guide
+- **[PERFORMANCE_TUNING.md](PERFORMANCE_TUNING.md)**: Performance optimisation guide
 - **[TROUBLESHOOTING.md](TROUBLESHOOTING.md)**: Common issues and solutions
 
 ### API Documentation
@@ -497,14 +497,14 @@ swift test --filter JPEGLSPerformanceBenchmarks
 - **[USAGE_EXAMPLES.md](USAGE_EXAMPLES.md)** - Comprehensive real-world usage examples
 - **[SWIFTUI_EXAMPLES.md](SWIFTUI_EXAMPLES.md)** - SwiftUI integration guide with image loading examples
 - **[APPKIT_EXAMPLES.md](APPKIT_EXAMPLES.md)** - AppKit integration guide for macOS applications
-- **[PERFORMANCE_TUNING.md](PERFORMANCE_TUNING.md)** - Performance optimization and benchmarking
+- **[PERFORMANCE_TUNING.md](PERFORMANCE_TUNING.md)** - Performance optimisation and benchmarking
 - **[TROUBLESHOOTING.md](TROUBLESHOOTING.md)** - Common issues and solutions
 
 ## Requirements
 
 - Swift 6.2 or later
 - Platforms: Linux, macOS 12+, iOS 15+
-- Optimized for: Apple Silicon (M1/M2/M3) with ARM64 NEON
+- Optimised for: Apple Silicon (M1/M2/M3) with ARM64 NEON
 - Compatible with: x86-64 with SSE/AVX
 
 ---

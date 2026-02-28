@@ -1,14 +1,14 @@
 # Performance Tuning Guide
 
-Optimize JPEG-LS encoding and decoding performance with JLSwift.
+Optimise JPEG-LS encoding and decoding performance with JLSwift.
 
 ## Table of Contents
 
 - [Overview](#overview)
 - [Hardware Acceleration](#hardware-acceleration)
-- [Memory Optimization](#memory-optimization)
-- [Encoding Optimization](#encoding-optimization)
-- [Decoding Optimization](#decoding-optimization)
+- [Memory Optimisation](#memory-optimisation)
+- [Encoding Optimisation](#encoding-optimisation)
+- [Decoding Optimisation](#decoding-optimisation)
 - [Profiling and Benchmarking](#profiling-and-benchmarking)
 - [Best Practices](#best-practices)
 
@@ -18,7 +18,7 @@ JLSwift is designed for high performance on Apple Silicon while maintaining comp
 
 ### Performance Factors
 
-| Factor | Impact | Optimization |
+| Factor | Impact | Optimisation |
 |--------|---------|--------------|
 | **Hardware** | High | Use ARM64 on Apple Silicon |
 | **Image Size** | High | Consider tile-based processing for large images |
@@ -42,17 +42,17 @@ print("Using: \(type(of: accelerator).platformName)")
 
 **Platform Priority:**
 1. **ARM64**: Fastest on Apple Silicon (M1/M2/M3)
-2. **x86-64**: Optimized for Intel processors
+2. **x86-64**: Optimised for Intel processors
 3. **Scalar**: Fallback for all platforms
 
 ### ARM64 / Apple Silicon (Best Performance)
 
-- **NEON SIMD**: Vectorized gradient computation and prediction
+- **NEON SIMD**: Vectorised gradient computation and prediction
 - **Hardware**: M1, M2, M3, ARM64 processors
 - **Speedup**: ~2-3x over scalar implementation
 
-**Optimization Tips:**
-- Build with `-c release` for full optimization
+**Optimisation Tips:**
+- Build with `-c release` for full optimisation
 - Use Swift 6.2+ for best SIMD codegen
 - Run on Apple Silicon devices for maximum benefit
 
@@ -63,7 +63,7 @@ swift build -c release --arch arm64
 
 ### x86-64 / Intel (Good Performance)
 
-- **SSE/AVX**: Vectorized operations on Intel processors
+- **SSE/AVX**: Vectorised operations on Intel processors
 - **Hardware**: Intel Core, Xeon processors
 - **Speedup**: ~1.5-2x over scalar implementation
 
@@ -104,7 +104,7 @@ print("Mean: \(stats.mean), StdDev: \(stats.standardDeviation)")
 - Single-pixel operations (overhead outweighs benefits)
 - Tight encoding/decoding loops
 
-## Memory Optimization
+## Memory Optimisation
 
 ### Tile-Based Processing
 
@@ -207,11 +207,11 @@ let rows = cacheFriendlyBuffer.getRows(componentId: 1, rowStart: 0, rowEnd: 10)
 ```
 
 **Benefits:**
-- ~10-20% faster neighbor access
+- ~10-20% faster neighbour access
 - Better prefetching from memory
 - Reduced cache misses in tight loops
 
-## Encoding Optimization
+## Encoding Optimisation
 
 ### Interleaving Mode Selection
 
@@ -280,14 +280,14 @@ Different content types compress at different speeds:
 | High-frequency | Slowest (50%) | Regular mode with many context switches |
 | Medical images | Medium (65%) | Mix of flat and textured regions |
 
-**Optimization:**
+**Optimisation:**
 - Pre-process images to increase flat regions (lossy only)
 - Consider tiling to isolate different content types
 - Use profiling to identify bottlenecks
 
-## Decoding Optimization
+## Decoding Optimisation
 
-### Parser Optimization
+### Parser Optimisation
 
 The parser reads and validates JPEG-LS file structure:
 
@@ -327,7 +327,7 @@ try reader.seek(to: scanDataOffset)
 ```
 
 **Performance Tips:**
-- Minimize bit buffer resets
+- Minimise bit buffer resets
 - Use seek() sparingly (resets bit buffer)
 - Read in larger chunks when possible
 
@@ -348,7 +348,7 @@ swift test --filter "benchmarkEncode512x512"
 **Benchmark Categories:**
 1. **Encoding by size**: 256×256 to 4096×4096
 2. **Encoding by bit depth**: 8-bit, 12-bit, 16-bit
-3. **Encoding by component**: Grayscale, RGB
+3. **Encoding by component**: Greyscale, RGB
 4. **Near-lossless**: NEAR=3, NEAR=10
 5. **Interleaving modes**: none, line, sample
 6. **Content types**: flat, gradient, medical-like
@@ -426,9 +426,9 @@ swift build -c release
 swift build -c debug
 ```
 
-**Optimization flags:**
-- `-c release`: Full optimizations, no debug symbols
-- `-c debug`: No optimizations, full debug info
+**Optimisation flags:**
+- `-c release`: Full optimisations, no debug symbols
+- `-c debug`: No optimisations, full debug info
 
 ### Concurrency
 
@@ -504,15 +504,15 @@ print("Interleave mode: \(statistics.interleaveMode)")
 ❌ **Avoid:**
 - Debug builds in production
 - Processing large images without tiling
-- Ignoring platform-specific optimizations
+- Ignoring platform-specific optimisations
 - Frequent buffer allocations without pooling
 
 ✅ **Prefer:**
-- Release builds with full optimizations
+- Release builds with full optimisations
 - Tile-based processing for large images
-- Using `selectPlatformAccelerator()` for automatic optimization
+- Using `selectPlatformAccelerator()` for automatic optimisation
 - Buffer pooling for repeated operations
-- Cache-friendly data layouts for neighbor access
+- Cache-friendly data layouts for neighbour access
 
 ## Summary
 
@@ -524,9 +524,9 @@ print("Interleave mode: \(statistics.interleaveMode)")
 4. **Enable buffer pooling**: 5-10x faster allocations
 5. **Choose sample-interleaving**: Fastest for RGB images
 
-### Advanced Optimizations
+### Advanced Optimisations
 
-1. Cache-friendly buffers for neighbor access
+1. Cache-friendly buffers for neighbour access
 2. Accelerate framework for batch operations
 3. Parallel processing for multiple images
 4. Content-aware tile sizing
@@ -534,7 +534,7 @@ print("Interleave mode: \(statistics.interleaveMode)")
 
 ### Measurement
 
-Before optimizing, always:
+Before optimising, always:
 1. Profile your specific workload
 2. Run benchmarks on target hardware
 3. Measure memory usage patterns
