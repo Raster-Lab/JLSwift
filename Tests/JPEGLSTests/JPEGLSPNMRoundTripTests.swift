@@ -417,12 +417,12 @@ struct JPEGLSPNMRoundTripTests {
 
     // MARK: - Decode Format Validation Tests
 
-    @Test("Decode output format validation: raw, pgm, ppm, png are valid")
+    @Test("Decode output format validation: raw, pgm, ppm, png, tiff are valid")
     func testDecodeFormatValidation() {
-        let validFormats = ["raw", "pgm", "ppm", "png", "RAW", "PGM", "PPM", "PNG"]
-        let invalidFormats = ["tiff", "bmp", "jpg", ""]
+        let validFormats = ["raw", "pgm", "ppm", "png", "tiff", "RAW", "PGM", "PPM", "PNG", "TIFF"]
+        let invalidFormats = ["bmp", "jpg", ""]
 
-        let supportedFormats = ["raw", "pgm", "ppm", "png"]
+        let supportedFormats = ["raw", "pgm", "ppm", "png", "tiff"]
         for fmt in validFormats {
             #expect(supportedFormats.contains(fmt.lowercased()))
         }

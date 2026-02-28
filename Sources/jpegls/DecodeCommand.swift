@@ -14,7 +14,7 @@ extension JPEGLSCLITool {
         @Argument(help: "Output file path for raw pixel data")
         var output: String
         
-        @Option(name: .long, help: "Output format: raw, pgm, ppm, png (default: raw)")
+        @Option(name: .long, help: "Output format: raw, pgm, ppm, png, tiff (default: raw)")
         var format: String = "raw"
         
         @Flag(name: .long, help: "Enable verbose output")
@@ -127,10 +127,23 @@ extension JPEGLSCLITool {
                 }
                 
             case "tiff":
-                throw ValidationError("Format 'tiff' is not yet implemented — use 'raw', 'pgm', 'ppm', or 'png'")
+                // Write TIFF file using the pure-Swift TIFF encoder.
+                let componentPixels: [[[Int]]] = imageData.components.map { $0.pixels }
+                let maxVal = (1 << imageData.frameHeader.bitsPerSample) - 1
+                let tiffData = try TIFFSupport.encode(
+                    componentPixels: componentPixels,
+                    width: imageData.frameHeader.width,
+                    height: imageData.frameHeader.height,
+                    maxVal: maxVal
+                )
+                try tiffData.write(to: URL(fileURLWithPath: output))
+
+                if !quiet {
+                    print("Decoded \(imageData.frameHeader.width)x\(imageData.frameHeader.height) image to \(output) as TIFF (\(tiffData.count) bytes)")
+                }
                 
             default:
-                throw ValidationError("Unknown format '\(format)' — supported formats: raw, pgm, ppm, png")
+                throw ValidationError("Unknown format '\(format)' — supported formats: raw, pgm, ppm, png, tiff")
             }
         }
     }
