@@ -39,7 +39,7 @@ import JPEGLS
 
 // Example: Encoding a simple gradient image
 func encodeGrayscaleImage() throws {
-    // Create a simple 256x256 gradient image
+    // Create a simple 256×256 gradient image
     let width = 256
     let height = 256
     var pixels: [[Int]] = []
@@ -54,28 +54,18 @@ func encodeGrayscaleImage() throws {
         pixels.append(row)
     }
     
-    // Create grayscale image data
+    // Create greyscale image data
     let imageData = try MultiComponentImageData.grayscale(
         pixels: pixels,
         bitsPerSample: 8
     )
     
-    // Create lossless scan header
-    let scanHeader = try JPEGLSScanHeader.grayscaleLossless()
+    // Encode using the high-level encoder (lossless, no interleaving)
+    let encoder = JPEGLSEncoder()
+    let jpegLSData = try encoder.encode(imageData)
     
-    // Create encoder
-    let encoder = try JPEGLSMultiComponentEncoder(
-        frameHeader: imageData.frameHeader,
-        scanHeader: scanHeader
-    )
-    
-    // Encode the image
-    let buffer = JPEGLSPixelBuffer(imageData: imageData)
-    let statistics = try encoder.encodeScan(buffer: buffer)
-    
-    print("Encoded \(statistics.pixelsEncoded) pixels")
-    print("Encoded \(statistics.regularModeCount) in regular mode")
-    print("Encoded \(statistics.runModeCount) in run mode")
+    print("Encoded \(width * height) pixels")
+    print("Output size: \(jpegLSData.count) bytes")
 }
 
 try encodeGrayscaleImage()
@@ -115,27 +105,22 @@ func encodeRGBImage() throws {
     
     // Create RGB image data
     let imageData = try MultiComponentImageData.rgb(
-        red: red,
-        green: green,
-        blue: blue,
+        redPixels: red,
+        greenPixels: green,
+        bluePixels: blue,
         bitsPerSample: 8
     )
     
-    // Create lossless RGB scan header (uses sample interleaving by default)
-    let scanHeader = try JPEGLSScanHeader.rgbLossless()
-    
-    // Create encoder
-    let encoder = try JPEGLSMultiComponentEncoder(
-        frameHeader: imageData.frameHeader,
-        scanHeader: scanHeader
+    // Encode using the high-level encoder (lossless, sample-interleaved)
+    let encoder = JPEGLSEncoder()
+    let config = try JPEGLSEncoder.Configuration(
+        near: 0,
+        interleaveMode: .sample
     )
+    let jpegLSData = try encoder.encode(imageData, configuration: config)
     
-    // Encode the image
-    let buffer = JPEGLSPixelBuffer(imageData: imageData)
-    let statistics = try encoder.encodeScan(buffer: buffer)
-    
-    print("Encoded RGB image: \(width)x\(height)")
-    print("Total pixels: \(statistics.pixelsEncoded)")
+    print("Encoded RGB image: \(width)×\(height)")
+    print("Output size: \(jpegLSData.count) bytes")
     print("Interleave mode: sample-interleaved")
 }
 
@@ -160,27 +145,13 @@ func encodeNearLossless() throws {
         bitsPerSample: 8
     )
     
-    // Create near-lossless scan header with NEAR=3
-    // This allows maximum error of ±3 gray levels
-    let scanHeader = try JPEGLSScanHeader(
-        componentCount: 1,
-        components: [JPEGLSScanHeader.ComponentSelector(id: 1)],
-        near: 3,  // Maximum error: ±3
-        interleaveMode: .none
-    )
-    
-    // Create encoder
-    let encoder = try JPEGLSMultiComponentEncoder(
-        frameHeader: imageData.frameHeader,
-        scanHeader: scanHeader
-    )
-    
-    // Encode
-    let buffer = JPEGLSPixelBuffer(imageData: imageData)
-    let statistics = try encoder.encodeScan(buffer: buffer)
+    // Encode with near-lossless (NEAR=3 allows maximum error of ±3 grey levels)
+    let encoder = JPEGLSEncoder()
+    let config = try JPEGLSEncoder.Configuration(near: 3)
+    let jpegLSData = try encoder.encode(imageData, configuration: config)
     
     print("Near-lossless encoding (NEAR=3)")
-    print("Pixels encoded: \(statistics.pixelsEncoded)")
+    print("Output size: \(jpegLSData.count) bytes")
     print("Expected better compression than lossless with minimal quality loss")
 }
 
@@ -213,27 +184,19 @@ func decodeJPEGLSFile(from path: String) throws {
     // Read the JPEG-LS file
     let data = try Data(contentsOf: URL(fileURLWithPath: path))
     
-    // Parse the file structure
-    let parser = JPEGLSParser()
-    let parseResult = try parser.parse(data: data)
+    // Decode using the high-level decoder
+    let decoder = JPEGLSDecoder()
+    let imageData = try decoder.decode(data)
     
-    print("File parsed successfully:")
-    print("  Dimensions: \(parseResult.frameHeader.width)x\(parseResult.frameHeader.height)")
-    print("  Bits per sample: \(parseResult.frameHeader.bitsPerSample)")
-    print("  Components: \(parseResult.frameHeader.componentCount)")
-    print("  Scans: \(parseResult.scanHeaders.count)")
+    print("File decoded successfully:")
+    print("  Dimensions: \(imageData.frameHeader.width)×\(imageData.frameHeader.height)")
+    print("  Bits per sample: \(imageData.frameHeader.bitsPerSample)")
+    print("  Components: \(imageData.frameHeader.componentCount)")
     
-    // Display scan information
-    for (index, scanHeader) in parseResult.scanHeaders.enumerated() {
-        print("\nScan \(index + 1):")
-        print("  Components: \(scanHeader.componentCount)")
-        print("  NEAR: \(scanHeader.near) (\(scanHeader.near == 0 ? "lossless" : "near-lossless"))")
-        print("  Interleave mode: \(scanHeader.interleaveMode)")
+    // Access pixel data
+    for (index, component) in imageData.components.enumerated() {
+        print("  Component \(index + 1): \(component.pixels.count) rows × \(component.pixels.first?.count ?? 0) columns")
     }
-    
-    // TODO: Full decoding requires bitstream reader integration
-    // See MILESTONES.md Phase 7.1 (Core CLI Commands) for status
-    // For now, we can validate the file structure
 }
 
 // Example usage
@@ -266,32 +229,19 @@ func processMedicalImage() throws {
     )
     
     // Use lossless compression for diagnostic images
-    let scanHeader = try JPEGLSScanHeader.grayscaleLossless()
-    
-    // Create encoder
-    let encoder = try JPEGLSMultiComponentEncoder(
-        frameHeader: imageData.frameHeader,
-        scanHeader: scanHeader
-    )
-    
-    // Use buffer pooling for better performance
-    let contextBuffer = sharedBufferPool.acquire(type: .contextArrays, size: 365)
-    defer { sharedBufferPool.release(contextBuffer, type: .contextArrays) }
-    
-    // Encode
-    let buffer = JPEGLSPixelBuffer(imageData: imageData)
-    let statistics = try encoder.encodeScan(buffer: buffer)
+    let encoder = JPEGLSEncoder()
+    let jpegLSData = try encoder.encode(imageData)
     
     print("Medical image encoded:")
-    print("  Dimensions: \(width)x\(height)")
-    print("  Bit depth: \(bitsPerSample)-bit (\(maxValue + 1) gray levels)")
-    print("  Pixels: \(statistics.pixelsEncoded)")
+    print("  Dimensions: \(width)×\(height)")
+    print("  Bit depth: \(bitsPerSample)-bit (\(maxValue + 1) grey levels)")
     print("  Compression: lossless")
     
     // Calculate compression statistics
     let uncompressedSize = width * height * 2  // 2 bytes per pixel for 12-bit
     print("  Uncompressed size: \(uncompressedSize) bytes")
-    // Compressed size would come from bitstream writer (not yet integrated)
+    print("  Compressed size: \(jpegLSData.count) bytes")
+    print("  Compression ratio: \(String(format: "%.2f", Double(uncompressedSize) / Double(jpegLSData.count)))×")
 }
 
 func loadMedicalImageData(width: Int, height: Int) -> [[Int]] {
@@ -367,20 +317,11 @@ func batchEncodeImages(images: [ImageFile]) throws {
                 bitsPerSample: imageFile.bitsPerSample
             )
             
-            // Create scan header
-            let scanHeader = try JPEGLSScanHeader.grayscaleLossless()
+            // Encode using the high-level encoder
+            let encoder = JPEGLSEncoder()
+            let jpegLSData = try encoder.encode(imageData)
             
-            // Create encoder
-            let encoder = try JPEGLSMultiComponentEncoder(
-                frameHeader: imageData.frameHeader,
-                scanHeader: scanHeader
-            )
-            
-            // Encode
-            let buffer = JPEGLSPixelBuffer(imageData: imageData)
-            let statistics = try encoder.encodeScan(buffer: buffer)
-            
-            print("  ✓ Success: \(statistics.pixelsEncoded) pixels")
+            print("  ✓ Success: \(jpegLSData.count) bytes")
             successCount += 1
             
         } catch {
@@ -480,17 +421,11 @@ func processLargeImageWithTiles() throws {
             bitsPerSample: 8
         )
         
-        // Encode the tile
-        let scanHeader = try JPEGLSScanHeader.grayscaleLossless()
-        let encoder = try JPEGLSMultiComponentEncoder(
-            frameHeader: imageData.frameHeader,
-            scanHeader: scanHeader
-        )
+        // Encode the tile using the high-level encoder
+        let encoder = JPEGLSEncoder()
+        let jpegLSData = try encoder.encode(imageData)
         
-        let buffer = JPEGLSPixelBuffer(imageData: imageData)
-        let statistics = try encoder.encodeScan(buffer: buffer)
-        
-        print("  ✓ Encoded: \(statistics.pixelsEncoded) pixels")
+        print("  ✓ Encoded: \(jpegLSData.count) bytes")
     }
     
     print("\n✓ Large image processing complete")
@@ -538,33 +473,26 @@ func encodeWithCustomPresets() throws {
     // Create custom preset parameters
     // Adjust thresholds for different image characteristics
     let customPresets = try JPEGLSPresetParameters(
-        maxval: 255,      // Maximum sample value
-        t1: 5,            // Threshold 1 (default: 3)
-        t2: 10,           // Threshold 2 (default: 7)
-        t3: 25,           // Threshold 3 (default: 21)
-        reset: 128        // Context reset (default: 64)
+        maxValue: 255,       // Maximum sample value
+        threshold1: 5,       // Threshold 1 (default: 3)
+        threshold2: 10,      // Threshold 2 (default: 7)
+        threshold3: 25,      // Threshold 3 (default: 21)
+        reset: 64            // Context reset (default: 64)
     )
     
-    // Create frame header with custom presets
-    var frameHeader = imageData.frameHeader
-    frameHeader.presetParameters = customPresets
-    
-    // Create scan header
-    let scanHeader = try JPEGLSScanHeader.grayscaleLossless()
-    
-    // Create encoder with custom presets
-    let encoder = try JPEGLSMultiComponentEncoder(
-        frameHeader: frameHeader,
-        scanHeader: scanHeader
+    // Encode using the high-level encoder with custom preset parameters
+    let encoder = JPEGLSEncoder()
+    let config = try JPEGLSEncoder.Configuration(
+        near: 0,
+        interleaveMode: .none,
+        presetParameters: customPresets
     )
-    
-    let buffer = JPEGLSPixelBuffer(imageData: imageData)
-    let statistics = try encoder.encodeScan(buffer: buffer)
+    let jpegLSData = try encoder.encode(imageData, configuration: config)
     
     print("Encoded with custom preset parameters:")
-    print("  T1=\(customPresets.t1), T2=\(customPresets.t2), T3=\(customPresets.t3)")
+    print("  Threshold1=\(customPresets.threshold1), Threshold2=\(customPresets.threshold2), Threshold3=\(customPresets.threshold3)")
     print("  RESET=\(customPresets.reset)")
-    print("  Pixels: \(statistics.pixelsEncoded)")
+    print("  Encoded \(jpegLSData.count) bytes")
 }
 
 try encodeWithCustomPresets()
@@ -585,9 +513,9 @@ func compareInterleavingModes() throws {
     let (red, green, blue) = createRGBTestImage(width: width, height: height)
     
     let imageData = try MultiComponentImageData.rgb(
-        red: red,
-        green: green,
-        blue: blue,
+        redPixels: red,
+        greenPixels: green,
+        bluePixels: blue,
         bitsPerSample: 8
     )
     
@@ -604,34 +532,18 @@ func compareInterleavingModes() throws {
     try testInterleaving(imageData: imageData, mode: .sample)
 }
 
-func testInterleaving(imageData: MultiComponentImageData, 
-                      mode: JPEGLSScanHeader.InterleaveMode) throws {
-    // Create scan header with specified interleaving mode
-    let scanHeader = try JPEGLSScanHeader(
-        componentCount: 3,
-        components: [
-            JPEGLSScanHeader.ComponentSelector(id: 1),
-            JPEGLSScanHeader.ComponentSelector(id: 2),
-            JPEGLSScanHeader.ComponentSelector(id: 3)
-        ],
+func testInterleaving(imageData: MultiComponentImageData,
+                      mode: JPEGLSInterleaveMode) throws {
+    // Encode with specified interleaving mode
+    let encoder = JPEGLSEncoder()
+    let config = try JPEGLSEncoder.Configuration(
         near: 0,
         interleaveMode: mode
     )
-    
-    // Create encoder
-    let encoder = try JPEGLSMultiComponentEncoder(
-        frameHeader: imageData.frameHeader,
-        scanHeader: scanHeader
-    )
-    
-    // Encode
-    let buffer = JPEGLSPixelBuffer(imageData: imageData)
-    let statistics = try encoder.encodeScan(buffer: buffer)
+    let jpegLSData = try encoder.encode(imageData, configuration: config)
     
     print("  Mode: \(mode)")
-    print("  Pixels encoded: \(statistics.pixelsEncoded)")
-    print("  Regular mode: \(statistics.regularModeCount)")
-    print("  Run mode: \(statistics.runModeCount)")
+    print("  Output size: \(jpegLSData.count) bytes")
 }
 
 func createRGBTestImage(width: Int, height: Int) -> ([[Int]], [[Int]], [[Int]]) {
@@ -686,14 +598,8 @@ func efficientBatchProcessing(imageCount: Int) throws {
             bitsPerSample: 8
         )
         
-        let scanHeader = try JPEGLSScanHeader.grayscaleLossless()
-        let encoder = try JPEGLSMultiComponentEncoder(
-            frameHeader: imageData.frameHeader,
-            scanHeader: scanHeader
-        )
-        
-        let pixelBuffer = JPEGLSPixelBuffer(imageData: imageData)
-        _ = try encoder.encodeScan(buffer: pixelBuffer)
+        let encoder = JPEGLSEncoder()
+        _ = try encoder.encode(imageData)
         
         // Release buffer back to pool
         sharedBufferPool.release(buffer, type: .contextArrays)
@@ -857,18 +763,12 @@ func streamLargeImage() throws {
             bitsPerSample: 8
         )
         
-        let scanHeader = try JPEGLSScanHeader.grayscaleLossless()
-        let encoder = try JPEGLSMultiComponentEncoder(
-            frameHeader: imageData.frameHeader,
-            scanHeader: scanHeader
-        )
+        let encoder = JPEGLSEncoder()
+        let jpegLSData = try encoder.encode(imageData)
         
-        let buffer = JPEGLSPixelBuffer(imageData: imageData)
-        let statistics = try encoder.encodeScan(buffer: buffer)
+        totalPixelsProcessed += tileWidth * currentChunkHeight
         
-        totalPixelsProcessed += statistics.pixelsEncoded
-        
-        print("  ✓ Processed \(statistics.pixelsEncoded) pixels")
+        print("  ✓ Processed \(jpegLSData.count) bytes")
         
         // The chunk data can now be discarded (garbage collected)
         // Only one chunk is in memory at a time
@@ -947,26 +847,17 @@ func processImageWithErrorHandling(inputPath: String, outputPath: String) {
             bitsPerSample: 8
         )
         
-        // Set up encoder
-        print("  Setting up encoder...")
-        let scanHeader = try JPEGLSScanHeader.grayscaleLossless()
-        let encoder = try JPEGLSMultiComponentEncoder(
-            frameHeader: imageData.frameHeader,
-            scanHeader: scanHeader
-        )
-        
-        // Encode
+        // Set up encoder and encode
         print("  Encoding...")
-        let buffer = JPEGLSPixelBuffer(imageData: imageData)
-        let statistics = try encoder.encodeScan(buffer: buffer)
+        let encoder = JPEGLSEncoder()
+        let jpegLSData = try encoder.encode(imageData)
         
         print("  ✓ Success!")
-        print("    Pixels encoded: \(statistics.pixelsEncoded)")
-        print("    Regular mode: \(statistics.regularModeCount)")
-        print("    Run mode: \(statistics.runModeCount)")
+        print("    Encoded \(jpegLSData.count) bytes")
         
-        // Save result (requires bitstream writer integration)
-        print("  Output would be saved to: \(outputPath)")
+        // Save result to output file
+        try jpegLSData.write(to: URL(fileURLWithPath: outputPath))
+        print("  Output saved to: \(outputPath)")
         
     } catch let error as JPEGLSError {
         print("  ✗ JPEG-LS Error: \(error)")
@@ -994,7 +885,7 @@ func handleJPEGLSError(_ error: JPEGLSError) {
         print("    Component count \(count) is not supported")
         print("    Valid values: 1 (grayscale) or 3 (RGB)")
         
-    case .invalidNearValue(let near):
+    case .invalidNearParameter(let near):
         print("    NEAR value \(near) is not valid")
         print("    Valid range: 0-255")
         
@@ -1141,23 +1032,12 @@ func safeImageEncoding(pixels: [[Int]], width: Int, height: Int,
             bitsPerSample: bitsPerSample
         )
         
-        let scanHeader = try JPEGLSScanHeader(
-            componentCount: 1,
-            components: [JPEGLSScanHeader.ComponentSelector(id: 1)],
-            near: near,
-            interleaveMode: .none
-        )
-        
-        let encoder = try JPEGLSMultiComponentEncoder(
-            frameHeader: imageData.frameHeader,
-            scanHeader: scanHeader
-        )
-        
-        let buffer = JPEGLSPixelBuffer(imageData: imageData)
-        let statistics = try encoder.encodeScan(buffer: buffer)
+        let encoder = JPEGLSEncoder()
+        let config = try JPEGLSEncoder.Configuration(near: near)
+        let jpegLSData = try encoder.encode(imageData, configuration: config)
         
         print("✓ Encoding successful!")
-        print("  Pixels: \(statistics.pixelsEncoded)")
+        print("  Encoded \(jpegLSData.count) bytes")
         
     } catch {
         print("✗ Encoding failed: \(error)")
@@ -1262,13 +1142,12 @@ for raw_file in "$INPUT_DIR"/*.raw; do
     
     echo "Processing: $basename" | tee -a "$LOG_FILE"
     
-    # Note: encode command requires bitstream writer integration
-    # jpegls encode "$raw_file" "$output_file" \
-    #     --width 512 --height 512 \
-    #     --bits-per-sample 12 \
-    #     --quiet
+    # Encode raw image to JPEG-LS
+    jpegls encode "$raw_file" "$output_file" \
+        --width 512 --height 512 \
+        --bits-per-sample 12 \
+        --quiet
     
-    # For now, using info command as example
     if [ -f "$output_file" ]; then
         jpegls info "$output_file" --quiet >> "$LOG_FILE"
     fi
