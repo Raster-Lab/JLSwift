@@ -954,9 +954,32 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 - [x] Implement `jpegls benchmark` command for quick performance measurement
 - [x] Implement `jpegls compare` command to diff two JPEG-LS files (also supports PGM/PPM reference inputs)
 - [x] Implement `--preset` parameter integration in the encoder (custom T1, T2, T3, RESET)
-- [ ] Implement `--part2` flag for Part 2 extensions encoding
+- [x] Implement `--part2` flag for Part 2 extensions encoding
 - [ ] Implement progress bars for long-running operations (large files, batch processing)
 - [x] Implement `--version` flag displaying library and tool version information (provided by ArgumentParser via `version:` in `CommandConfiguration`)
+
+**Implementation Details (Phase 17.1 — `--part2` flag and `--palette` option):**
+- Added `--part2` boolean flag to the `encode` and `convert` CLI commands:
+  - `--part2` opts the output JPEG-LS file into Part 2 (ITU-T T.870 / ISO/IEC 14495-2) encoding.
+  - Required when using the `--palette` option; harmless when specified alone (acts as documentation of intent).
+- Added `--palette` option to the `encode` and `convert` CLI commands:
+  - Accepts a comma-separated list of 8-bit integer palette entries (0–255 each). Example: `--palette 0,85,170,255`.
+  - When set (together with `--part2`), the encoder creates a `JPEGLSMappingTable` with ID 1 and embeds it as an LSE type 2 marker before the scan. All scan component selectors reference the table.
+  - The decoder reads the mapping table and applies the palette lookup to every decoded raw sample value, so the output pixels are palette output values rather than raw indices.
+  - Validation: `--palette` without `--part2` throws an error; non-integer or out-of-range (< 0 or > 255) entries are rejected with a clear message.
+- Extended `JPEGLSEncoder.Configuration` to support a `mappingTable: JPEGLSMappingTable?` property (default: `nil`):
+  - When non-nil, `encode()` writes the mapping table as an LSE type 2/3 segment immediately after the preset-parameters block and sets the mapping-table ID in every scan component selector (`Tdi` field in the SOS marker).
+  - This integrates the previously internal `writeMappingTable(_:to:)` function into the high-level `encode()` codepath, and adds the `mappingTableID` parameter to the internal `encodeScan()` function.
+- Added `Part2EncodingTests` suite in `CLIArgumentParsingTests.swift` (21 tests) covering:
+  - `--part2` flag is boolean (no value required)
+  - `--palette` parsing: valid values, boundary values (0, 255), spaces, rejection of 256 and negatives, rejection of non-integers, rejection of empty string
+  - Validation logic: `--palette` requires `--part2`; `--part2` without `--palette` is valid
+  - `JPEGLSEncoder.Configuration` accepts and defaults `mappingTable`
+  - Encoded output contains LSE type 2 marker when a mapping table is provided
+  - Parser correctly reads back the mapping table from encoded output
+  - SOS component selector carries the table ID when a mapping table is provided
+  - Identity mapping table round-trip: decoded pixels equal encoded pixels
+  - Non-identity mapping table round-trip: decoded pixels reflect palette-mapped values
 
 **Implementation Details (PNG output for `decode`):**
 - Created `PNGSupport.swift` in the `JPEGLS` library target (accessible to both the library and the CLI)
