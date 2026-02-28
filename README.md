@@ -277,64 +277,73 @@ The verify command checks:
 - Preset parameter validity and threshold ordering
 - Component ID consistency
 
-#### `jpegls encode` - Encode Raw Image Data
+#### `jpegls encode` - Encode Image Data
 
-Encode raw pixel data to JPEG-LS format:
+Encode raw pixel data or PGM/PPM images to JPEG-LS format:
 
 ```bash
-# Encode grayscale image (lossless)
+# Encode a PGM file (dimensions/components auto-detected from header)
+jpegls encode input.pgm output.jls
+
+# Encode a PPM file with sample interleaving
+jpegls encode input.ppm output.jls --interleave sample
+
+# Near-lossless encoding from a PGM file
+jpegls encode input.pgm output.jls --near 3 --verbose
+
+# Encode raw pixel data (width and height required for raw input)
 jpegls encode input.raw output.jls --width 512 --height 512 --bits-per-sample 8
 
-# Encode RGB image with line interleaving
+# Encode RGB raw data with line interleaving
 jpegls encode input.raw output.jls \
   --width 512 --height 512 \
   --components 3 \
   --interleave line
 
-# Near-lossless encoding (NEAR=3)
-jpegls encode input.raw output.jls \
-  --width 512 --height 512 \
-  --near 3 \
-  --verbose
-
 # Quiet mode - suppress non-essential output
-jpegls encode input.raw output.jls \
-  --width 512 --height 512 \
-  --quiet
+jpegls encode input.pgm output.jls --quiet
 ```
 
 **Options:**
-- `-w, --width`: Image width in pixels (required)
-- `-h, --height`: Image height in pixels (required)
-- `-b, --bits-per-sample`: Bits per sample, 2-16 (default: 8)
-- `-c, --components`: Number of components - 1 (grayscale) or 3 (RGB) (default: 1)
+- `-w, --width`: Image width in pixels (required for raw input; auto-detected from PGM/PPM)
+- `-h, --height`: Image height in pixels (required for raw input; auto-detected from PGM/PPM)
+- `-b, --bits-per-sample`: Bits per sample, 2-16 (default: 8; auto-detected from PGM/PPM MAXVAL)
+- `-c, --components`: Number of components - 1 (grayscale) or 3 (RGB) (default: 1; auto-detected from PGM/PPM)
 - `--near`: NEAR parameter, 0=lossless, 1-255=lossy (default: 0)
 - `--interleave`: Interleave mode - none, line, sample (default: none)
 - `--color-transform`: Color transformation - none, hp1, hp2, hp3 (default: none)
 - `--verbose`: Enable verbose output
 - `--quiet`: Suppress non-essential output
 
+**Supported input formats:** raw pixel data, PGM (P5 binary), PPM (P6 binary)
+
 #### `jpegls decode` - Decode JPEG-LS File
 
-Decode JPEG-LS file to raw pixel data:
+Decode JPEG-LS file to raw pixel data or PGM/PPM image:
 
 ```bash
-# Decode to raw format
+# Decode to raw format (default)
 jpegls decode input.jls output.raw
 
+# Decode to PGM (grayscale) or PPM (colour) format
+jpegls decode input.jls output.pgm --format pgm
+jpegls decode input.jls output.ppm --format ppm
+
 # Decode with verbose output
-jpegls decode input.jls output.raw --verbose
+jpegls decode input.jls output.pgm --format pgm --verbose
 
 # Quiet mode - suppress non-essential output
-jpegls decode input.jls output.raw --quiet
+jpegls decode input.jls output.pgm --format pgm --quiet
 ```
 
 **Options:**
-- `--format`: Output format - raw, png, tiff (default: raw) *(PNG/TIFF support planned)*
+- `--format`: Output format - raw, pgm, ppm, png, tiff (default: raw) *(PNG/TIFF support planned)*
 - `--verbose`: Enable verbose output
 - `--quiet`: Suppress non-essential output
 
-**Note:** All four commands (`encode`, `decode`, `info`, `verify`) are fully functional. Lossless decoding supports 8-bit and 16-bit images in all interleaving modes (none, line, sample).
+**Supported output formats:** raw pixel data, PGM (P5 binary), PPM (P6 binary)
+
+**Note:** All four commands (`encode`, `decode`, `info`, `verify`) are fully functional. Lossless decoding supports 8-bit and 16-bit images in all interleaving modes (none, line, sample). The `encode` command accepts PGM/PPM files directly with auto-detected parameters, and the `decode` command can output PGM/PPM files.
 
 #### `jpegls batch` - Batch Process Multiple Files
 

@@ -8,23 +8,23 @@ extension JPEGLSCLITool {
             abstract: "Encode image to JPEG-LS format"
         )
         
-        @Argument(help: "Input image file path (raw pixel data)")
+        @Argument(help: "Input image file path (raw pixel data, PGM, or PPM)")
         var input: String
         
         @Argument(help: "Output JPEG-LS file path")
         var output: String
         
-        @Option(name: .shortAndLong, help: "Image width in pixels")
-        var width: Int
+        @Option(name: .shortAndLong, help: "Image width in pixels (required for raw input; auto-detected from PGM/PPM)")
+        var width: Int?
         
-        @Option(name: .shortAndLong, help: "Image height in pixels")
-        var height: Int
+        @Option(name: .shortAndLong, help: "Image height in pixels (required for raw input; auto-detected from PGM/PPM)")
+        var height: Int?
         
-        @Option(name: .shortAndLong, help: "Bits per sample (2-16, default: 8)")
-        var bitsPerSample: Int = 8
+        @Option(name: .shortAndLong, help: "Bits per sample (2-16, default: 8; auto-detected from PGM/PPM MAXVAL)")
+        var bitsPerSample: Int?
         
-        @Option(name: .shortAndLong, help: "Number of components (1=grayscale, 3=RGB, default: 1)")
-        var components: Int = 1
+        @Option(name: .shortAndLong, help: "Number of components (1=grayscale, 3=RGB, default: 1; auto-detected from PGM/PPM)")
+        var components: Int?
         
         @Option(name: .long, help: "NEAR parameter for near-lossless encoding (0=lossless, 1-255=lossy, default: 0)")
         var near: Int = 0
@@ -59,15 +59,6 @@ extension JPEGLSCLITool {
                 throw ValidationError("Cannot use both --verbose and --quiet flags")
             }
             
-            // Validate inputs
-            guard (2...16).contains(bitsPerSample) else {
-                throw ValidationError("Bits per sample must be between 2 and 16")
-            }
-            
-            guard [1, 3].contains(components) else {
-                throw ValidationError("Components must be 1 (grayscale) or 3 (RGB)")
-            }
-            
             guard (0...255).contains(near) else {
                 throw ValidationError("NEAR parameter must be between 0 and 255")
             }
@@ -78,14 +69,77 @@ extension JPEGLSCLITool {
             // Parse color transformation
             let colorTransformValue = try parseColorTransform(colorTransform)
             
+            // Read input file
+            let inputData = try Data(contentsOf: URL(fileURLWithPath: input))
+            
+            // Resolve image parameters — either from PGM/PPM header or from CLI options.
+            let imageData: MultiComponentImageData
+            let resolvedWidth: Int
+            let resolvedHeight: Int
+            let resolvedBitsPerSample: Int
+            let resolvedComponents: Int
+            
+            if isPNMFile(path: input, data: inputData) {
+                // PGM/PPM input: parse header and extract pixel data automatically.
+                let pnm = try PNMSupport.parse(inputData)
+                
+                resolvedWidth      = pnm.width
+                resolvedHeight     = pnm.height
+                resolvedComponents = pnm.components
+                // Derive bits-per-sample from MAXVAL unless the caller overrides it.
+                resolvedBitsPerSample = bitsPerSample ?? bitsNeeded(forMaxVal: pnm.maxVal)
+                
+                guard (2...16).contains(resolvedBitsPerSample) else {
+                    throw ValidationError("Bits per sample must be between 2 and 16")
+                }
+                
+                imageData = try buildMultiComponentImageData(
+                    componentPixels: pnm.componentPixels,
+                    bitsPerSample: resolvedBitsPerSample
+                )
+            } else {
+                // Raw input: require --width and --height; use defaults for the rest.
+                guard let w = width else {
+                    throw ValidationError("--width is required for raw input (omit for PGM/PPM files)")
+                }
+                guard let h = height else {
+                    throw ValidationError("--height is required for raw input (omit for PGM/PPM files)")
+                }
+                
+                resolvedWidth      = w
+                resolvedHeight     = h
+                resolvedBitsPerSample = bitsPerSample ?? 8
+                resolvedComponents = components ?? 1
+                
+                guard (2...16).contains(resolvedBitsPerSample) else {
+                    throw ValidationError("Bits per sample must be between 2 and 16")
+                }
+                guard [1, 3].contains(resolvedComponents) else {
+                    throw ValidationError("Components must be 1 (grayscale) or 3 (RGB)")
+                }
+                
+                let expectedSize = resolvedWidth * resolvedHeight * resolvedComponents * ((resolvedBitsPerSample + 7) / 8)
+                guard inputData.count >= expectedSize else {
+                    throw ValidationError("Input file size (\(inputData.count) bytes) is smaller than expected (\(expectedSize) bytes)")
+                }
+                
+                imageData = try buildRawImageData(
+                    from: inputData,
+                    width: resolvedWidth,
+                    height: resolvedHeight,
+                    bitsPerSample: resolvedBitsPerSample,
+                    components: resolvedComponents
+                )
+            }
+            
             if verbose {
                 print("JPEG-LS Encoder")
                 print("===============")
                 print("Input: \(input)")
                 print("Output: \(output)")
-                print("Dimensions: \(width)x\(height)")
-                print("Bits per sample: \(bitsPerSample)")
-                print("Components: \(components)")
+                print("Dimensions: \(resolvedWidth)x\(resolvedHeight)")
+                print("Bits per sample: \(resolvedBitsPerSample)")
+                print("Components: \(resolvedComponents)")
                 print("NEAR: \(near) (\(near == 0 ? "lossless" : "near-lossless"))")
                 print("Interleave mode: \(interleave)")
                 print("Color transformation: \(colorTransform)")
@@ -95,63 +149,10 @@ extension JPEGLSCLITool {
                 print()
             }
             
-            // Read input file
-            let inputData = try Data(contentsOf: URL(fileURLWithPath: input))
+            // Determine interleave mode (grayscale always uses .none)
+            let actualInterleaveMode: JPEGLSInterleaveMode = resolvedComponents == 1 ? .none : interleaveMode
             
-            // Validate input data size
-            let expectedSize = width * height * components * ((bitsPerSample + 7) / 8)
-            guard inputData.count >= expectedSize else {
-                throw ValidationError("Input file size (\(inputData.count) bytes) is smaller than expected (\(expectedSize) bytes)")
-            }
-            
-            // Convert input data to pixel arrays
-            let imageData: MultiComponentImageData
-            if components == 1 {
-                // Grayscale - organize pixels as 2D array [row][column]
-                let pixels = try extractPixels(from: inputData, width: width, height: height, bitsPerSample: bitsPerSample)
-                imageData = try MultiComponentImageData.grayscale(
-                    pixels: pixels,
-                    bitsPerSample: bitsPerSample
-                )
-            } else {
-                // RGB - organize pixels as 2D arrays for each component
-                let bytesPerPixel = (bitsPerSample + 7) / 8
-                var redPixels: [[Int]] = Array(repeating: Array(repeating: 0, count: width), count: height)
-                var greenPixels: [[Int]] = Array(repeating: Array(repeating: 0, count: width), count: height)
-                var bluePixels: [[Int]] = Array(repeating: Array(repeating: 0, count: width), count: height)
-                
-                for row in 0..<height {
-                    for col in 0..<width {
-                        let pixelIndex = row * width + col
-                        let offset = pixelIndex * 3 * bytesPerPixel
-                        redPixels[row][col] = try extractPixelValue(from: inputData, at: offset, bitsPerSample: bitsPerSample)
-                        greenPixels[row][col] = try extractPixelValue(from: inputData, at: offset + bytesPerPixel, bitsPerSample: bitsPerSample)
-                        bluePixels[row][col] = try extractPixelValue(from: inputData, at: offset + 2 * bytesPerPixel, bitsPerSample: bitsPerSample)
-                    }
-                }
-                
-                imageData = try MultiComponentImageData.rgb(
-                    redPixels: redPixels,
-                    greenPixels: greenPixels,
-                    bluePixels: bluePixels,
-                    bitsPerSample: bitsPerSample
-                )
-            }
-            
-            // Determine interleave mode
-            let actualInterleaveMode: JPEGLSInterleaveMode
-            if components == 1 {
-                // Grayscale always uses .none
-                actualInterleaveMode = .none
-            } else {
-                // RGB uses specified mode
-                actualInterleaveMode = interleaveMode
-            }
-            
-            // Create encoder
-            let encoder = JPEGLSEncoder()
-            
-            // Create configuration
+            // Create encoder configuration
             let config = try JPEGLSEncoder.Configuration(
                 near: near,
                 interleaveMode: actualInterleaveMode,
@@ -167,11 +168,11 @@ extension JPEGLSCLITool {
                 }
             }
             
-            // Encode
             if verbose {
                 print("Encoding...")
             }
             
+            let encoder = JPEGLSEncoder()
             let jpegLSData = try encoder.encode(imageData, configuration: config)
             
             // Write output file
@@ -191,14 +192,90 @@ extension JPEGLSCLITool {
             }
         }
         
+        // MARK: - Private Helpers
+        
+        /// Returns `true` if the file at `path` is a PGM (P5) or PPM (P6) binary image.
+        private func isPNMFile(path: String, data: Data) -> Bool {
+            let ext = (path as NSString).pathExtension.lowercased()
+            if ext == "pgm" || ext == "ppm" { return true }
+            // Also inspect the magic bytes for headerless detection.
+            if data.count >= 2 {
+                let magic = data.prefix(2)
+                return (magic[0] == UInt8(ascii: "P") && (magic[1] == UInt8(ascii: "5") || magic[1] == UInt8(ascii: "6")))
+            }
+            return false
+        }
+        
+        /// Returns the minimum number of bits needed to represent values up to `maxVal`.
+        private func bitsNeeded(forMaxVal maxVal: Int) -> Int {
+            var bits = 1
+            while (1 << bits) - 1 < maxVal { bits += 1 }
+            return bits
+        }
+        
+        /// Build `MultiComponentImageData` from pre-parsed `[component][row][col]` pixel arrays.
+        private func buildMultiComponentImageData(
+            componentPixels: [[[Int]]],
+            bitsPerSample: Int
+        ) throws -> MultiComponentImageData {
+            switch componentPixels.count {
+            case 1:
+                return try MultiComponentImageData.grayscale(
+                    pixels: componentPixels[0],
+                    bitsPerSample: bitsPerSample
+                )
+            case 3:
+                return try MultiComponentImageData.rgb(
+                    redPixels:   componentPixels[0],
+                    greenPixels: componentPixels[1],
+                    bluePixels:  componentPixels[2],
+                    bitsPerSample: bitsPerSample
+                )
+            default:
+                throw ValidationError("PGM/PPM input must have 1 or 3 components; got \(componentPixels.count)")
+            }
+        }
+        
+        /// Build `MultiComponentImageData` from packed raw pixel bytes.
+        private func buildRawImageData(
+            from data: Data,
+            width: Int,
+            height: Int,
+            bitsPerSample: Int,
+            components: Int
+        ) throws -> MultiComponentImageData {
+            if components == 1 {
+                let pixels = try extractPixels(from: data, width: width, height: height, bitsPerSample: bitsPerSample)
+                return try MultiComponentImageData.grayscale(pixels: pixels, bitsPerSample: bitsPerSample)
+            } else {
+                let bytesPerPixel = (bitsPerSample + 7) / 8
+                var redPixels:   [[Int]] = Array(repeating: Array(repeating: 0, count: width), count: height)
+                var greenPixels: [[Int]] = Array(repeating: Array(repeating: 0, count: width), count: height)
+                var bluePixels:  [[Int]] = Array(repeating: Array(repeating: 0, count: width), count: height)
+                
+                for row in 0..<height {
+                    for col in 0..<width {
+                        let pixelIndex = row * width + col
+                        let offset = pixelIndex * 3 * bytesPerPixel
+                        redPixels[row][col]   = try extractPixelValue(from: data, at: offset,                    bitsPerSample: bitsPerSample)
+                        greenPixels[row][col] = try extractPixelValue(from: data, at: offset + bytesPerPixel,    bitsPerSample: bitsPerSample)
+                        bluePixels[row][col]  = try extractPixelValue(from: data, at: offset + 2 * bytesPerPixel, bitsPerSample: bitsPerSample)
+                    }
+                }
+                return try MultiComponentImageData.rgb(
+                    redPixels:   redPixels,
+                    greenPixels: greenPixels,
+                    bluePixels:  bluePixels,
+                    bitsPerSample: bitsPerSample
+                )
+            }
+        }
+        
         private func parseInterleaveMode(_ mode: String) throws -> JPEGLSInterleaveMode {
             switch mode.lowercased() {
-            case "none":
-                return .none
-            case "line":
-                return .line
-            case "sample":
-                return .sample
+            case "none":   return .none
+            case "line":   return .line
+            case "sample": return .sample
             default:
                 throw ValidationError("Invalid interleave mode: \(mode). Must be none, line, or sample")
             }
@@ -206,14 +283,10 @@ extension JPEGLSCLITool {
         
         private func parseColorTransform(_ transform: String) throws -> JPEGLSColorTransformation {
             switch transform.lowercased() {
-            case "none":
-                return .none
-            case "hp1":
-                return .hp1
-            case "hp2":
-                return .hp2
-            case "hp3":
-                return .hp3
+            case "none": return .none
+            case "hp1":  return .hp1
+            case "hp2":  return .hp2
+            case "hp3":  return .hp3
             default:
                 throw ValidationError("Invalid color transformation: \(transform). Must be none, hp1, hp2, or hp3")
             }
