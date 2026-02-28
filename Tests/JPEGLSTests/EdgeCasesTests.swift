@@ -226,7 +226,7 @@ struct EdgeCasesTests {
 
         let data = try writer.getData()
         // 0xFF is emitted, then bit 0 is forced to 0 (stuff bit).
-        // The top 7 bits of 0x42 (0b0100001 = 0x21) follow with the stuff bit as MSB → 0x21.
+        // 0x42 = 0b01000010; with the stuff bit as MSB, the next byte is 0b00100001 = 0x21.
         // The remaining 1 bit (LSB of 0x42 = 0) is flushed as 0x00.
         #expect(data.count == 3)
         #expect(data[0] == 0xFF)

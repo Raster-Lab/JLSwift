@@ -388,12 +388,12 @@ struct JPEGLSBitstreamWriterTests {
     @Test("Current position tracking")
     func testCurrentPosition() {
         let writer = JPEGLSBitstreamWriter()
-        
+
         #expect(writer.currentPosition == 0)
         writer.writeByte(0x12)
         #expect(writer.currentPosition == 1)
         writer.writeByte(0xFF)
-        #expect(writer.currentPosition == 3)  // 0xFF stuffed to 2 bytes
+        #expect(writer.currentPosition == 2)  // writeByte writes raw; no byte stuffing
     }
     
     @Test("Get data with unflushed bits throws error")

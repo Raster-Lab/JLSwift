@@ -598,7 +598,7 @@ struct CharLSBitExactComparisonTests {
 struct CharLSSubSampledComparisonTests {
 
     /// Per-component reference info for a sub-sampled test case
-    struct SubSampledTestCase: CustomTestStringConvertible, Sendable {
+    struct SubsampledTestCase: CustomTestStringConvertible, Sendable {
         let jlsFile: String
         let near: Int
         let description: String
@@ -606,22 +606,22 @@ struct CharLSSubSampledComparisonTests {
 
         /// Expected per-component dimensions and reference files.
         /// Order matches the scan component order: R, G, B.
-        static let componentRefs: [(refFile: String, width: Int, height: Int, compID: UInt8)] = [
+        static let componentRefs: [(refFile: String, width: Int, height: Int, componentID: UInt8)] = [
             ("test8r.pgm",   256, 256, 1),  // R: full resolution
             ("test8gr4.pgm", 256,  64, 2),  // G: sub-sampled 4× vertically
             ("test8bs2.pgm", 128, 128, 3),  // B: sub-sampled 2× in both directions
         ]
     }
 
-    static let testCases: [SubSampledTestCase] = [
-        SubSampledTestCase(jlsFile: "t8sse0.jls", near: 0, description: "8-bit sub-sampled, lossless"),
-        SubSampledTestCase(jlsFile: "t8sse3.jls", near: 3, description: "8-bit sub-sampled, near=3"),
+    static let testCases: [SubsampledTestCase] = [
+        SubsampledTestCase(jlsFile: "t8sse0.jls", near: 0, description: "8-bit sub-sampled, lossless"),
+        SubsampledTestCase(jlsFile: "t8sse3.jls", near: 3, description: "8-bit sub-sampled, near=3"),
     ]
 
     /// Decode sub-sampled CharLS reference files and compare each component
     /// pixel-by-pixel against its corresponding reference PGM image.
     @Test("Sub-sampled bit-exact comparison with CharLS reference", arguments: testCases)
-    func testSubSampledComparison(testCase: SubSampledTestCase) throws {
+    func testSubSampledComparison(testCase: SubsampledTestCase) throws {
         let jlsData = try TestFixtureLoader.loadFixture(named: testCase.jlsFile)
         let decoder = JPEGLSDecoder()
         let decodedImage = try decoder.decode(jlsData)
@@ -634,19 +634,19 @@ struct CharLSSubSampledComparisonTests {
         #expect(decodedImage.components.count == 3,
                "Component count mismatch for \(testCase.jlsFile)")
 
-        for compRef in SubSampledTestCase.componentRefs {
+        for compRef in SubsampledTestCase.componentRefs {
             // Find the decoded component by ID
-            guard let decodedComp = decodedImage.components.first(where: { $0.id == compRef.compID }) else {
-                Issue.record("Component \(compRef.compID) not found in decoded image")
+            guard let decodedComp = decodedImage.components.first(where: { $0.id == compRef.componentID }) else {
+                Issue.record("Component \(compRef.componentID) not found in decoded image")
                 continue
             }
 
             // Verify per-component dimensions
             #expect(decodedComp.pixels.count == compRef.height,
-                   "Component \(compRef.compID) height mismatch: expected \(compRef.height), got \(decodedComp.pixels.count)")
+                   "Component \(compRef.componentID) height mismatch: expected \(compRef.height), got \(decodedComp.pixels.count)")
             if !decodedComp.pixels.isEmpty {
                 #expect(decodedComp.pixels[0].count == compRef.width,
-                       "Component \(compRef.compID) width mismatch: expected \(compRef.width), got \(decodedComp.pixels[0].count)")
+                       "Component \(compRef.componentID) width mismatch: expected \(compRef.width), got \(decodedComp.pixels[0].count)")
             }
 
             // Load reference PGM
@@ -663,11 +663,11 @@ struct CharLSSubSampledComparisonTests {
                     refIdx += 1
                     if testCase.near == 0 {
                         #expect(decoded == reference,
-                               "Component \(compRef.compID) [\(row),\(col)] lossless mismatch in \(testCase.jlsFile): decoded=\(decoded), ref=\(reference)")
+                               "Component \(compRef.componentID) [\(row),\(col)] lossless mismatch in \(testCase.jlsFile): decoded=\(decoded), ref=\(reference)")
                     } else {
                         let diff = abs(decoded - reference)
                         #expect(diff <= testCase.near,
-                               "Component \(compRef.compID) [\(row),\(col)] error exceeds NEAR in \(testCase.jlsFile): decoded=\(decoded), ref=\(reference), diff=\(diff)")
+                               "Component \(compRef.componentID) [\(row),\(col)] error exceeds NEAR in \(testCase.jlsFile): decoded=\(decoded), ref=\(reference), diff=\(diff)")
                     }
                 }
             }

@@ -292,7 +292,7 @@ public struct JPEGLSDecoder: Sendable {
         for i in 0..<componentCount {
             let scanCompID = scanHeader.components[i].id
             let h = frameCompByID[scanCompID].map { Int($0.horizontalSamplingFactor) } ?? 1
-            let v = frameCompByID[scanCompID].map { Int($0.verticalSamplingFactor) }   ?? 1
+            let v = frameCompByID[scanCompID].map { Int($0.verticalSamplingFactor) } ?? 1
             compWidths.append((frameHeader.width  * h + hMax - 1) / hMax)
             compHeights.append((frameHeader.height * v + vMax - 1) / vMax)
             compVFactors.append(v)
