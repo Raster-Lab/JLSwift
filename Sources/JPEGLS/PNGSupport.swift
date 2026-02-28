@@ -131,9 +131,12 @@ public enum PNGSupport {
     /// The output is a valid zlib stream (CMF + FLG + DEFLATE blocks + Adler-32),
     /// suitable for use as PNG IDAT chunk data.
     static func makeZlibStored(_ payload: Data) -> Data {
-        // zlib header:
+        // zlib header (RFC 1950 §2.2):
         //   CMF = 0x78: deflate method (CM=8), window size 32768 (CINFO=7)
-        //   FLG = 0x01: no preset dictionary; (0x78*256 + 0x01) = 30721 which is 31×991 ✓
+        //   FLG = 0x01: no preset dictionary, compression level 0 (fastest)
+        //   The FCHECK field in FLG must be chosen so that (CMF*256 + FLG) % 31 == 0:
+        //   0x78*256 = 30720; 30720 % 31 = 30; FLG must satisfy FLG % 31 = 1 → FLG = 0x01.
+        //   Verification: (0x78*256 + 0x01) = 30721 = 31 × 991, so 30721 % 31 = 0. ✓
         var out = Data()
         out.append(0x78)
         out.append(0x01)

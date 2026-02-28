@@ -361,8 +361,8 @@ struct JPEGLSPNGOutputTests {
     /// This helper only handles the specific zlib-stored format produced by
     /// `PNGSupport.makeZlibStored`; it is not a general zlib decompressor.
     private func decompressZlibStored(_ data: Data) throws -> Data {
-        struct DecompressError: Error {}
-        guard data.count >= 6 else { throw DecompressError() }
+        struct ZlibStoredDecompressionError: Error {}
+        guard data.count >= 6 else { throw ZlibStoredDecompressionError() }
         // Skip the 2-byte zlib header (CMF + FLG).
         var offset = 2
         var result = Data()
@@ -371,18 +371,18 @@ struct JPEGLSPNGOutputTests {
             let bfinalBtype = data[offset]; offset += 1
             let isFinal = (bfinalBtype & 0x01) == 1
             let btype   = (bfinalBtype >> 1) & 0x03
-            guard btype == 0 else { throw DecompressError() }  // must be stored
+            guard btype == 0 else { throw ZlibStoredDecompressionError() }  // must be stored
             let lenLo = Int(data[offset]);     let lenHi = Int(data[offset + 1]); offset += 2
             let nlenLo = Int(data[offset]);    let nlenHi = Int(data[offset + 1]); offset += 2
             let len  = lenLo  | (lenHi  << 8)
             let nlen = nlenLo | (nlenHi << 8)
-            guard (len & 0xFFFF) == (~UInt16(nlen) & 0xFFFF) else { throw DecompressError() }
-            guard offset + len <= data.count else { throw DecompressError() }
+            guard (len & 0xFFFF) == (~UInt16(nlen) & 0xFFFF) else { throw ZlibStoredDecompressionError() }
+            guard offset + len <= data.count else { throw ZlibStoredDecompressionError() }
             result.append(contentsOf: data[offset..<(offset + len)])
             offset += len
             if isFinal { seenFinal = true; break }
         }
-        guard seenFinal else { throw DecompressError() }
+        guard seenFinal else { throw ZlibStoredDecompressionError() }
         return result
     }
 }
