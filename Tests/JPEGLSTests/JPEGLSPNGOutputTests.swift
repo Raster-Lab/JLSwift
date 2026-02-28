@@ -346,12 +346,12 @@ struct JPEGLSPNGOutputTests {
 
     // MARK: - Decode Format Acceptance
 
-    @Test("PNG is listed as a supported decode output format alongside raw, pgm, and ppm")
+    @Test("PNG is listed as a supported decode output format alongside raw, pgm, ppm, and tiff")
     func testPNGInSupportedDecodeFormats() {
         // This mirrors the validation logic in DecodeCommand.run().
-        let supportedFormats = ["raw", "pgm", "ppm", "png"]
+        let supportedFormats = ["raw", "pgm", "ppm", "png", "tiff"]
         #expect(supportedFormats.contains("png"))
-        #expect(!supportedFormats.contains("tiff"))
+        #expect(supportedFormats.contains("tiff"))
     }
 
     // MARK: - Helpers

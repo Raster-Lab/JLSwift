@@ -946,7 +946,7 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 
 #### Phase 17.1: Missing Functionality ⏳
 - [x] Implement PNG output format support for the `decode` command
-- [ ] Implement TIFF output format support for the `decode` command
+- [x] Implement TIFF output format support for the `decode` command
 - [x] Implement PGM/PPM output format support for the `decode` command
 - [x] Implement PGM/PPM input format support for the `encode` command (auto-detect dimensions/components)
 - [ ] Implement PNG/TIFF input format support for the `encode` command
@@ -969,9 +969,10 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
   - `PNGEncoderError` enum: `invalidDimensions`, `unsupportedComponentCount`, `invalidMaxVal`
 - Updated `decode` command:
   - `--format png` now produces a valid PNG file instead of throwing "not yet implemented"
-  - `--format` help text updated to list supported formats: `raw`, `pgm`, `ppm`, `png` (TIFF remains "not yet implemented")
+  - `--format` help text updated to list supported formats: `raw`, `pgm`, `ppm`, `png`
   - Error messages updated to British English style
-- Updated `JPEGLSPNMRoundTripTests.swift`: decode format validation test updated to include `png` as a supported format (and move `tiff` to the unsupported list)
+- Updated `JPEGLSPNMRoundTripTests.swift`: decode format validation test updated to include `png` as a supported format
+- Updated `JPEGLSPNGOutputTests.swift`: updated supported-formats test to include `tiff`
 - Created `JPEGLSPNGOutputTests.swift` with 19 unit tests:
   - PNG file signature verification
   - IHDR chunk structure (width, height, bit depth, colour type) for 8-bit greyscale, 8-bit RGB, 16-bit greyscale, and 256×256 images
@@ -983,7 +984,30 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
   - IDAT pixel content verification: 8-bit greyscale, 16-bit greyscale big-endian, 8-bit RGB interleaving
   - JPEG-LS round-trip (encode → decode → PNG) with pixel-exact verification for greyscale and RGB
 
-**Implementation Details (PGM/PPM I/O):**
+**Implementation Details (TIFF output for `decode`):**
+- Created `TIFFSupport.swift` in the `JPEGLS` library target (accessible to both the library and the CLI)
+  - `TIFFSupport.encode(componentPixels:width:height:maxVal:)` produces a valid Baseline TIFF file from `[component][row][column]` pixel data
+  - Supports 8-bit (maxVal ≤ 255) and 16-bit (maxVal ≤ 65535) samples; supports greyscale (1 component, PhotometricInterpretation = 1) and RGB (3 components, PhotometricInterpretation = 2)
+  - Little-endian ('II') TIFF with no compression (Compression = 1), single strip, chunky (interleaved) planar configuration (PlanarConfiguration = 1)
+  - IFD contains 10 required Baseline TIFF tags in ascending tag-number order: ImageWidth (256), ImageLength (257), BitsPerSample (258), Compression (259), PhotometricInterpretation (262), StripOffsets (273), SamplesPerPixel (277), RowsPerStrip (278), StripByteCounts (279), PlanarConfiguration (284)
+  - For RGB images, BitsPerSample requires 3 SHORT values; these are stored in an extra-data block immediately after the IFD (offset in the BitsPerSample value field)
+  - `TIFFEncoderError` enum: `invalidDimensions`, `unsupportedComponentCount`, `invalidMaxVal`
+- Updated `decode` command:
+  - `--format tiff` now produces a valid TIFF file instead of throwing "not yet implemented"
+  - `--format` help text updated to list supported formats: `raw`, `pgm`, `ppm`, `png`, `tiff`
+  - Error message for unknown formats updated to list all five supported formats
+- Updated `JPEGLSPNMRoundTripTests.swift`: decode format validation test updated to include `tiff` as a supported format
+- Updated `JPEGLSPNGOutputTests.swift`: updated supported-formats test to include `tiff`
+- Created `JPEGLSTIFFOutputTests.swift` with 25 unit tests:
+  - TIFF header: 'II' byte-order mark, magic number 42, IFD offset = 8
+  - IFD structure: entry count, next-IFD pointer = 0 (single IFD)
+  - IFD tag verification: ImageWidth, ImageLength, BitsPerSample (8-bit and 16-bit), Compression, PhotometricInterpretation (greyscale and RGB), SamplesPerPixel, PlanarConfiguration
+  - BitsPerSample for RGB: count = 3, offset to 3 × SHORT array with equal values
+  - Error handling: zero dimensions, unsupported component count, invalid maxVal
+  - Image data content: 8-bit greyscale row-major order, 16-bit little-endian samples, 8-bit RGB chunky interleaving, 16-bit RGB per-channel LE order
+  - JPEG-LS round-trip (encode → decode → TIFF) with pixel-exact verification for greyscale and RGB
+
+
 - Created `PNMSupport.swift` utility module in the `jpegls` CLI target
   - `PNMSupport.parse(_:)` parses P5 (PGM) and P6 (PPM) binary images from `Data`; handles comment lines, 8-bit and 16-bit samples, returns `PNMImage` with `[component][row][col]` pixel layout
   - `PNMSupport.encode(componentPixels:width:height:maxVal:)` writes P5/P6 binary data; supports 8-bit and 16-bit output
