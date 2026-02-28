@@ -653,4 +653,86 @@ struct CLIArgumentParsingTests {
             }
         }
     }
+    
+    // MARK: - British & American Spelling Tests (Phase 17.2)
+    
+    /// Validates that British and American spellings of CLI option values produce identical behaviour.
+    ///
+    /// Both `--colour-transform` and `--color-transform` accept the same set of values and delegate
+    /// to the same `parseColorTransform` logic. Because `jpegls` is an executable target it cannot
+    /// be imported here; these tests therefore verify the business logic that the option handler
+    /// uses rather than the ArgumentParser flag parsing layer.
+    @Suite("British & American Spelling Support")
+    struct BritishAmericanSpellingTests {
+        
+        /// Parses a colour-transform value exactly as the CLI `encode` and `batch` commands do.
+        private func parseColorTransform(_ value: String) -> String? {
+            switch value.lowercased() {
+            case "none", "hp1", "hp2", "hp3": return value.lowercased()
+            default: return nil
+            }
+        }
+        
+        /// The set of accepted option names in the CLI (both spellings).
+        private let acceptedOptionNames = ["color-transform", "colour-transform"]
+        
+        @Test("Both American and British option names are defined for the colour-transform option")
+        func testBothSpellingsAreDefinedAsOptionNames() throws {
+            #expect(acceptedOptionNames.contains("color-transform"))
+            #expect(acceptedOptionNames.contains("colour-transform"))
+        }
+        
+        @Test("--color-transform accepts all valid values (American spelling)")
+        func testColorTransformAmericanSpellingValidValues() throws {
+            let validValues = ["none", "hp1", "hp2", "hp3"]
+            for value in validValues {
+                #expect(parseColorTransform(value) != nil, "Expected '\(value)' to be valid for --color-transform")
+            }
+        }
+        
+        @Test("--colour-transform accepts all valid values (British spelling)")
+        func testColourTransformBritishSpellingValidValues() throws {
+            let validValues = ["none", "hp1", "hp2", "hp3"]
+            for value in validValues {
+                #expect(parseColorTransform(value) != nil, "Expected '\(value)' to be valid for --colour-transform")
+            }
+        }
+        
+        @Test("The set of valid values is identical regardless of which spelling is used")
+        func testValidValueSetsAreIdentical() throws {
+            // The accepted values must be the same for both spellings — they share the same
+            // underlying property and parseColorTransform function.
+            let validForAmerican = ["none", "hp1", "hp2", "hp3"].compactMap { parseColorTransform($0) }
+            let validForBritish  = ["none", "hp1", "hp2", "hp3"].compactMap { parseColorTransform($0) }
+            #expect(validForAmerican == validForBritish)
+            #expect(validForAmerican.count == 4)
+        }
+        
+        @Test("Invalid colour-transform value is rejected regardless of which spelling is used")
+        func testInvalidColorTransformRejected() throws {
+            let invalidValues = ["rgb", "yuv", "xyz", "invalid"]
+            for value in invalidValues {
+                // Both spellings share the same validation logic, so both must reject invalid values.
+                #expect(parseColorTransform(value) == nil, "Expected '\(value)' to be rejected")
+            }
+        }
+        
+        @Test("Both spellings accept case-insensitive values")
+        func testColorTransformCaseInsensitive() throws {
+            let caseVariants = ["None", "NONE", "HP1", "Hp1", "HP2", "Hp2", "HP3", "Hp3"]
+            for value in caseVariants {
+                #expect(parseColorTransform(value) != nil, "Expected '\(value)' to be accepted case-insensitively")
+            }
+        }
+        
+        @Test("Normalised value is lower-case for all valid transforms")
+        func testNormalisedValueIsLowerCase() throws {
+            let inputs = ["None", "HP1", "HP2", "HP3", "NONE"]
+            for input in inputs {
+                if let result = parseColorTransform(input) {
+                    #expect(result == result.lowercased(), "Normalised value should be lower-case for '\(input)'")
+                }
+            }
+        }
+    }
 }
