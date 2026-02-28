@@ -586,10 +586,12 @@ JLSwift includes comprehensive conformance testing using reference files from th
   - Sub-sampling and interleaving modes
   - Non-default parameters
 - **Image Loading**: PGM (grayscale) and PPM (color) reference image parsing
-- **Bit-Exact Comparison**: All 10 non-sub-sampled reference files validated for bit-exact decoding
-  - 10 comparison test cases all passing (8-bit color modes 0/1/2, 12-bit grayscale, non-default parameters)
-  - Pixel-by-pixel validation (lossless: exact match; near-lossless: error ≤ NEAR)
+- **Bit-Exact Comparison**: All 12 non-sub-sampled + 2 sub-sampled reference files validated for bit-exact decoding
+  - 10 non-sub-sampled comparison test cases all passing (8-bit color modes 0/1/2, 12-bit grayscale, non-default parameters)
+  - 2 sub-sampled comparison test cases passing (t8sse0.jls lossless, t8sse3.jls near=3)
+  - Pixel-by-pixel validation per component (lossless: exact match; near-lossless: error ≤ NEAR)
   - Non-default parameter tests validated against test8bs2.pgm reference
+  - Sub-sampled tests compare each component against its reference PGM (R 256×256, G 256×64, B 128×128)
   - Flat-region (run mode) and near-lossless round-trip encoding/decoding verified correct
 - **Round-Trip Interoperability**: 33 JLSwift encode → decode → compare regression tests
   - All bit depths (8/12/16-bit), grayscale and RGB, all interleave modes

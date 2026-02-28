@@ -38,6 +38,19 @@ public struct MultiComponentImageData: Sendable {
     
     /// Initialize multi-component image data
     ///
+    /// Supports both uniform-resolution images (all components at `frameHeader.width × frameHeader.height`)
+    /// and sub-sampled images where each component's resolution is derived from its sampling factors
+    /// stored in `frameHeader.components`.  The expected dimensions for component *i* are:
+    ///
+    /// ```
+    /// width_i  = ⌈ frameWidth  × H_i / Hmax ⌉
+    /// height_i = ⌈ frameHeight × V_i / Vmax ⌉
+    /// ```
+    ///
+    /// where `Hmax` / `Vmax` are the maximum horizontal / vertical sampling factors across all
+    /// frame components.  When all sampling factors equal 1 the formula reduces to the full
+    /// frame dimensions, preserving backward compatibility.
+    ///
     /// - Parameters:
     ///   - components: Array of component data
     ///   - frameHeader: Frame header with image parameters
@@ -49,33 +62,44 @@ public struct MultiComponentImageData: Sendable {
                 reason: "Component count mismatch: expected \(frameHeader.componentCount), got \(components.count)"
             )
         }
-        
+
+        // Compute max sampling factors for sub-sampling support.
+        let hMax = max(1, frameHeader.components.map { Int($0.horizontalSamplingFactor) }.max() ?? 1)
+        let vMax = max(1, frameHeader.components.map { Int($0.verticalSamplingFactor) }.max() ?? 1)
+
+        // Build a lookup from component ID to its frame spec for dimension computation.
+        let frameCompByID = Dictionary(uniqueKeysWithValues: frameHeader.components.map { ($0.id, $0) })
+
         // Validate all component IDs exist in frame header
-        let frameComponentIDs = Set(frameHeader.components.map { $0.id })
         for component in components {
-            guard frameComponentIDs.contains(component.id) else {
+            guard let frameComp = frameCompByID[component.id] else {
                 throw JPEGLSError.invalidFrameHeader(
                     reason: "Component ID \(component.id) not found in frame header"
                 )
             }
-            
-            // Validate dimensions
-            guard component.pixels.count == frameHeader.height else {
+
+            // Compute expected dimensions for this component using its sampling factors.
+            let h = Int(frameComp.horizontalSamplingFactor)
+            let v = Int(frameComp.verticalSamplingFactor)
+            let expectedWidth  = (frameHeader.width  * h + hMax - 1) / hMax
+            let expectedHeight = (frameHeader.height * v + vMax - 1) / vMax
+
+            guard component.pixels.count == expectedHeight else {
                 throw JPEGLSError.invalidDimensions(
                     width: component.pixels.first?.count ?? 0,
                     height: component.pixels.count
                 )
             }
-            
+
             for row in component.pixels {
-                guard row.count == frameHeader.width else {
+                guard row.count == expectedWidth else {
                     throw JPEGLSError.invalidDimensions(
                         width: row.count,
-                        height: frameHeader.height
+                        height: expectedHeight
                     )
                 }
             }
-            
+
             // Validate pixel values are in range [0, MAXVAL]
             let maxValue = (1 << frameHeader.bitsPerSample) - 1
             for row in component.pixels {
@@ -88,7 +112,7 @@ public struct MultiComponentImageData: Sendable {
                 }
             }
         }
-        
+
         self.components = components
         self.frameHeader = frameHeader
     }

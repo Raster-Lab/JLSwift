@@ -261,6 +261,12 @@ public struct JPEGLSDecoder: Sendable {
     // MARK: - Line-Interleaved Decoding
     
     /// Decode line-interleaved image (all components in one scan, line by line)
+    ///
+    /// Supports both uniform-resolution images (all components at the full frame dimensions)
+    /// and sub-sampled images where components have different dimensions.  For sub-sampled
+    /// images the scan data is organised in **stripes**, each covering `vMax` rows of the
+    /// reference grid.  Within each stripe, component *i* contributes `V_i` lines of width
+    /// `ceil(frameWidth × H_i / Hmax)`, matching the JPEG-LS §C.2 line-interleaved format.
     private func decodeLineInterleaved(
         frameHeader: JPEGLSFrameHeader,
         scanHeader: JPEGLSScanHeader,
@@ -271,54 +277,91 @@ public struct JPEGLSDecoder: Sendable {
         let reader = JPEGLSBitstreamReader(data: scanData)
         let componentCount = scanHeader.componentCount
         let (limit, qbppBits) = computeGolombLimit(parameters: parameters, near: scanHeader.near, bitsPerSample: frameHeader.bitsPerSample)
-        
-        // Initialize pixel buffers for all components
-        var componentPixels = (0..<componentCount).map { componentId in
-            return Array(repeating: Array(repeating: 0, count: frameHeader.width), count: frameHeader.height)
+
+        // Compute maximum sampling factors across all frame components.
+        let hMax = max(1, frameHeader.components.map { Int($0.horizontalSamplingFactor) }.max() ?? 1)
+        let vMax = max(1, frameHeader.components.map { Int($0.verticalSamplingFactor) }.max() ?? 1)
+
+        // For each scan component, look up its sampling factors in the frame header and compute
+        // its actual pixel dimensions.  For uniform images (all factors == 1) this reduces to the
+        // full frame dimensions, preserving existing behaviour.
+        let frameCompByID = Dictionary(uniqueKeysWithValues: frameHeader.components.map { ($0.id, $0) })
+        var compWidths:   [Int] = []
+        var compHeights:  [Int] = []
+        var compVFactors: [Int] = []
+        for i in 0..<componentCount {
+            let scanCompID = scanHeader.components[i].id
+            let h = frameCompByID[scanCompID].map { Int($0.horizontalSamplingFactor) } ?? 1
+            let v = frameCompByID[scanCompID].map { Int($0.verticalSamplingFactor) }   ?? 1
+            compWidths.append((frameHeader.width  * h + hMax - 1) / hMax)
+            compHeights.append((frameHeader.height * v + vMax - 1) / vMax)
+            compVFactors.append(v)
         }
-        
+
+        // Initialize pixel buffers with per-component dimensions.
+        var componentPixels = (0..<componentCount).map { i in
+            Array(repeating: Array(repeating: 0, count: compWidths[i]), count: compHeights[i])
+        }
+
         // Initialize shared decoder and context (one context shared across all components in interleaved mode)
         let decoder = try JPEGLSRegularModeDecoder(parameters: parameters, near: scanHeader.near)
         let runDecoder = try JPEGLSRunModeDecoder(parameters: parameters, near: scanHeader.near)
         var context = try JPEGLSContextModel(parameters: parameters, near: scanHeader.near)
-        
+
         // Track left-edge values per component for boundary Rc at col=0.
         var prevRowEdges = Array(repeating: 0, count: componentCount)
-        
+
         // Per-component RUNindex per CharLS: each component line preserves its own run index.
         var componentRunIndex = Array(repeating: 0, count: componentCount)
-        
-        // Decode line by line, all components per line
-        for row in 0..<frameHeader.height {
+
+        // Per-component row index: tracks the next row to decode within each component's grid.
+        var compRowIndex = Array(repeating: 0, count: componentCount)
+
+        // Number of stripes: ceil(frameHeight / vMax).  Each stripe covers vMax reference rows.
+        let numStripes = (frameHeader.height + vMax - 1) / vMax
+
+        for _ in 0..<numStripes {
             for componentIndex in 0..<componentCount {
-                // Restore this component's run index
-                context.setRunIndex(componentRunIndex[componentIndex])
-                
-                let edgeForThisRow = prevRowEdges[componentIndex]
-                if row > 0 {
-                    prevRowEdges[componentIndex] = componentPixels[componentIndex][row - 1][0]
+                let vFactor   = compVFactors[componentIndex]
+                let compWidth = compWidths[componentIndex]
+                let compHeight = compHeights[componentIndex]
+
+                // Decode vFactor lines for this component within the current stripe.
+                for _ in 0..<vFactor {
+                    let row = compRowIndex[componentIndex]
+                    guard row < compHeight else { break }
+
+                    // Restore this component's run index.
+                    context.setRunIndex(componentRunIndex[componentIndex])
+
+                    let edgeForThisRow = prevRowEdges[componentIndex]
+                    if row > 0 {
+                        prevRowEdges[componentIndex] = componentPixels[componentIndex][row - 1][0]
+                    }
+
+                    // Decode one line for this component.
+                    try decodeLineForComponent(
+                        reader: reader,
+                        pixels: &componentPixels[componentIndex],
+                        row: row,
+                        width: compWidth,
+                        decoder: decoder,
+                        runDecoder: runDecoder,
+                        context: &context,
+                        scanHeader: scanHeader,
+                        parameters: parameters,
+                        limit: limit,
+                        qbppBits: qbppBits,
+                        prevRowEdge: edgeForThisRow
+                    )
+
+                    // Save this component's run index.
+                    componentRunIndex[componentIndex] = context.currentRunIndex
+                    compRowIndex[componentIndex] += 1
                 }
-                // Decode one line for this component
-                try decodeLineForComponent(
-                    reader: reader,
-                    pixels: &componentPixels[componentIndex],
-                    row: row,
-                    width: frameHeader.width,
-                    decoder: decoder,
-                    runDecoder: runDecoder,
-                    context: &context,
-                    scanHeader: scanHeader,
-                    parameters: parameters,
-                    limit: limit,
-                    qbppBits: qbppBits,
-                    prevRowEdge: edgeForThisRow
-                )
-                
-                // Save this component's run index
-                componentRunIndex[componentIndex] = context.currentRunIndex
             }
         }
-        
+
         // Apply mapping table lookups per component
         return (0..<componentCount).map { componentIndex in
             let tableID = scanHeader.components[componentIndex].mappingTableID
