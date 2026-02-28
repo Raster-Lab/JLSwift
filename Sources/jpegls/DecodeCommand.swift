@@ -14,7 +14,7 @@ extension JPEGLSCLITool {
         @Argument(help: "Output file path for raw pixel data")
         var output: String
         
-        @Option(name: .long, help: "Output format: raw, png, tiff (default: raw)")
+        @Option(name: .long, help: "Output format: raw, pgm, ppm, png, tiff (default: raw)")
         var format: String = "raw"
         
         @Flag(name: .long, help: "Enable verbose output")
@@ -87,11 +87,28 @@ extension JPEGLSCLITool {
                     print("Decoded \(imageData.frameHeader.width)x\(imageData.frameHeader.height) image to \(output) (\(outputData.count) bytes)")
                 }
                 
+            case "pgm", "ppm":
+                // Write PGM (grayscale) or PPM (colour) file
+                let componentPixels: [[[Int]]] = imageData.components.map { $0.pixels }
+                let maxVal = (1 << imageData.frameHeader.bitsPerSample) - 1
+                let pnmData = try PNMSupport.encode(
+                    componentPixels: componentPixels,
+                    width: imageData.frameHeader.width,
+                    height: imageData.frameHeader.height,
+                    maxVal: maxVal
+                )
+                try pnmData.write(to: URL(fileURLWithPath: output))
+                
+                if !quiet {
+                    let fmtName = imageData.components.count == 1 ? "PGM" : "PPM"
+                    print("Decoded \(imageData.frameHeader.width)x\(imageData.frameHeader.height) image to \(output) as \(fmtName) (\(pnmData.count) bytes)")
+                }
+                
             case "png", "tiff":
-                throw ValidationError("Format '\(format)' not yet implemented - use 'raw' format")
+                throw ValidationError("Format '\(format)' not yet implemented - use 'raw', 'pgm', or 'ppm' format")
                 
             default:
-                throw ValidationError("Unknown format '\(format)' - supported formats: raw, png, tiff")
+                throw ValidationError("Unknown format '\(format)' - supported formats: raw, pgm, ppm, png, tiff")
             }
         }
     }

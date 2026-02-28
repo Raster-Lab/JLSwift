@@ -940,15 +940,15 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 - [ ] Document performance comparison results with methodology
 - [ ] Create automated regression tests to maintain performance parity with CharLS
 
-### Milestone 17: Command Line Tools Enhancement 📋
+### Milestone 17: Command Line Tools Enhancement ⏳
 **Target**: Complete, well-documented CLI with full functionality and dual-spelling support  
-**Status**: Not Started
+**Status**: In Progress
 
-#### Phase 17.1: Missing Functionality
+#### Phase 17.1: Missing Functionality ⏳
 - [ ] Implement PNG output format support for the `decode` command
 - [ ] Implement TIFF output format support for the `decode` command
-- [ ] Implement PGM/PPM output format support for the `decode` command
-- [ ] Implement PGM/PPM input format support for the `encode` command (auto-detect dimensions/components)
+- [x] Implement PGM/PPM output format support for the `decode` command
+- [x] Implement PGM/PPM input format support for the `encode` command (auto-detect dimensions/components)
 - [ ] Implement PNG/TIFF input format support for the `encode` command
 - [ ] Implement `jpegls convert` command for format-to-format conversion
 - [ ] Implement `jpegls benchmark` command for quick performance measurement
@@ -957,6 +957,26 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 - [ ] Implement `--part2` flag for Part 2 extensions encoding
 - [ ] Implement progress bars for long-running operations (large files, batch processing)
 - [ ] Implement `--version` flag displaying library and tool version information
+
+**Implementation Details (PGM/PPM I/O):**
+- Created `PNMSupport.swift` utility module in the `jpegls` CLI target
+  - `PNMSupport.parse(_:)` parses P5 (PGM) and P6 (PPM) binary images from `Data`; handles comment lines, 8-bit and 16-bit samples, returns `PNMImage` with `[component][row][col]` pixel layout
+  - `PNMSupport.encode(componentPixels:width:height:maxVal:)` writes P5/P6 binary data; supports 8-bit and 16-bit output
+- Updated `encode` command:
+  - `--width` and `--height` are now optional; they are required only for raw pixel input
+  - `--bits-per-sample` and `--components` are also optional when the input is PGM/PPM (auto-detected from file header)
+  - Auto-detection: PGM/PPM is detected from the `.pgm`/`.ppm` file extension or the P5/P6 magic bytes at the start of the file
+  - `bitsNeeded(forMaxVal:)` computes the minimum JPEG-LS `bitsPerSample` from the PNM MAXVAL (e.g. MAXVAL=4095 → 12 bits)
+- Updated `decode` command:
+  - Added `pgm` and `ppm` as valid `--format` options
+  - Single-component decoded images use PGM (P5); three-component images use PPM (P6)
+  - Updated help text and error messages to list `pgm` and `ppm` as valid options
+- Created `JPEGLSPNMRoundTripTests.swift` with 15 unit tests:
+  - PGM/PPM header parsing tests (8-bit, 16-bit, colour)
+  - PGM write tests (header format, 16-bit big-endian pixels)
+  - Library round-trip tests via JPEGLS encoder/decoder (PGM 8-bit, PGM 12-bit, PPM 8-bit)
+  - Decode → PGM/PPM output tests verified against CharLS reference fixtures (pixel-exact)
+  - `bitsNeeded` and `isPNMFile` logic tests
 
 #### Phase 17.2: British & American Spelling Support
 - [ ] Support both `--colour-transform` and `--color-transform` options
