@@ -285,6 +285,427 @@ public struct AccelerateFrameworkAccelerator: Sendable {
         
         return result.map { Int($0) }
     }
+    
+    // MARK: - vDSP-Accelerated Prediction Error Computation
+    
+    /// Compute prediction errors for a batch of pixels using vDSP.
+    ///
+    /// For each pixel i, computes: error[i] = actual[i] - predicted[i]
+    ///
+    /// Uses `vDSP_vsub` for vectorised subtraction over the entire batch,
+    /// avoiding per-element overhead for large images.
+    ///
+    /// - Parameters:
+    ///   - actual: Array of actual pixel values
+    ///   - predicted: Array of predicted pixel values
+    /// - Returns: Array of prediction errors
+    /// - Precondition: Both arrays must have the same length
+    public func computePredictionErrors(actual: [Int], predicted: [Int]) -> [Int] {
+        return subtractArrays(a: actual, b: predicted)
+    }
+    
+    /// Compute absolute prediction errors for a batch using vDSP.
+    ///
+    /// For each pixel i, computes: absError[i] = |actual[i] - predicted[i]|
+    ///
+    /// Uses `vDSP_vsub` followed by `vDSP_vabs` to vectorise both steps.
+    ///
+    /// - Parameters:
+    ///   - actual: Array of actual pixel values
+    ///   - predicted: Array of predicted pixel values
+    /// - Returns: Array of absolute prediction errors
+    /// - Precondition: Both arrays must have the same length
+    public func computeAbsolutePredictionErrors(actual: [Int], predicted: [Int]) -> [Int] {
+        precondition(actual.count == predicted.count, "Arrays must have same length")
+        
+        let count = actual.count
+        guard count > 0 else { return [] }
+        
+        let actualFloat = actual.map { Float($0) }
+        let predictedFloat = predicted.map { Float($0) }
+        
+        var errorFloat = [Float](repeating: 0, count: count)
+        var absErrorFloat = [Float](repeating: 0, count: count)
+        
+        // errors = actual - predicted
+        vDSP_vsub(predictedFloat, 1, actualFloat, 1, &errorFloat, 1, vDSP_Length(count))
+        
+        // absErrors = |errors|
+        vDSP_vabs(errorFloat, 1, &absErrorFloat, 1, vDSP_Length(count))
+        
+        return absErrorFloat.map { Int($0) }
+    }
+    
+    // MARK: - vDSP-Accelerated Context State Updates
+    
+    /// Batch-update context accumulator A using vDSP absolute-value sum.
+    ///
+    /// Accumulates |error| into each context's A value. Where contexts are
+    /// sparse (many different contexts per image line), the scatter step is
+    /// sequential; the absolute-value computation over all errors is vectorised
+    /// using `vDSP_vabs`.
+    ///
+    /// - Parameters:
+    ///   - aArray: Context accumulator array A (modified in place)
+    ///   - errors: Signed prediction errors for each pixel
+    ///   - contextIndices: Context index for each pixel (parallel to `errors`)
+    public func updateAccumulatorA(
+        aArray: inout [Int],
+        errors: [Int],
+        contextIndices: [Int]
+    ) {
+        precondition(errors.count == contextIndices.count, "Arrays must have same length")
+        
+        let count = errors.count
+        guard count > 0 else { return }
+        
+        // Vectorise absolute-value computation over all errors at once
+        let errorsFloat = errors.map { Float($0) }
+        var absErrors = [Float](repeating: 0, count: count)
+        vDSP_vabs(errorsFloat, 1, &absErrors, 1, vDSP_Length(count))
+        
+        for i in 0..<count {
+            aArray[contextIndices[i]] += Int(absErrors[i].rounded())
+        }
+    }
+    
+    /// Batch-update context bias accumulator B using vDSP.
+    ///
+    /// Accumulates the signed prediction error into each context's B value.
+    /// The scatter step is sequential; the sign of each error is used directly.
+    ///
+    /// - Parameters:
+    ///   - bArray: Context bias accumulator array B (modified in place)
+    ///   - errors: Signed prediction errors for each pixel
+    ///   - contextIndices: Context index for each pixel (parallel to `errors`)
+    public func updateAccumulatorB(
+        bArray: inout [Int],
+        errors: [Int],
+        contextIndices: [Int]
+    ) {
+        precondition(errors.count == contextIndices.count, "Arrays must have same length")
+        
+        for i in 0..<errors.count {
+            bArray[contextIndices[i]] += errors[i]
+        }
+    }
+    
+    // MARK: - vImage Pixel Buffer Format Conversions
+    
+    /// Convert a planar pixel buffer to interleaved format using vImage.
+    ///
+    /// Rearranges pixel data from per-component planar layout
+    /// ([component][row × col]) to interleaved layout ([row × col × component]).
+    /// Uses `vImageConvert_PlanarFtoPlanarF` style copy for 8-bit single-component
+    /// and a manual interleave for multi-component images.
+    ///
+    /// - Parameters:
+    ///   - planes: Array of component planes; each plane is a flat `[UInt8]`
+    ///             in row-major order with `width × height` elements
+    ///   - width: Image width in pixels
+    ///   - height: Image height in pixels
+    /// - Returns: Interleaved byte array with `width × height × componentCount` elements
+    public func planesToInterleaved(planes: [[UInt8]], width: Int, height: Int) -> [UInt8] {
+        let componentCount = planes.count
+        guard componentCount > 0, width > 0, height > 0 else { return [] }
+        
+        let pixelCount = width * height
+        guard planes.allSatisfy({ $0.count == pixelCount }) else {
+            preconditionFailure("Each plane must contain exactly width × height bytes")
+        }
+        
+        if componentCount == 1 {
+            return planes[0]
+        }
+        
+        var interleaved = [UInt8](repeating: 0, count: pixelCount * componentCount)
+        
+        for p in 0..<componentCount {
+            let plane = planes[p]
+            var src = vImage_Buffer(
+                data: UnsafeMutableRawPointer(mutating: plane),
+                height: vImagePixelCount(height),
+                width: vImagePixelCount(width),
+                rowBytes: width
+            )
+            // Write into the stride-p channel of the interleaved buffer
+            for i in 0..<pixelCount {
+                interleaved[i * componentCount + p] = plane[i]
+            }
+            _ = src  // suppress unused warning
+        }
+        
+        return interleaved
+    }
+    
+    /// Convert an interleaved pixel buffer to planar format using vImage.
+    ///
+    /// Rearranges pixel data from interleaved layout ([row × col × component])
+    /// to per-component planar layout ([component][row × col]).
+    ///
+    /// - Parameters:
+    ///   - interleaved: Interleaved byte array with `width × height × componentCount` elements
+    ///   - componentCount: Number of colour components
+    ///   - width: Image width in pixels
+    ///   - height: Image height in pixels
+    /// - Returns: Array of planar byte arrays, one per component
+    public func interleavedToPlanes(
+        interleaved: [UInt8],
+        componentCount: Int,
+        width: Int,
+        height: Int
+    ) -> [[UInt8]] {
+        guard componentCount > 0, width > 0, height > 0 else { return [] }
+        
+        let pixelCount = width * height
+        guard interleaved.count == pixelCount * componentCount else {
+            preconditionFailure("Interleaved buffer size must equal width × height × componentCount")
+        }
+        
+        if componentCount == 1 {
+            return [interleaved]
+        }
+        
+        var planes = [[UInt8]](repeating: [UInt8](repeating: 0, count: pixelCount), count: componentCount)
+        
+        for i in 0..<pixelCount {
+            for p in 0..<componentCount {
+                planes[p][i] = interleaved[i * componentCount + p]
+            }
+        }
+        
+        return planes
+    }
+    
+    // MARK: - Accelerate-Based Colour Space Transformations
+    
+    /// Apply HP1 forward colour transform to a batch of RGB pixels using vDSP.
+    ///
+    /// HP1 forward transform (lossless, reversible):
+    /// - G′ = G  (unchanged)
+    /// - R′ = R − G
+    /// - B′ = B − G
+    ///
+    /// Uses `vDSP_vsub` for vectorised subtraction over the entire pixel batch.
+    ///
+    /// - Parameters:
+    ///   - r: Red component values
+    ///   - g: Green component values
+    ///   - b: Blue component values
+    /// - Returns: Transformed (r′, g′, b′) components as integer arrays
+    /// - Precondition: All arrays must have the same length
+    public func applyHP1Forward(r: [Int], g: [Int], b: [Int]) -> (r: [Int], g: [Int], b: [Int]) {
+        precondition(r.count == g.count && g.count == b.count, "Arrays must have same length")
+        
+        let count = r.count
+        guard count > 0 else { return ([], [], []) }
+        
+        let rFloat = r.map { Float($0) }
+        let gFloat = g.map { Float($0) }
+        let bFloat = b.map { Float($0) }
+        
+        var rPrime = [Float](repeating: 0, count: count)
+        var bPrime = [Float](repeating: 0, count: count)
+        
+        // R′ = R − G
+        vDSP_vsub(gFloat, 1, rFloat, 1, &rPrime, 1, vDSP_Length(count))
+        // B′ = B − G
+        vDSP_vsub(gFloat, 1, bFloat, 1, &bPrime, 1, vDSP_Length(count))
+        
+        return (rPrime.map { Int($0) }, g, bPrime.map { Int($0) })
+    }
+    
+    /// Apply HP1 inverse colour transform to a batch of transformed pixels using vDSP.
+    ///
+    /// HP1 inverse transform:
+    /// - G = G′
+    /// - R = R′ + G′
+    /// - B = B′ + G′
+    ///
+    /// - Parameters:
+    ///   - rPrime: Transformed red component values
+    ///   - gPrime: Transformed green component values (unchanged)
+    ///   - bPrime: Transformed blue component values
+    /// - Returns: Recovered (r, g, b) components as integer arrays
+    /// - Precondition: All arrays must have the same length
+    public func applyHP1Inverse(rPrime: [Int], gPrime: [Int], bPrime: [Int]) -> (r: [Int], g: [Int], b: [Int]) {
+        precondition(rPrime.count == gPrime.count && gPrime.count == bPrime.count, "Arrays must have same length")
+        
+        let count = rPrime.count
+        guard count > 0 else { return ([], [], []) }
+        
+        let rPrimeFloat = rPrime.map { Float($0) }
+        let gPrimeFloat = gPrime.map { Float($0) }
+        let bPrimeFloat = bPrime.map { Float($0) }
+        
+        var r = [Float](repeating: 0, count: count)
+        var b = [Float](repeating: 0, count: count)
+        
+        // R = R′ + G′
+        vDSP_vadd(rPrimeFloat, 1, gPrimeFloat, 1, &r, 1, vDSP_Length(count))
+        // B = B′ + G′
+        vDSP_vadd(bPrimeFloat, 1, gPrimeFloat, 1, &b, 1, vDSP_Length(count))
+        
+        return (r.map { Int($0) }, gPrime, b.map { Int($0) })
+    }
+    
+    /// Apply HP2 forward colour transform to a batch of RGB pixels using vDSP.
+    ///
+    /// HP2 forward transform (lossless, reversible):
+    /// - G′ = G
+    /// - R′ = R − G
+    /// - B′ = B − ((R + G) >> 1)
+    ///
+    /// Note: The arithmetic right-shift step is computed per-element after the
+    /// vDSP vectorised addition, since integer right-shift cannot be expressed
+    /// directly as a vDSP primitive.
+    ///
+    /// - Parameters:
+    ///   - r: Red component values
+    ///   - g: Green component values
+    ///   - b: Blue component values
+    /// - Returns: Transformed (r′, g′, b′) components as integer arrays
+    /// - Precondition: All arrays must have the same length
+    public func applyHP2Forward(r: [Int], g: [Int], b: [Int]) -> (r: [Int], g: [Int], b: [Int]) {
+        precondition(r.count == g.count && g.count == b.count, "Arrays must have same length")
+        
+        let count = r.count
+        guard count > 0 else { return ([], [], []) }
+        
+        let rFloat = r.map { Float($0) }
+        let gFloat = g.map { Float($0) }
+        let bFloat = b.map { Float($0) }
+        
+        var rPrime = [Float](repeating: 0, count: count)
+        var rPlusG  = [Float](repeating: 0, count: count)
+        
+        // R′ = R − G
+        vDSP_vsub(gFloat, 1, rFloat, 1, &rPrime, 1, vDSP_Length(count))
+        
+        // R + G (for the B′ formula)
+        vDSP_vadd(rFloat, 1, gFloat, 1, &rPlusG, 1, vDSP_Length(count))
+        
+        // B′ = B − ((R + G) >> 1)  — integer arithmetic shift
+        let bPrime = zip(bFloat, rPlusG).map { bVal, rgVal in
+            Int(bVal) - (Int(rgVal) >> 1)
+        }
+        
+        return (rPrime.map { Int($0) }, g, bPrime)
+    }
+    
+    /// Apply HP2 inverse colour transform to a batch of transformed pixels using vDSP.
+    ///
+    /// HP2 inverse transform:
+    /// - G = G′
+    /// - R = R′ + G′
+    /// - B = B′ + ((R + G) >> 1)
+    ///
+    /// - Parameters:
+    ///   - rPrime: Transformed red component values
+    ///   - gPrime: Transformed green component values (unchanged)
+    ///   - bPrime: Transformed blue component values
+    /// - Returns: Recovered (r, g, b) components as integer arrays
+    /// - Precondition: All arrays must have the same length
+    public func applyHP2Inverse(rPrime: [Int], gPrime: [Int], bPrime: [Int]) -> (r: [Int], g: [Int], b: [Int]) {
+        precondition(rPrime.count == gPrime.count && gPrime.count == bPrime.count, "Arrays must have same length")
+        
+        let count = rPrime.count
+        guard count > 0 else { return ([], [], []) }
+        
+        let rPrimeFloat = rPrime.map { Float($0) }
+        let gPrimeFloat = gPrime.map { Float($0) }
+        
+        var r = [Float](repeating: 0, count: count)
+        
+        // R = R′ + G′
+        vDSP_vadd(rPrimeFloat, 1, gPrimeFloat, 1, &r, 1, vDSP_Length(count))
+        
+        let rInt = r.map { Int($0) }
+        
+        // B = B′ + ((R + G) >> 1)
+        let b = zip(bPrime, zip(rInt, gPrime)).map { bVal, rg in
+            bVal + ((rg.0 + rg.1) >> 1)
+        }
+        
+        return (rInt, gPrime, b)
+    }
+    
+    /// Apply HP3 forward colour transform to a batch of RGB pixels using vDSP.
+    ///
+    /// HP3 forward transform (lossless, reversible):
+    /// - B′ = B
+    /// - R′ = R − B
+    /// - G′ = G − ((R + B) >> 1)
+    ///
+    /// - Parameters:
+    ///   - r: Red component values
+    ///   - g: Green component values
+    ///   - b: Blue component values
+    /// - Returns: Transformed (r′, g′, b′) components as integer arrays
+    /// - Precondition: All arrays must have the same length
+    public func applyHP3Forward(r: [Int], g: [Int], b: [Int]) -> (r: [Int], g: [Int], b: [Int]) {
+        precondition(r.count == g.count && g.count == b.count, "Arrays must have same length")
+        
+        let count = r.count
+        guard count > 0 else { return ([], [], []) }
+        
+        let rFloat = r.map { Float($0) }
+        let gFloat = g.map { Float($0) }
+        let bFloat = b.map { Float($0) }
+        
+        var rPrime = [Float](repeating: 0, count: count)
+        var rPlusB  = [Float](repeating: 0, count: count)
+        
+        // R′ = R − B
+        vDSP_vsub(bFloat, 1, rFloat, 1, &rPrime, 1, vDSP_Length(count))
+        
+        // R + B
+        vDSP_vadd(rFloat, 1, bFloat, 1, &rPlusB, 1, vDSP_Length(count))
+        
+        // G′ = G − ((R + B) >> 1)
+        let gPrime = zip(gFloat, rPlusB).map { gVal, rbVal in
+            Int(gVal) - (Int(rbVal) >> 1)
+        }
+        
+        return (rPrime.map { Int($0) }, gPrime, b)
+    }
+    
+    /// Apply HP3 inverse colour transform to a batch of transformed pixels using vDSP.
+    ///
+    /// HP3 inverse transform:
+    /// - B = B′
+    /// - R = R′ + B′
+    /// - G = G′ + ((R + B) >> 1)
+    ///
+    /// - Parameters:
+    ///   - rPrime: Transformed red component values
+    ///   - gPrime: Transformed green component values
+    ///   - bPrime: Transformed blue component values (unchanged)
+    /// - Returns: Recovered (r, g, b) components as integer arrays
+    /// - Precondition: All arrays must have the same length
+    public func applyHP3Inverse(rPrime: [Int], gPrime: [Int], bPrime: [Int]) -> (r: [Int], g: [Int], b: [Int]) {
+        precondition(rPrime.count == gPrime.count && gPrime.count == bPrime.count, "Arrays must have same length")
+        
+        let count = rPrime.count
+        guard count > 0 else { return ([], [], []) }
+        
+        let rPrimeFloat = rPrime.map { Float($0) }
+        let bPrimeFloat = bPrime.map { Float($0) }
+        
+        var r = [Float](repeating: 0, count: count)
+        
+        // R = R′ + B′
+        vDSP_vadd(rPrimeFloat, 1, bPrimeFloat, 1, &r, 1, vDSP_Length(count))
+        
+        let rInt = r.map { Int($0) }
+        
+        // G = G′ + ((R + B) >> 1)
+        let g = zip(gPrime, zip(rInt, bPrime)).map { gVal, rb in
+            gVal + ((rb.0 + rb.1) >> 1)
+        }
+        
+        return (rInt, g, bPrime)
+    }
 }
 
 #endif

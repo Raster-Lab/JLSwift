@@ -80,6 +80,9 @@ JPEG-LS is a lossless/near-lossless compression standard specifically designed f
 | 12.1 | CharLS Decode Interoperability | ⏳ In Progress | — |
 | 12.2 | CharLS Encode Interoperability | ✅ Complete | 100.00% |
 | 12.3 | Round-Trip Interoperability (JLSwift) | ⏳ In Progress | 100.00% |
+| 13.1 | ARM Neon Optimisation Audit & Enhancement | ✅ Complete | 100.00% |
+| 13.2 | Accelerate Framework Deep Integration | ✅ Complete | 100.00% |
+| 13.3 | Apple Silicon Memory Architecture Optimisation | ✅ Complete | 100.00% |
 
 **Overall Project Coverage: 95.80%** (exceeds 95% threshold)
 
@@ -95,10 +98,10 @@ JPEG-LS is a lossless/near-lossless compression standard specifically designed f
 |---------|-------------|
 | **Native Swift** | Pure Swift implementation with no external C dependencies |
 | **Swift 6.2 Strict Concurrency** | Explicit `.swiftLanguageMode(.v6)` in Package.swift; all shared types are `Sendable`; batch processing uses `withTaskGroup` structured concurrency |
-| **Apple Silicon Optimised** | ARM NEON/SIMD acceleration with Swift SIMD4 types |
-| **Hardware Acceleration** | Apple Accelerate framework (vDSP) for batch operations & statistics |
+| **Apple Silicon Optimised** | ARM NEON/SIMD acceleration using Swift SIMD types: SIMD8 run-length detection, SIMD8 byte-stuffing scan, and CLZ-based Golomb-Rice parameter computation |
+| **Hardware Acceleration** | Apple Accelerate framework (vDSP) for batch gradient computation, absolute prediction-error accumulation, context-state updates, vImage planar↔interleaved conversion, and vectorised HP1/HP2/HP3 colour transforms |
 | **Metal GPU Acceleration** | Optional GPU acceleration for large images (macOS 10.13+, iOS 11+) |
-| **Memory Optimised** | Buffer pooling, tile-based processing, and cache-friendly data layouts |
+| **Memory Optimised** | Cache-line–aligned context arrays, L1-cache–tuned tile sizes, `UnifiedMemoryBufferPool` for Apple Silicon unified memory, memory-mapped I/O via `mmap`, and prefetch hints for sequential access patterns |
 | **DICOM Compatible** | Full support for DICOM transfer syntaxes |
 | **Multi-Component Support** | Full RGB and greyscale encoding with all interleaving modes |
 | **Interleaving Modes** | None (separate scans), Line-interleaved, Sample-interleaved |

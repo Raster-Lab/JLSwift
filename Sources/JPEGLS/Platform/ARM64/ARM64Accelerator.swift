@@ -61,6 +61,146 @@ public struct ARM64Accelerator: PlatformAccelerator {
         return (Int(gradients[0]), Int(gradients[1]), Int(gradients[2]))
     }
     
+    // MARK: - NEON-Optimized Run-Length Detection
+    
+    /// Detect run length using SIMD8 comparisons on ARM64.
+    ///
+    /// Scans ahead from `startIndex` in the `pixels` array, counting
+    /// consecutive elements equal to `runValue`. Uses SIMD8 vectorised
+    /// comparison to process 8 pixels per iteration, leveraging NEON
+    /// comparison instructions for maximum throughput.
+    ///
+    /// - Parameters:
+    ///   - pixels: Array of pixel values to scan
+    ///   - startIndex: Starting index for the scan
+    ///   - runValue: The pixel value that constitutes a run
+    ///   - maxLength: Maximum run length to detect
+    /// - Returns: Length of the run starting at `startIndex`
+    public func detectRunLength(
+        in pixels: [Int32],
+        startIndex: Int,
+        runValue: Int32,
+        maxLength: Int
+    ) -> Int {
+        let limit = min(pixels.count - startIndex, maxLength)
+        guard limit > 0 else { return 0 }
+        
+        var runLength = 0
+        let vectorSize = 8
+        let runVec = SIMD8<Int32>(repeating: runValue)
+        
+        // Process 8 pixels at a time using NEON comparisons
+        while runLength + vectorSize <= limit {
+            let idx = startIndex + runLength
+            let chunk = SIMD8<Int32>(
+                pixels[idx],     pixels[idx + 1], pixels[idx + 2], pixels[idx + 3],
+                pixels[idx + 4], pixels[idx + 5], pixels[idx + 6], pixels[idx + 7]
+            )
+            let matches = chunk .== runVec
+            
+            // Find first mismatch within the vector
+            for j in 0..<vectorSize {
+                if matches[j] {
+                    runLength += 1
+                } else {
+                    return runLength
+                }
+            }
+        }
+        
+        // Handle remaining elements sequentially
+        while runLength < limit {
+            if pixels[startIndex + runLength] == runValue {
+                runLength += 1
+            } else {
+                break
+            }
+        }
+        
+        return runLength
+    }
+    
+    // MARK: - NEON-Accelerated Byte Stuffing Detection
+    
+    /// Detect positions requiring byte stuffing using SIMD8 on ARM64.
+    ///
+    /// Scans byte data for 0xFF values that require JPEG-LS bit-level
+    /// stuffing per ISO 14495-1 §9.1. Uses SIMD8 vectorised comparisons
+    /// to process 8 bytes per iteration, reducing branch overhead for
+    /// large encoded streams.
+    ///
+    /// - Parameter data: Raw byte data to scan
+    /// - Returns: Array of byte indices where 0xFF occurs (stuffing required)
+    public func detectByteStuffingPositions(in data: [UInt8]) -> [Int] {
+        var positions: [Int] = []
+        let count = data.count
+        let vectorSize = 8
+        let ffVec = SIMD8<UInt8>(repeating: 0xFF)
+        
+        var i = 0
+        // Process 8 bytes at a time using NEON
+        while i + vectorSize <= count {
+            let chunk = SIMD8<UInt8>(
+                data[i],     data[i + 1], data[i + 2], data[i + 3],
+                data[i + 4], data[i + 5], data[i + 6], data[i + 7]
+            )
+            let mask = chunk .== ffVec
+            
+            if mask.any() {
+                for j in 0..<vectorSize where mask[j] {
+                    positions.append(i + j)
+                }
+            }
+            i += vectorSize
+        }
+        
+        // Handle remaining bytes
+        while i < count {
+            if data[i] == 0xFF {
+                positions.append(i)
+            }
+            i += 1
+        }
+        
+        return positions
+    }
+    
+    // MARK: - NEON-Optimized Golomb-Rice Parameter Computation
+    
+    /// Compute the Golomb-Rice coding parameter k using ARM64 CLZ.
+    ///
+    /// Finds the smallest k ≥ 0 such that `2^k * n ≥ a`, which is the
+    /// standard JPEG-LS Golomb-Rice parameter selection rule. The ARM64
+    /// `leadingZeroBitCount` property compiles to a single CLZ instruction,
+    /// making this computation branch-efficient on Apple Silicon.
+    ///
+    /// - Parameters:
+    ///   - a: Context accumulator value (sum of absolute prediction errors)
+    ///   - n: Context counter (number of samples in context)
+    /// - Returns: Golomb-Rice parameter k in range [0, 31]
+    public func computeGolombRiceParameter(a: Int, n: Int) -> Int {
+        guard n > 0 else { return 0 }
+        guard a > 0 else { return 0 }
+        
+        // Iterative Golomb-Rice k calculation: find smallest k where 2^k * n >= a
+        // The ARM64 CLZ provides an O(1) approximation; we refine with the exact loop.
+        // Initial estimate using CLZ: k ≈ max(0, ceil(log2(a/n)) - 1)
+        let aN = max(1, a / n)
+        // log2 approximation via CLZ: floor(log2(x)) = bit_width - 1 - clz(x)
+        let log2ApproxK = max(0, (UInt64.bitWidth - 1 - UInt64(aN).leadingZeroBitCount))
+        
+        // Refine: start from CLZ-based estimate and adjust
+        var k = max(0, log2ApproxK - 1)
+        while k < 31 && (n << k) < a {
+            k += 1
+        }
+        while k > 0 && (n << (k - 1)) >= a {
+            k -= 1
+        }
+        
+        return k
+    }
+    
     // MARK: - NEON-Optimized MED Predictor
     
     /// Compute MED (Median Edge Detector) prediction using NEON operations.
