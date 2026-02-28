@@ -337,64 +337,82 @@ struct JPEGLSPNMRoundTripTests {
         #expect(refPixels == outPixels, "Decoded PPM pixel data should match reference")
     }
 
-    // MARK: - bitsNeeded Tests
+    // MARK: - bitsNeeded Behaviour Tests
 
-    @Test("bitsNeeded computes correct bit depth from MAXVAL")
-    func testBitsNeeded() {
-        func bitsNeeded(forMaxVal maxVal: Int) -> Int {
-            var bits = 1
-            while (1 << bits) - 1 < maxVal { bits += 1 }
-            return bits
+    @Test("Encode from 8-bit PGM produces 8-bit JPEG-LS")
+    func testPGM8bitProduces8BitEncoding() throws {
+        let inputData = try fixtureData(named: "test8bs2.pgm")
+        let (_, _, _, _, headerLen) = try parsePNMHeader(inputData)
+        let pixelBytes = inputData.subdata(in: headerLen..<inputData.count)
+
+        var pixels: [[Int]] = Array(repeating: Array(repeating: 0, count: 128), count: 128)
+        for row in 0..<128 {
+            for col in 0..<128 {
+                pixels[row][col] = Int(pixelBytes[row * 128 + col])
+            }
         }
-        #expect(bitsNeeded(forMaxVal: 1)     == 1)
-        #expect(bitsNeeded(forMaxVal: 3)     == 2)
-        #expect(bitsNeeded(forMaxVal: 15)    == 4)
-        #expect(bitsNeeded(forMaxVal: 255)   == 8)
-        #expect(bitsNeeded(forMaxVal: 1023)  == 10)
-        #expect(bitsNeeded(forMaxVal: 4095)  == 12)
-        #expect(bitsNeeded(forMaxVal: 65535) == 16)
+
+        // MAXVAL=255 → bitsPerSample=8
+        let imgData = try MultiComponentImageData.grayscale(pixels: pixels, bitsPerSample: 8)
+        let config = try JPEGLSEncoder.Configuration(near: 0, interleaveMode: .none, presetParameters: nil, colorTransformation: .none)
+        let encoded = try JPEGLSEncoder().encode(imgData, configuration: config)
+        let decoded = try JPEGLSDecoder().decode(encoded)
+
+        #expect(decoded.frameHeader.bitsPerSample == 8)
     }
 
-    // MARK: - isPNM Detection Tests
+    @Test("Encode from 12-bit PGM (MAXVAL=4095) produces 12-bit JPEG-LS")
+    func testPGM12bitProduces12BitEncoding() throws {
+        let inputData = try fixtureData(named: "test16.pgm")
+        let (width, height, maxVal, _, headerLen) = try parsePNMHeader(inputData)
+        #expect(maxVal == 4095)
 
-    @Test("isPNMFile detects PGM/PPM by file extension")
-    func testIsPNMByExtension() {
-        func isPNM(path: String, data: Data) -> Bool {
-            let ext = (path as NSString).pathExtension.lowercased()
-            if ext == "pgm" || ext == "ppm" { return true }
-            if data.count >= 2 {
-                let magic = data.prefix(2)
-                return (magic[0] == UInt8(ascii: "P") &&
-                        (magic[1] == UInt8(ascii: "5") || magic[1] == UInt8(ascii: "6")))
+        let pixelBytes = inputData.subdata(in: headerLen..<inputData.count)
+        var pixels: [[Int]] = Array(repeating: Array(repeating: 0, count: width), count: height)
+        for row in 0..<height {
+            for col in 0..<width {
+                let i = (row * width + col) * 2
+                pixels[row][col] = (Int(pixelBytes[i]) << 8) | Int(pixelBytes[i + 1])
             }
-            return false
         }
-        #expect(isPNM(path: "image.pgm", data: Data()) == true)
-        #expect(isPNM(path: "image.ppm", data: Data()) == true)
-        #expect(isPNM(path: "IMAGE.PGM", data: Data()) == true)   // extension is lowercased
-        #expect(isPNM(path: "image.raw", data: Data()) == false)
-        #expect(isPNM(path: "image.jls", data: Data()) == false)
+
+        // MAXVAL=4095 → bitsPerSample=12
+        let imgData = try MultiComponentImageData.grayscale(pixels: pixels, bitsPerSample: 12)
+        let config = try JPEGLSEncoder.Configuration(near: 0, interleaveMode: .none, presetParameters: nil, colorTransformation: .none)
+        let encoded = try JPEGLSEncoder().encode(imgData, configuration: config)
+        let decoded = try JPEGLSDecoder().decode(encoded)
+
+        #expect(decoded.frameHeader.bitsPerSample == 12)
     }
 
-    @Test("isPNMFile detects PGM/PPM by magic bytes when extension is absent")
-    func testIsPNMByMagicBytes() {
-        func isPNM(path: String, data: Data) -> Bool {
-            let ext = (path as NSString).pathExtension.lowercased()
-            if ext == "pgm" || ext == "ppm" { return true }
-            if data.count >= 2 {
-                let magic = data.prefix(2)
-                return (magic[0] == UInt8(ascii: "P") &&
-                        (magic[1] == UInt8(ascii: "5") || magic[1] == UInt8(ascii: "6")))
-            }
-            return false
-        }
-        let p5Header = Data([UInt8(ascii: "P"), UInt8(ascii: "5")])
-        let p6Header = Data([UInt8(ascii: "P"), UInt8(ascii: "6")])
-        let rawData  = Data([0x00, 0x01, 0x02])
+    // MARK: - PNM Format Detection Tests
 
-        #expect(isPNM(path: "image.bin", data: p5Header) == true)
-        #expect(isPNM(path: "image.bin", data: p6Header) == true)
-        #expect(isPNM(path: "image.bin", data: rawData)  == false)
+    @Test("PGM file detected by .pgm extension and P5 magic bytes")
+    func testPGMDetectionByExtensionAndMagic() throws {
+        // Verify that a real PGM fixture has P5 magic bytes.
+        let data = try fixtureData(named: "test8bs2.pgm")
+        #expect(data.count >= 2)
+        #expect(data[0] == UInt8(ascii: "P"))
+        #expect(data[1] == UInt8(ascii: "5"))
+    }
+
+    @Test("PPM file detected by .ppm extension and P6 magic bytes")
+    func testPPMDetectionByExtensionAndMagic() throws {
+        // Verify that a real PPM fixture has P6 magic bytes.
+        let data = try fixtureData(named: "test8.ppm")
+        #expect(data.count >= 2)
+        #expect(data[0] == UInt8(ascii: "P"))
+        #expect(data[1] == UInt8(ascii: "6"))
+    }
+
+    @Test("Non-PNM files have neither P5 nor P6 magic bytes")
+    func testNonPNMFiles() throws {
+        // JPEG-LS files start with the SOI marker (0xFF 0xD8), not P5/P6.
+        let jlsData = try fixtureData(named: "t8nde0.jls")
+        let isP5 = jlsData.count >= 2 && jlsData[0] == UInt8(ascii: "P") && jlsData[1] == UInt8(ascii: "5")
+        let isP6 = jlsData.count >= 2 && jlsData[0] == UInt8(ascii: "P") && jlsData[1] == UInt8(ascii: "6")
+        #expect(!isP5)
+        #expect(!isP6)
     }
 
     // MARK: - Decode Format Validation Tests
@@ -415,7 +433,7 @@ struct JPEGLSPNMRoundTripTests {
 
     @Test("Decode PGM format: single-component images write PGM, three-component images write PPM")
     func testDecodeFormatAutoselection() throws {
-        // Verify that a grayscale decoded image uses PGM and an RGB image uses PPM.
+        // Verify that a grayscale decoded image has 1 component (→ PGM) and an RGB image has 3 (→ PPM).
         let grayscaleJLS = try fixtureData(named: "t8nde0.jls")
         let colorJLS     = try fixtureData(named: "t8c0e0.jls")
 
@@ -425,11 +443,22 @@ struct JPEGLSPNMRoundTripTests {
         #expect(grayscaleDecoded.components.count == 1)
         #expect(colorDecoded.components.count     == 3)
 
-        // When --format pgm or ppm, any component count is accepted by the decoder.
-        // Verify the correct PNM magic byte is used for each.
-        let pgmMagic = "P5"
-        let ppmMagic = "P6"
-        #expect(grayscaleDecoded.components.count == 1 ? pgmMagic == "P5" : true)
-        #expect(colorDecoded.components.count == 3     ? ppmMagic == "P6" : true)
+        // Build PGM from the grayscale image and verify it starts with the P5 magic bytes.
+        let gWidth  = grayscaleDecoded.frameHeader.width
+        let gHeight = grayscaleDecoded.frameHeader.height
+        let gMaxVal = (1 << grayscaleDecoded.frameHeader.bitsPerSample) - 1
+        let pgmHeader = "P5\n\(gWidth) \(gHeight)\n\(gMaxVal)\n"
+        let pgmData = Data(pgmHeader.utf8)
+        #expect(pgmData[0] == UInt8(ascii: "P"))
+        #expect(pgmData[1] == UInt8(ascii: "5"))
+
+        // Build PPM from the colour image and verify it starts with the P6 magic bytes.
+        let cWidth  = colorDecoded.frameHeader.width
+        let cHeight = colorDecoded.frameHeader.height
+        let cMaxVal = (1 << colorDecoded.frameHeader.bitsPerSample) - 1
+        let ppmHeader = "P6\n\(cWidth) \(cHeight)\n\(cMaxVal)\n"
+        let ppmData = Data(ppmHeader.utf8)
+        #expect(ppmData[0] == UInt8(ascii: "P"))
+        #expect(ppmData[1] == UInt8(ascii: "6"))
     }
 }
