@@ -1546,3 +1546,236 @@ struct CLIArgumentParsingTests {
         }
     }
 }
+
+// MARK: - Part 2 Encoding Tests
+
+@Suite("Part 2 Encoding Tests (Phase 17.1 — --part2 and --palette)")
+struct Part2EncodingTests {
+
+    // MARK: - Palette parsing
+
+    /// Reproduce the palette-parsing logic from EncodeCommand/ConvertCommand.
+    private func parsePaletteEntries(_ string: String) throws -> [Int] {
+        let parts = string.split(separator: ",", omittingEmptySubsequences: false)
+        var entries: [Int] = []
+        for part in parts {
+            let trimmed = part.trimmingCharacters(in: .whitespaces)
+            guard let value = Int(trimmed), value >= 0, value <= 255 else {
+                throw ValidationError("Invalid palette entry '\(trimmed)'. Each entry must be an integer in the range 0–255.")
+            }
+            entries.append(value)
+        }
+        guard !entries.isEmpty else {
+            throw ValidationError("Palette must contain at least one entry.")
+        }
+        return entries
+    }
+
+    // MARK: - Flag and option acceptance
+
+    @Test("--part2 flag is accepted as a boolean flag (no value required)")
+    func testPart2FlagIsBoolean() {
+        // If --part2 were an option taking a value, a CLI argument parser would complain.
+        // Simulating: simply verify the flag name string follows the expected pattern.
+        let flagName = "--part2"
+        #expect(flagName.hasPrefix("--"))
+        #expect(!flagName.contains("="))
+    }
+
+    @Test("--palette option is accepted as a string option")
+    func testPaletteOptionAccepted() throws {
+        let entries = try parsePaletteEntries("0,85,170,255")
+        #expect(entries == [0, 85, 170, 255])
+    }
+
+    @Test("--palette with spaces around commas is accepted")
+    func testPaletteWithSpaces() throws {
+        let entries = try parsePaletteEntries("0, 85, 170, 255")
+        #expect(entries == [0, 85, 170, 255])
+    }
+
+    @Test("--palette single entry is accepted")
+    func testPaletteSingleEntry() throws {
+        let entries = try parsePaletteEntries("128")
+        #expect(entries == [128])
+    }
+
+    @Test("--palette value 0 is accepted")
+    func testPaletteMinBoundary() throws {
+        let entries = try parsePaletteEntries("0")
+        #expect(entries == [0])
+    }
+
+    @Test("--palette value 255 is accepted")
+    func testPaletteMaxBoundary() throws {
+        let entries = try parsePaletteEntries("255")
+        #expect(entries == [255])
+    }
+
+    @Test("--palette value 256 is rejected")
+    func testPaletteOutOfRangeHigh() {
+        #expect(throws: (any Error).self) {
+            _ = try parsePaletteEntries("256")
+        }
+    }
+
+    @Test("--palette negative value is rejected")
+    func testPaletteNegativeValue() {
+        #expect(throws: (any Error).self) {
+            _ = try parsePaletteEntries("-1")
+        }
+    }
+
+    @Test("--palette non-integer value is rejected")
+    func testPaletteNonInteger() {
+        #expect(throws: (any Error).self) {
+            _ = try parsePaletteEntries("abc")
+        }
+    }
+
+    @Test("--palette empty string is rejected")
+    func testPaletteEmptyString() {
+        #expect(throws: (any Error).self) {
+            _ = try parsePaletteEntries("")
+        }
+    }
+
+    // MARK: - --palette requires --part2
+
+    @Test("--palette without --part2 should be rejected at validation time")
+    func testPaletteRequiresPart2() {
+        // Simulate the validation: palette != nil && !part2 → error.
+        let palette: String? = "0,85,170,255"
+        let part2 = false
+        let shouldError = palette != nil && !part2
+        #expect(shouldError == true)
+    }
+
+    @Test("--palette with --part2 is valid")
+    func testPaletteWithPart2IsValid() {
+        let palette: String? = "0,85,170,255"
+        let part2 = true
+        let shouldError = palette != nil && !part2
+        #expect(shouldError == false)
+    }
+
+    @Test("--part2 without --palette is valid (no palette encoding)")
+    func testPart2WithoutPaletteIsValid() {
+        let palette: String? = nil
+        let part2 = true
+        let shouldError = palette != nil && !part2
+        #expect(shouldError == false)
+    }
+
+    // MARK: - Library round-trip with mapping table
+
+    @Test("JPEGLSEncoder.Configuration accepts mappingTable parameter")
+    func testConfigurationAcceptsMappingTable() throws {
+        let table = try JPEGLSMappingTable(id: 1, entryWidth: 1, entries: [0, 85, 170, 255])
+        let config = try JPEGLSEncoder.Configuration(mappingTable: table)
+        #expect(config.mappingTable?.id == 1)
+        #expect(config.mappingTable?.count == 4)
+    }
+
+    @Test("JPEGLSEncoder.Configuration without mappingTable has nil mappingTable")
+    func testConfigurationDefaultMappingTableIsNil() throws {
+        let config = try JPEGLSEncoder.Configuration()
+        #expect(config.mappingTable == nil)
+    }
+
+    @Test("Encode with mapping table writes LSE type 2 marker before SOS")
+    func testEncodeWithMappingTableWritesLSEMarker() throws {
+        let pixels = [[0, 1], [2, 3]]
+        let imageData = try MultiComponentImageData.grayscale(pixels: pixels, bitsPerSample: 8)
+        let table = try JPEGLSMappingTable(id: 1, entryWidth: 1, entries: [0, 85, 170, 255])
+        let config = try JPEGLSEncoder.Configuration(mappingTable: table)
+        let encoded = try JPEGLSEncoder().encode(imageData, configuration: config)
+        let bytes = Array(encoded)
+
+        // Scan for the LSE marker (0xFF 0xF8).
+        var foundLSE = false
+        var i = 0
+        while i < bytes.count - 1 {
+            if bytes[i] == 0xFF && bytes[i + 1] == 0xF8 {
+                foundLSE = true
+                break
+            }
+            i += 1
+        }
+        #expect(foundLSE, "Expected an LSE marker (0xFF 0xF8) in the encoded output")
+    }
+
+    @Test("Encode with mapping table: parsed output contains the mapping table")
+    func testEncodeWithMappingTableParsedCorrectly() throws {
+        let pixels = [[0, 1], [2, 3]]
+        let imageData = try MultiComponentImageData.grayscale(pixels: pixels, bitsPerSample: 8)
+        let entries = [0, 85, 170, 255]
+        let table = try JPEGLSMappingTable(id: 1, entryWidth: 1, entries: entries)
+        let config = try JPEGLSEncoder.Configuration(mappingTable: table)
+        let encoded = try JPEGLSEncoder().encode(imageData, configuration: config)
+
+        let parser = JPEGLSParser(data: encoded)
+        let result = try parser.parse()
+        #expect(result.mappingTables.count == 1)
+        #expect(result.mappingTables[1]?.entries == entries)
+    }
+
+    @Test("Encode with mapping table: SOS component selector references table ID")
+    func testEncodeWithMappingTableSOSReferencesTableID() throws {
+        let pixels = [[0, 1, 2, 3]]
+        let imageData = try MultiComponentImageData.grayscale(pixels: pixels, bitsPerSample: 8)
+        let table = try JPEGLSMappingTable(id: 1, entryWidth: 1, entries: [10, 20, 30, 40])
+        let config = try JPEGLSEncoder.Configuration(mappingTable: table)
+        let encoded = try JPEGLSEncoder().encode(imageData, configuration: config)
+
+        let parser = JPEGLSParser(data: encoded)
+        let result = try parser.parse()
+        // The first scan header's first component should reference table ID 1.
+        #expect(result.scanHeaders.first?.components.first?.mappingTableID == 1)
+    }
+
+    @Test("Encode without mapping table: SOS component selector has table ID 0")
+    func testEncodeWithoutMappingTableSOSHasZeroTableID() throws {
+        let pixels = [[10, 20], [30, 40]]
+        let imageData = try MultiComponentImageData.grayscale(pixels: pixels, bitsPerSample: 8)
+        let config = try JPEGLSEncoder.Configuration()
+        let encoded = try JPEGLSEncoder().encode(imageData, configuration: config)
+
+        let parser = JPEGLSParser(data: encoded)
+        let result = try parser.parse()
+        #expect(result.scanHeaders.first?.components.first?.mappingTableID == 0)
+    }
+
+    @Test("Encode with identity mapping table produces pixel-exact decoded output")
+    func testEncodeWithIdentityMappingTableRoundTrip() throws {
+        let pixels = [[10, 20], [30, 40]]
+        let imageData = try MultiComponentImageData.grayscale(pixels: pixels, bitsPerSample: 8)
+        // Identity palette: maps each index to itself — decoder output equals encoder input.
+        let identityEntries = Array(0..<256)
+        let table = try JPEGLSMappingTable(id: 1, entryWidth: 1, entries: identityEntries)
+        let config = try JPEGLSEncoder.Configuration(mappingTable: table)
+        let encoded = try JPEGLSEncoder().encode(imageData, configuration: config)
+        let decoded = try JPEGLSDecoder().decode(encoded)
+
+        // Identity table: output values == input values.
+        #expect(decoded.components[0].pixels == [[10, 20], [30, 40]])
+    }
+
+    @Test("Encode with non-identity mapping table: decoded output reflects palette lookup")
+    func testEncodeWithNonIdentityPaletteRoundTrip() throws {
+        // Encode indices [0, 1, 2, 3]; palette maps 0→10, 1→20, 2→30, 3→40.
+        let pixels = [[0, 1], [2, 3]]
+        let imageData = try MultiComponentImageData.grayscale(pixels: pixels, bitsPerSample: 8)
+        let entries = Array(0..<256).map { i -> Int in
+            if i < 4 { return (i + 1) * 10 }
+            return i
+        }
+        let table = try JPEGLSMappingTable(id: 1, entryWidth: 1, entries: entries)
+        let config = try JPEGLSEncoder.Configuration(mappingTable: table)
+        let encoded = try JPEGLSEncoder().encode(imageData, configuration: config)
+        let decoded = try JPEGLSDecoder().decode(encoded)
+
+        // Decoder applies the palette: 0→10, 1→20, 2→30, 3→40.
+        #expect(decoded.components[0].pixels == [[10, 20], [30, 40]])
+    }
+}

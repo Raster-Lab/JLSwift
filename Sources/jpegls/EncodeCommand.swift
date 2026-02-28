@@ -91,6 +91,18 @@ extension JPEGLSCLITool {
         var optimise: Bool = false
 
         @Flag(
+            name: .long,
+            help: "Enable JPEG-LS Part 2 (ITU-T T.870) extensions. Required when using --palette."
+        )
+        var part2: Bool = false
+
+        @Option(
+            name: .long,
+            help: "Comma-separated palette entries for palettised encoding (requires --part2). Each entry is an integer output value; the number of entries determines the palette size. Example: --palette 0,85,170,255"
+        )
+        var palette: String?
+
+        @Flag(
             name: [.customLong("no-colour"), .customLong("no-color")],
             help: "Disable ANSI colour codes in terminal output. Accepts both --no-colour and --no-color."
         )
@@ -266,11 +278,32 @@ extension JPEGLSCLITool {
             }
             
             // Create encoder configuration
+            // Parse palette if provided (requires --part2)
+            if palette != nil && !part2 {
+                throw ValidationError("--palette requires --part2 to be set")
+            }
+            let resolvedMappingTable: JPEGLSMappingTable?
+            if let paletteString = palette {
+                let entries = try parsePaletteEntries(paletteString)
+                resolvedMappingTable = try JPEGLSMappingTable(id: 1, entryWidth: 1, entries: entries)
+                if verbose {
+                    print("Part 2 palette: \(entries.count) entries")
+                    print()
+                }
+            } else {
+                resolvedMappingTable = nil
+            }
+            if part2 && verbose {
+                print("Part 2 extensions: enabled")
+                print()
+            }
+
             let config = try JPEGLSEncoder.Configuration(
                 near: near,
                 interleaveMode: actualInterleaveMode,
                 presetParameters: resolvedPresetParameters,
-                colorTransformation: colorTransformValue
+                colorTransformation: colorTransformValue,
+                mappingTable: resolvedMappingTable
             )
             
             if verbose {
@@ -409,6 +442,23 @@ extension JPEGLSCLITool {
             default:
                 throw ValidationError("Invalid colour transformation '\(transform)'. Valid values: none, hp1, hp2, hp3. See 'jpegls encode --help' for examples.")
             }
+        }
+
+        /// Parse a comma-separated list of palette entry integers.
+        private func parsePaletteEntries(_ string: String) throws -> [Int] {
+            let parts = string.split(separator: ",", omittingEmptySubsequences: false)
+            var entries: [Int] = []
+            for part in parts {
+                let trimmed = part.trimmingCharacters(in: .whitespaces)
+                guard let value = Int(trimmed), value >= 0, value <= 255 else {
+                    throw ValidationError("Invalid palette entry '\(trimmed)'. Each entry must be an integer in the range 0–255.")
+                }
+                entries.append(value)
+            }
+            guard !entries.isEmpty else {
+                throw ValidationError("Palette must contain at least one entry.")
+            }
+            return entries
         }
         
         private func extractPixels(from data: Data, width: Int, height: Int, bitsPerSample: Int) throws -> [[Int]] {

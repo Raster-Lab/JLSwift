@@ -48,7 +48,18 @@ public struct JPEGLSEncoder: Sendable {
         ///   2. Applies the forward transform (with modular arithmetic) to every
         ///      pixel before the JPEG-LS codec runs.
         public let colorTransformation: JPEGLSColorTransformation
-        
+
+        /// Optional mapping table for palettised (indexed-colour) encoding per ITU-T.87 §5.1.1.3.
+        ///
+        /// When set the encoder writes an LSE type 2 marker before the scan and sets the
+        /// mapping-table ID in every scan component selector so that decoders apply the
+        /// palette lookup after decoding.  Use this to encode images whose sample values
+        /// are palette indices rather than direct intensities.
+        ///
+        /// Supported for single- and multi-component images.  All components in the scan
+        /// will reference the same mapping table.
+        public let mappingTable: JPEGLSMappingTable?
+
         /// Initialize encoding configuration
         ///
         /// ```swift
@@ -66,6 +77,10 @@ public struct JPEGLSEncoder: Sendable {
         ///     interleaveMode: .line,
         ///     presetParameters: preset
         /// )
+        ///
+        /// // Palettised encoding with a 4-entry greyscale mapping table
+        /// let palette = try JPEGLSMappingTable(id: 1, entryWidth: 1, entries: [0, 85, 170, 255])
+        /// let paletteConfig = try JPEGLSEncoder.Configuration(mappingTable: palette)
         /// ```
         ///
         /// - Parameters:
@@ -73,21 +88,24 @@ public struct JPEGLSEncoder: Sendable {
         ///   - interleaveMode: Interleaving mode for multi-component images
         ///   - presetParameters: Optional custom preset parameters (uses defaults if nil)
         ///   - colorTransformation: Colour transform to apply before encoding (default: .none)
+        ///   - mappingTable: Optional mapping table for palettised encoding (default: nil)
         /// - Throws: `JPEGLSError.invalidNearParameter` if NEAR is out of range
         public init(
             near: Int = 0,
             interleaveMode: JPEGLSInterleaveMode = .none,
             presetParameters: JPEGLSPresetParameters? = nil,
-            colorTransformation: JPEGLSColorTransformation = .none
+            colorTransformation: JPEGLSColorTransformation = .none,
+            mappingTable: JPEGLSMappingTable? = nil
         ) throws {
             guard near >= 0 && near <= 255 else {
                 throw JPEGLSError.invalidNearParameter(near: near)
             }
-            
+
             self.near = near
             self.interleaveMode = interleaveMode
             self.presetParameters = presetParameters
             self.colorTransformation = colorTransformation
+            self.mappingTable = mappingTable
         }
     }
     
@@ -159,7 +177,13 @@ public struct JPEGLSEncoder: Sendable {
         if configuration.presetParameters != nil || configuration.near > 0 {
             try writePresetParameters(parameters, to: writer)
         }
-        
+
+        // Write mapping table (LSE type 2/3) if a palette is specified (Part 2 §5.1.1.3).
+        let mappingTableID: UInt8 = configuration.mappingTable?.id ?? 0
+        if let table = configuration.mappingTable {
+            writeMappingTable(table, to: writer)
+        }
+
         // Encode scan(s) based on interleave mode
         switch configuration.interleaveMode {
         case .none:
@@ -168,18 +192,20 @@ public struct JPEGLSEncoder: Sendable {
                 try encodeScan(
                     imageData: encodingData,
                     componentIDs: [component.id],
+                    mappingTableID: mappingTableID,
                     configuration: configuration,
                     parameters: parameters,
                     writer: writer
                 )
             }
-            
+
         case .line, .sample:
             // Interleaved: single scan with all components
             let componentIDs = encodingData.components.map { $0.id }
             try encodeScan(
                 imageData: encodingData,
                 componentIDs: componentIDs,
+                mappingTableID: mappingTableID,
                 configuration: configuration,
                 parameters: parameters,
                 writer: writer
@@ -452,6 +478,7 @@ public struct JPEGLSEncoder: Sendable {
     private func encodeScan(
         imageData: MultiComponentImageData,
         componentIDs: [UInt8],
+        mappingTableID: UInt8 = 0,
         configuration: Configuration,
         parameters: JPEGLSPresetParameters,
         writer: JPEGLSBitstreamWriter
@@ -460,7 +487,7 @@ public struct JPEGLSEncoder: Sendable {
         let scanHeader = try JPEGLSScanHeader(
             componentCount: componentIDs.count,
             components: componentIDs.map { id in
-                JPEGLSScanHeader.ComponentSelector(id: id)
+                JPEGLSScanHeader.ComponentSelector(id: id, mappingTableID: mappingTableID)
             },
             near: configuration.near,
             interleaveMode: configuration.interleaveMode,
