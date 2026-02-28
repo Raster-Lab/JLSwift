@@ -1145,8 +1145,13 @@ public struct JPEGLSEncoder: Sendable {
             return (left, 0, 0, 0)
         } else if col == 0 {
             let top = reconstructed[row - 1][col]
+            // Per ITU-T.87 §3.2 and CharLS edge-pixel buffering: Rc at col=0 is
+            // the first pixel of two rows above (equivalent to prevRowEdge in the
+            // lossless path).  For row 0–1 this equals 0; for row r≥2 it is the
+            // reconstructed value at (r−2, 0).
+            let topLeft = row >= 2 ? reconstructed[row - 2][col] : 0
             let topRight = (width > 1) ? reconstructed[row - 1][col + 1] : top
-            return (top, top, top, topRight)
+            return (top, top, topLeft, topRight)
         } else {
             let left = reconstructed[row][col - 1]
             let top = reconstructed[row - 1][col]

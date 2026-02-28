@@ -174,6 +174,13 @@ struct RoundTripRGBLosslessTests {
         // 12-bit RGB
         RGBConfig(bitsPerSample: 12, interleaveMode: .none, colorTransform: .none, width: 16, height: 16, label: "12-bit none-ILV"),
         RGBConfig(bitsPerSample: 12, interleaveMode: .line, colorTransform: .none, width: 16, height: 16, label: "12-bit line-ILV"),
+        // Larger 8-bit images to exercise run-index accumulation over many rows
+        RGBConfig(bitsPerSample: 8, interleaveMode: .none, colorTransform: .none, width: 64, height: 64, label: "8-bit 64×64 none-ILV"),
+        RGBConfig(bitsPerSample: 8, interleaveMode: .line, colorTransform: .none, width: 64, height: 64, label: "8-bit 64×64 line-ILV"),
+        RGBConfig(bitsPerSample: 8, interleaveMode: .sample, colorTransform: .none, width: 64, height: 64, label: "8-bit 64×64 sample-ILV"),
+        RGBConfig(bitsPerSample: 8, interleaveMode: .none, colorTransform: .none, width: 256, height: 256, label: "8-bit 256×256 none-ILV"),
+        RGBConfig(bitsPerSample: 8, interleaveMode: .line, colorTransform: .none, width: 256, height: 256, label: "8-bit 256×256 line-ILV"),
+        RGBConfig(bitsPerSample: 8, interleaveMode: .sample, colorTransform: .none, width: 256, height: 256, label: "8-bit 256×256 sample-ILV"),
     ]
 
     @Test("RGB lossless noise round-trip", arguments: configs)
@@ -457,5 +464,87 @@ struct RoundTripEdgeCaseTests {
         let encoded = try JPEGLSEncoder().encode(imageData, configuration: try .init(near: 0))
         let decoded = try JPEGLSDecoder().decode(encoded)
         verifyLosslessGrayscale(original: pixels, decoded: decoded)
+    }
+}
+
+// MARK: - Expanded Near-Lossless Round-Trip Tests
+//
+// These tests verify that near-lossless encoding works correctly for images larger
+// than 8×8, and for flat (constant-value) images.  Both categories previously
+// triggered run-mode encoder bugs that were fixed in PR #82 (EOL partial-block).
+
+@Suite("Round-Trip: Near-Lossless")
+struct RoundTripNearLosslessTests {
+
+    struct NearLosslessConfig: CustomTestStringConvertible, Sendable {
+        let bitsPerSample: Int
+        let width: Int
+        let height: Int
+        let near: Int
+        let label: String
+        var testDescription: String { label }
+    }
+
+    static let configs: [NearLosslessConfig] = [
+        // 8-bit grayscale — multiple sizes to verify EOL run-mode fix
+        NearLosslessConfig(bitsPerSample: 8, width: 16, height: 16, near: 1, label: "8-bit 16×16 near=1"),
+        NearLosslessConfig(bitsPerSample: 8, width: 32, height: 32, near: 3, label: "8-bit 32×32 near=3"),
+        NearLosslessConfig(bitsPerSample: 8, width: 64, height: 64, near: 5, label: "8-bit 64×64 near=5"),
+        NearLosslessConfig(bitsPerSample: 8, width: 64, height: 64, near: 1, label: "8-bit 64×64 near=1"),
+        // 12-bit grayscale
+        NearLosslessConfig(bitsPerSample: 12, width: 32, height: 32, near: 3, label: "12-bit 32×32 near=3"),
+        NearLosslessConfig(bitsPerSample: 12, width: 64, height: 64, near: 3, label: "12-bit 64×64 near=3"),
+    ]
+
+    @Test("Near-lossless noise round-trip", arguments: configs)
+    func testNoisePatterNearLossless(config: NearLosslessConfig) throws {
+        let maxVal = (1 << config.bitsPerSample) - 1
+        let pixels = makeNoiseGrayscale(width: config.width, height: config.height, maxVal: maxVal)
+        let imageData = try MultiComponentImageData.grayscale(pixels: pixels, bitsPerSample: config.bitsPerSample)
+        let encoded = try JPEGLSEncoder().encode(imageData, configuration: try .init(near: config.near))
+        let decoded = try JPEGLSDecoder().decode(encoded)
+        verifyNearLosslessGrayscale(original: pixels, decoded: decoded, near: config.near)
+    }
+
+    @Test("Near-lossless gradient round-trip", arguments: configs)
+    func testGradientNearLossless(config: NearLosslessConfig) throws {
+        let maxVal = (1 << config.bitsPerSample) - 1
+        let pixels = makeGradientGrayscale(width: config.width, height: config.height, maxVal: maxVal)
+        let imageData = try MultiComponentImageData.grayscale(pixels: pixels, bitsPerSample: config.bitsPerSample)
+        let encoded = try JPEGLSEncoder().encode(imageData, configuration: try .init(near: config.near))
+        let decoded = try JPEGLSDecoder().decode(encoded)
+        verifyNearLosslessGrayscale(original: pixels, decoded: decoded, near: config.near)
+    }
+
+    /// Flat (constant-value) images trigger run mode on every pixel.
+    /// Previously failed for images larger than 8×8 due to the EOL partial-block bug.
+    @Test("Flat image lossless round-trip (32×32)")
+    func testFlatImage32x32() throws {
+        let pixels = Array(repeating: Array(repeating: 128, count: 32), count: 32)
+        let imageData = try MultiComponentImageData.grayscale(pixels: pixels, bitsPerSample: 8)
+        let encoded = try JPEGLSEncoder().encode(imageData, configuration: try .init(near: 0))
+        let decoded = try JPEGLSDecoder().decode(encoded)
+        verifyLosslessGrayscale(original: pixels, decoded: decoded)
+    }
+
+    /// Large flat image to stress-test run mode continuations across multiple lines.
+    @Test("Flat image lossless round-trip (64×64)")
+    func testFlatImage64x64() throws {
+        let pixels = Array(repeating: Array(repeating: 200, count: 64), count: 64)
+        let imageData = try MultiComponentImageData.grayscale(pixels: pixels, bitsPerSample: 8)
+        let encoded = try JPEGLSEncoder().encode(imageData, configuration: try .init(near: 0))
+        let decoded = try JPEGLSDecoder().decode(encoded)
+        verifyLosslessGrayscale(original: pixels, decoded: decoded)
+    }
+
+    /// Near-lossless flat image: run mode dominant, all pixels decode within NEAR.
+    @Test("Flat image near-lossless round-trip (32×32, near=3)")
+    func testFlatImageNearLossless() throws {
+        let pixels = Array(repeating: Array(repeating: 100, count: 32), count: 32)
+        let near = 3
+        let imageData = try MultiComponentImageData.grayscale(pixels: pixels, bitsPerSample: 8)
+        let encoded = try JPEGLSEncoder().encode(imageData, configuration: try .init(near: near))
+        let decoded = try JPEGLSDecoder().decode(encoded)
+        verifyNearLosslessGrayscale(original: pixels, decoded: decoded, near: near)
     }
 }
