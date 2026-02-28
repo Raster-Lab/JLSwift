@@ -319,7 +319,10 @@ struct BatchProcessor: Sendable {
         let queue = DispatchQueue(label: "jpegls.batch", attributes: .concurrent)
         let group = DispatchGroup()
         let semaphore = DispatchSemaphore(value: parallelism)
-        let aggregator = ResultsAggregator()
+
+        // Show per-file progress when not in verbose or quiet mode.
+        let progressBar = ProgressBar(total: files.count, quiet: quiet || verbose)
+        let aggregator = ResultsAggregator(progressBar: progressBar)
 
         let total = files.count
         for (index, file) in files.enumerated() {
@@ -345,6 +348,7 @@ struct BatchProcessor: Sendable {
         }
         
         group.wait()
+        progressBar.finish()
         
         return aggregator.results
     }
@@ -376,8 +380,6 @@ struct BatchProcessor: Sendable {
             
             if verbose && !quiet {
                 print("  ✓ Success (\(String(format: "%.2f", duration))s)")
-            } else if !quiet {
-                print(".", terminator: "")
             }
             
             return FileResult(file: inputFile, success: true, duration: duration, error: nil)
@@ -385,7 +387,7 @@ struct BatchProcessor: Sendable {
         } catch {
             let duration = Date().timeIntervalSince(startTime)
             
-            if !quiet {
+            if verbose && !quiet {
                 print("  ✗ Failed: \(error.localizedDescription)")
             }
             
@@ -482,7 +484,12 @@ final class ResultsAggregator: @unchecked Sendable {
     private var totalDuration: TimeInterval = 0
     private var failedFiles: [String] = []
     private var _cancelled = false
-    
+    private let progressBar: ProgressBar?
+
+    init(progressBar: ProgressBar? = nil) {
+        self.progressBar = progressBar
+    }
+
     var isCancelled: Bool {
         lock.lock()
         defer { lock.unlock() }
@@ -504,6 +511,8 @@ final class ResultsAggregator: @unchecked Sendable {
             failedFiles.append(result.file)
         }
         totalDuration += result.duration
+        let completed = successes + failures
+        progressBar?.update(completed: completed)
         lock.unlock()
     }
     
