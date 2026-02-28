@@ -23,7 +23,7 @@ struct JPEGLSMultiComponentEncoderTests {
             scanHeader: scanHeader
         )
         
-        // Should initialize without errors
+        // Should initialise without errors
         #expect(encoder != nil)
     }
     
@@ -42,7 +42,7 @@ struct JPEGLSMultiComponentEncoderTests {
             scanHeader: scanHeader
         )
         
-        // Should initialize without errors
+        // Should initialise without errors
         #expect(encoder != nil)
     }
     

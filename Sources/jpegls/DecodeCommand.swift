@@ -94,7 +94,7 @@ extension JPEGLSCLITool {
                 }
                 
             case "pgm", "ppm":
-                // Write PGM (grayscale) or PPM (color) file
+                // Write PGM (grayscale) or PPM (colour) file
                 let componentPixels: [[[Int]]] = imageData.components.map { $0.pixels }
                 let maxVal = (1 << imageData.frameHeader.bitsPerSample) - 1
                 let pnmData = try PNMSupport.encode(

@@ -164,7 +164,7 @@ public struct X86_64Accelerator: PlatformAccelerator {
         t3: Int
     ) -> Int {
         // Quantization using signed comparisons per ITU-T.87
-        // The compiler will optimize these to SSE/AVX comparison instructions
+        // The compiler will optimise these to SSE/AVX comparison instructions
         
         if gradient <= -t3 {
             return -4

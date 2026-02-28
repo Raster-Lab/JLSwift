@@ -44,7 +44,7 @@ struct TestFixtureLoader {
         return try parsePGM(data: data)
     }
     
-    /// Load a PPM (color) test image
+    /// Load a PPM (colour) test image
     static func loadPPM(named filename: String) throws -> (width: Int, height: Int, maxVal: Int, pixels: [UInt16]) {
         let data = try loadFixture(named: filename)
         return try parsePPM(data: data)
@@ -118,7 +118,7 @@ struct TestFixtureLoader {
         return (width, height, maxVal, pixels)
     }
     
-    /// Parse PPM format (3-component color)
+    /// Parse PPM format (3-component colour)
     private static func parsePPM(data: Data) throws -> (width: Int, height: Int, maxVal: Int, pixels: [UInt16]) {
         // Find the end of ASCII header by looking for the third newline after P6
         var headerEnd = 0
@@ -220,13 +220,13 @@ struct CharLSConformanceTests {
     
     /// All CharLS test cases
     static let testCases: [TestCase] = [
-        // 8-bit color tests with different color modes and NEAR values
-        TestCase(filename: "t8c0e0.jls", width: 256, height: 256, bitsPerSample: 8, components: 3, near: 0, description: "8-bit color mode 0, lossless"),
-        TestCase(filename: "t8c0e3.jls", width: 256, height: 256, bitsPerSample: 8, components: 3, near: 3, description: "8-bit color mode 0, near=3"),
-        TestCase(filename: "t8c1e0.jls", width: 256, height: 256, bitsPerSample: 8, components: 3, near: 0, description: "8-bit color mode 1, lossless"),
-        TestCase(filename: "t8c1e3.jls", width: 256, height: 256, bitsPerSample: 8, components: 3, near: 3, description: "8-bit color mode 1, near=3"),
-        TestCase(filename: "t8c2e0.jls", width: 256, height: 256, bitsPerSample: 8, components: 3, near: 0, description: "8-bit color mode 2, lossless"),
-        TestCase(filename: "t8c2e3.jls", width: 256, height: 256, bitsPerSample: 8, components: 3, near: 3, description: "8-bit color mode 2, near=3"),
+        // 8-bit colour tests with different colour modes and NEAR values
+        TestCase(filename: "t8c0e0.jls", width: 256, height: 256, bitsPerSample: 8, components: 3, near: 0, description: "8-bit colour mode 0, lossless"),
+        TestCase(filename: "t8c0e3.jls", width: 256, height: 256, bitsPerSample: 8, components: 3, near: 3, description: "8-bit colour mode 0, near=3"),
+        TestCase(filename: "t8c1e0.jls", width: 256, height: 256, bitsPerSample: 8, components: 3, near: 0, description: "8-bit colour mode 1, lossless"),
+        TestCase(filename: "t8c1e3.jls", width: 256, height: 256, bitsPerSample: 8, components: 3, near: 3, description: "8-bit colour mode 1, near=3"),
+        TestCase(filename: "t8c2e0.jls", width: 256, height: 256, bitsPerSample: 8, components: 3, near: 0, description: "8-bit colour mode 2, lossless"),
+        TestCase(filename: "t8c2e3.jls", width: 256, height: 256, bitsPerSample: 8, components: 3, near: 3, description: "8-bit colour mode 2, near=3"),
         
         // 16-bit grayscale tests
         TestCase(filename: "t16e0.jls", width: 256, height: 256, bitsPerSample: 12, components: 1, near: 0, description: "16-bit grayscale, lossless"),
@@ -236,7 +236,7 @@ struct CharLSConformanceTests {
         TestCase(filename: "t8sse0.jls", width: 256, height: 256, bitsPerSample: 8, components: 3, near: 0, description: "8-bit sub-sampled, lossless"),
         TestCase(filename: "t8sse3.jls", width: 256, height: 256, bitsPerSample: 8, components: 3, near: 3, description: "8-bit sub-sampled, near=3"),
         
-        // Non-default parameters (note: these are 128x128 grayscale, not full 256x256 color)
+        // Non-default parameters (note: these are 128x128 grayscale, not full 256x256 colour)
         TestCase(filename: "t8nde0.jls", width: 128, height: 128, bitsPerSample: 8, components: 1, near: 0, description: "8-bit non-default params, lossless"),
         TestCase(filename: "t8nde3.jls", width: 128, height: 128, bitsPerSample: 8, components: 1, near: 3, description: "8-bit non-default params, near=3"),
     ]
@@ -397,47 +397,47 @@ struct CharLSBitExactComparisonTests {
     /// Note: sub-sampled files (t8sse0.jls, t8sse3.jls) are deferred as they require
     /// special handling for different component dimensions
     static let comparisonTestCases: [ComparisonTestCase] = [
-        // 8-bit color tests (modes 0, 1, 2)
+        // 8-bit colour tests (modes 0, 1, 2)
         ComparisonTestCase(
             jlsFile: "t8c0e0.jls",
             referenceFile: "test8.ppm",
             width: 256, height: 256, components: 3, maxVal: 255, near: 0,
-            description: "8-bit color mode 0, lossless",
+            description: "8-bit colour mode 0, lossless",
             isSubSampled: false
         ),
         ComparisonTestCase(
             jlsFile: "t8c0e3.jls",
             referenceFile: "test8.ppm",
             width: 256, height: 256, components: 3, maxVal: 255, near: 3,
-            description: "8-bit color mode 0, near=3",
+            description: "8-bit colour mode 0, near=3",
             isSubSampled: false
         ),
         ComparisonTestCase(
             jlsFile: "t8c1e0.jls",
             referenceFile: "test8.ppm",
             width: 256, height: 256, components: 3, maxVal: 255, near: 0,
-            description: "8-bit color mode 1, lossless",
+            description: "8-bit colour mode 1, lossless",
             isSubSampled: false
         ),
         ComparisonTestCase(
             jlsFile: "t8c1e3.jls",
             referenceFile: "test8.ppm",
             width: 256, height: 256, components: 3, maxVal: 255, near: 3,
-            description: "8-bit color mode 1, near=3",
+            description: "8-bit colour mode 1, near=3",
             isSubSampled: false
         ),
         ComparisonTestCase(
             jlsFile: "t8c2e0.jls",
             referenceFile: "test8.ppm",
             width: 256, height: 256, components: 3, maxVal: 255, near: 0,
-            description: "8-bit color mode 2, lossless",
+            description: "8-bit colour mode 2, lossless",
             isSubSampled: false
         ),
         ComparisonTestCase(
             jlsFile: "t8c2e3.jls",
             referenceFile: "test8.ppm",
             width: 256, height: 256, components: 3, maxVal: 255, near: 3,
-            description: "8-bit color mode 2, near=3",
+            description: "8-bit colour mode 2, near=3",
             isSubSampled: false
         ),
         

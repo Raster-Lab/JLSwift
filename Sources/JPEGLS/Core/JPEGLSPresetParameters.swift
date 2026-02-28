@@ -1,6 +1,6 @@
 /// JPEG-LS preset coding parameters per ITU-T.87
 ///
-/// These parameters control the encoding/decoding behavior and can be customized
+/// These parameters control the encoding/decoding behaviour and can be customized
 /// via the JPEG-LS Extension (LSE) marker for optimal compression or compatibility.
 
 import Foundation

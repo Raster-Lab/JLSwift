@@ -256,16 +256,16 @@ struct DICOMIntegrationTests {
         let bitsPerSample = 8
         let components = 3
         
-        // Create test color Doppler data
+        // Create test colour Doppler data
         var pixelData = [UInt8](repeating: 0, count: width * height * components)
         for i in stride(from: 0, to: pixelData.count, by: components) {
-            // Simulate color-coded blood flow
+            // Simulate colour-coded blood flow
             pixelData[i] = UInt8(Int.random(in: 0...255))     // R
             pixelData[i + 1] = UInt8(Int.random(in: 0...255)) // G
             pixelData[i + 2] = UInt8(Int.random(in: 0...255)) // B
         }
         
-        // Validate encoding parameters for color US
+        // Validate encoding parameters for colour US
         let near = nearParameterForTransferSyntax(Self.losslessTransferSyntax)
         #expect(near == 0)
         #expect(bitsPerSample == 8)
@@ -350,7 +350,7 @@ struct DICOMIntegrationTests {
     
     @Test("DICOM photometric interpretation - RGB")
     func testPhotometricInterpretationRGB() throws {
-        // RGB: three component color image
+        // RGB: three component colour image
         let components = 3
         let bitsPerSample = 8
         let width = 256

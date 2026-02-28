@@ -1042,23 +1042,42 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 - Zsh: added `compare` to command list; updated all per-command `_arguments` specs with new flags and `pgm`/`ppm` in decode format
 - Fish: added `compare` subcommand and all its options; updated encode/decode/info/verify/batch with new flags
 
-### Milestone 18: Localisation & British English Consistency 📋
+### Milestone 18: Localisation & British English Consistency ⏳
 **Target**: Consistent British English throughout all comments, help text, and documentation  
-**Status**: Not Started
+**Status**: In Progress
 
-#### Phase 18.1: Source Code Comments
-- [ ] Audit all source code comments for American English spellings
-- [ ] Convert all comments to British English (e.g., colour, optimise, initialise, centre, behaviour, licence, analyse, serialise, modelling, grey)
-- [ ] Ensure documentation comments (`///`) use British English consistently
-- [ ] Verify TODO/FIXME/NOTE comments use British English
+#### Phase 18.1: Source Code Comments ✅
+- [x] Audit all source code comments for American English spellings
+- [x] Convert all comments to British English (e.g., colour, optimise, initialise, centre, behaviour, licence, analyse, serialise, modelling, grey)
+- [x] Ensure documentation comments (`///`) use British English consistently
+- [x] Verify TODO/FIXME/NOTE comments use British English
 - [ ] Create a project spelling reference list for contributors
 
-#### Phase 18.2: Help Text & Error Messages
-- [ ] Convert all CLI help text to British English
-- [ ] Convert all error messages to British English
-- [ ] Convert all verbose/debug output to British English
+**Implementation Details (Phase 18.1):**
+- Converted all `///` and `//` comments in `Sources/` and `Tests/` from American to British spelling:
+  - `color`/`colors` → `colour`/`colours` (in comments, help text, and error messages)
+  - `modeling` → `modelling` (e.g., "context modelling" per ITU-T.87)
+  - `behavior` → `behaviour` (preset parameters doc comment)
+  - `optimize` → `optimise` (compiler hint comments in ARM64Accelerator and X86_64Accelerator)
+  - `initialize` → `initialise` (inline test comments)
+- Updated all `@Test` name strings in `Tests/JPEGLSTests/JPEGLSMultiComponentDecoderTests.swift` to British English
+- Updated `CLIArgumentParsingTests.swift` file-level doc comment
+- Updated `CharLSConformanceTests.swift` test case descriptions and inline comments
+- Updated `DICOMIntegrationTests.swift` inline comments
+- Public API identifiers (type names, method names, property names) are intentionally unchanged
+
+#### Phase 18.2: Help Text & Error Messages ✅
+- [x] Convert all CLI help text to British English
+- [x] Convert all error messages to British English
+- [x] Convert all verbose/debug output to British English
 - [ ] Ensure man page uses British English throughout
 - [ ] Verify shell completion descriptions use British English
+
+**Implementation Details (Phase 18.2):**
+- `EncodeCommand.swift`: inline comment "Parse colour transformation", verbose output "Colour transformation:", error message "Invalid colour transformation"
+- `DecodeCommand.swift`: inline comment "Write PGM (grayscale) or PPM (colour) file"
+- `JPEGLSMultiComponentDecoder.swift`: error message "Colour transformation … is invalid for … components"
+- `PNMSupport.swift`: doc comment "Number of colour components"
 
 #### Phase 18.3: Documentation
 - [ ] Convert README.md to British English
@@ -1168,7 +1187,7 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 | **15** | GPU Compute | Metal pipeline enhancement, Vulkan compute support (Linux/Windows), GPU testing 📋 |
 | **16** | Performance Optimisation | Hotspot analysis, algorithmic optimisation, CharLS head-to-head benchmarking 📋 |
 | **17** | CLI Enhancement | Missing functionality ⏳, British & American spelling support ✅, help & usage docs ⏳ |
-| **18** | Localisation | British English in comments, help text, error messages, and documentation 📋 |
+| **18** | Localisation | British English in comments ✅, help text ✅, error messages ✅, documentation ⏳ |
 | **19** | Documentation & J2KSwift | Documentation revision, sample code, J2KSwift consistency alignment 📋 |
 | **20** | Final Integration & Release | DICOM independence, full test suite, performance validation, v1.0 release 📋 |
 

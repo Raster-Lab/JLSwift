@@ -13,7 +13,7 @@ struct PNMImage {
     let height: Int
     /// Maximum sample value (e.g. 255 for 8-bit, 4095 for 12-bit).
     let maxVal: Int
-    /// Number of color components: 1 for PGM, 3 for PPM.
+    /// Number of colour components: 1 for PGM, 3 for PPM.
     let components: Int
     /// Pixel data organized as `[component][row][column]`, values in `[0, maxVal]`.
     let componentPixels: [[[Int]]]

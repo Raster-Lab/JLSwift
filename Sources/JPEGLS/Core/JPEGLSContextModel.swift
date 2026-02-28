@@ -1,6 +1,6 @@
-/// JPEG-LS context modeling implementation per ITU-T.87 Section 4.
+/// JPEG-LS context modelling implementation per ITU-T.87 Section 4.
 ///
-/// Context modeling is at the heart of JPEG-LS compression. It maintains
+/// Context modelling is at the heart of JPEG-LS compression. It maintains
 /// adaptive statistics for different local contexts to achieve efficient
 /// entropy coding of prediction errors.
 

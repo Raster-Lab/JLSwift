@@ -26,7 +26,7 @@ struct JPEGLSRunModeTests {
         let params = try createDefaultParameters()
         let runMode = try JPEGLSRunMode(parameters: params, near: 0)
         
-        // Should initialize without throwing
+        // Should initialise without throwing
         #expect(runMode != nil)
     }
     
@@ -35,7 +35,7 @@ struct JPEGLSRunModeTests {
         let params = try createDefaultParameters()
         let runMode = try JPEGLSRunMode(parameters: params, near: 5)
         
-        // Should initialize without throwing
+        // Should initialise without throwing
         #expect(runMode != nil)
     }
     

@@ -1,4 +1,4 @@
-/// Tests for JPEG-LS context modeling implementation.
+/// Tests for JPEG-LS context modelling implementation.
 
 import Testing
 @testable import JPEGLS
