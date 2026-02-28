@@ -154,24 +154,16 @@ func routes(_ app: Application) throws {
             throw Abort(.badRequest, reason: "Missing JPEG-LS data")
         }
         
-        // Parse JPEG-LS file
-        let parser = JPEGLSParser(data: Data(buffer: jlsData))
-        let parseResult = try parser.parse()
-        
-        // Create decoder
-        let decoder = try JPEGLSMultiComponentDecoder(
-            frameHeader: parseResult.frameHeader,
-            scanHeader: parseResult.scanHeaders[0],
-            colorTransformation: .none
-        )
+        // Decode JPEG-LS file
+        let decoder = JPEGLSDecoder()
+        let imageData = try decoder.decode(Data(buffer: jlsData))
         
         // Return file information
         let info = [
-            "width": parseResult.frameHeader.width,
-            "height": parseResult.frameHeader.height,
-            "bitsPerSample": parseResult.frameHeader.bitsPerSample,
-            "componentCount": parseResult.frameHeader.componentCount,
-            "near": parseResult.scanHeaders[0].near
+            "width": imageData.frameHeader.width,
+            "height": imageData.frameHeader.height,
+            "bitsPerSample": imageData.frameHeader.bitsPerSample,
+            "componentCount": imageData.frameHeader.componentCount
         ]
         
         return try await info.encodeResponse(for: req)

@@ -63,20 +63,12 @@ let imageData = try MultiComponentImageData.grayscale(
     bitsPerSample: 8
 )
 
-// 3. Create a scan header (lossless compression)
-let scanHeader = try JPEGLSScanHeader.grayscaleLossless()
+// 3. Create the encoder and encode (lossless by default)
+let encoder = JPEGLSEncoder()
+let jpegLSData = try encoder.encode(imageData)
 
-// 4. Create the encoder
-let encoder = try JPEGLSMultiComponentEncoder(
-    frameHeader: imageData.frameHeader,
-    scanHeader: scanHeader
-)
-
-// 5. Create pixel buffer and encode
-let buffer = JPEGLSPixelBuffer(imageData: imageData)
-let statistics = try encoder.encodeScan(buffer: buffer)
-
-print("Encoded \(statistics.pixelsEncoded) pixels")
+print("Encoded \(pixels.count * pixels[0].count) pixels")
+print("Output size: \(jpegLSData.count) bytes")
 ```
 
 ## Basic Usage
@@ -88,31 +80,23 @@ print("Encoded \(statistics.pixelsEncoded) pixels")
 ```swift
 import JPEGLS
 
-// Load your image data (example: 512x512 8-bit grayscale)
+// Load your image data (example: 512×512 8-bit greyscale)
 let width = 512
 let height = 512
 let pixels: [[Int]] = loadYourImageData() // Your image loading code
 
-// Create grayscale image data
+// Create greyscale image data
 let imageData = try MultiComponentImageData.grayscale(
     pixels: pixels,
     bitsPerSample: 8
 )
 
-// Create lossless scan header
-let scanHeader = try JPEGLSScanHeader.grayscaleLossless()
+// Encode lossless using the high-level encoder
+let encoder = JPEGLSEncoder()
+let jpegLSData = try encoder.encode(imageData)
 
-// Create encoder
-let encoder = try JPEGLSMultiComponentEncoder(
-    frameHeader: imageData.frameHeader,
-    scanHeader: scanHeader
-)
-
-// Encode the image
-let buffer = JPEGLSPixelBuffer(imageData: imageData)
-let statistics = try encoder.encodeScan(buffer: buffer)
-
-print("✓ Encoded \(statistics.pixelsEncoded) pixels")
+print("✓ Encoded \(width * height) pixels")
+print("✓ Output: \(jpegLSData.count) bytes")
 ```
 
 #### Encoding an RGB Image
@@ -120,7 +104,7 @@ print("✓ Encoded \(statistics.pixelsEncoded) pixels")
 ```swift
 import JPEGLS
 
-// Separate color channels (each is a 2D array)
+// Separate colour channels (each is a 2D array)
 let redPixels: [[Int]] = loadRedChannel()
 let greenPixels: [[Int]] = loadGreenChannel()
 let bluePixels: [[Int]] = loadBlueChannel()
@@ -133,20 +117,15 @@ let imageData = try MultiComponentImageData.rgb(
     bitsPerSample: 8
 )
 
-// Create RGB lossless scan header (sample-interleaved)
-let scanHeader = try JPEGLSScanHeader.rgbLossless()
-
-// Create encoder
-let encoder = try JPEGLSMultiComponentEncoder(
-    frameHeader: imageData.frameHeader,
-    scanHeader: scanHeader
+// Encode lossless, sample-interleaved (recommended for RGB)
+let encoder = JPEGLSEncoder()
+let config = try JPEGLSEncoder.Configuration(
+    near: 0,
+    interleaveMode: .sample
 )
+let jpegLSData = try encoder.encode(imageData, configuration: config)
 
-// Encode the image
-let buffer = JPEGLSPixelBuffer(imageData: imageData)
-let statistics = try encoder.encodeScan(buffer: buffer)
-
-print("✓ Encoded \(statistics.pixelsEncoded) pixels across \(statistics.componentCount) components")
+print("✓ Encoded \(jpegLSData.count) bytes across 3 components")
 ```
 
 #### Near-Lossless Encoding
@@ -154,13 +133,10 @@ print("✓ Encoded \(statistics.pixelsEncoded) pixels across \(statistics.compon
 For lossy compression with controlled error bounds:
 
 ```swift
-// Create near-lossless scan header (NEAR=3 means max error of ±3)
-let scanHeader = try JPEGLSScanHeader(
-    componentCount: 1,
-    components: [JPEGLSScanHeader.ComponentSelector(id: 1)],
-    near: 3,  // Maximum allowed error
-    interleaveMode: .none
-)
+// Encode near-lossless (NEAR=3 means max error of ±3)
+let encoder = JPEGLSEncoder()
+let config = try JPEGLSEncoder.Configuration(near: 3)
+let jpegLSData = try encoder.encode(imageData, configuration: config)
 
 // Rest of encoding is the same...
 ```
@@ -173,19 +149,18 @@ import JPEGLS
 // Load JPEG-LS file
 let jpegLSData = try Data(contentsOf: URL(fileURLWithPath: "image.jls"))
 
-// Parse the file
-let parser = JPEGLSParser(data: jpegLSData)
-let parseResult = try parser.parse()
+// Decode using the high-level decoder
+let decoder = JPEGLSDecoder()
+let imageData = try decoder.decode(jpegLSData)
 
 // Inspect frame header
-print("Image: \(parseResult.frameHeader.width)×\(parseResult.frameHeader.height)")
-print("Bits per sample: \(parseResult.frameHeader.bitsPerSample)")
-print("Components: \(parseResult.frameHeader.componentCount)")
+print("Image: \(imageData.frameHeader.width)×\(imageData.frameHeader.height)")
+print("Bits per sample: \(imageData.frameHeader.bitsPerSample)")
+print("Components: \(imageData.frameHeader.componentCount)")
 
-// Inspect scan headers
-for (index, scanHeader) in parseResult.scanHeaders.enumerated() {
-    print("Scan \(index + 1): \(scanHeader.componentCount) components, \(scanHeader.interleaveMode)")
-    print("  Mode: \(scanHeader.isLossless ? "lossless" : "near-lossless (NEAR=\(scanHeader.near))")")
+// Access pixel data
+for (index, component) in imageData.components.enumerated() {
+    print("Component \(index + 1): \(component.pixels.count) rows × \(component.pixels.first?.count ?? 0) cols")
 }
 ```
 
@@ -220,19 +195,27 @@ jpegls verify image.jls --quiet
 echo $?  # Check exit code
 ```
 
-#### Encode and Decode (Coming Soon)
+#### Encode and Decode
 
-Full encode/decode functionality requires bitstream integration (in progress):
+Encode raw pixel data or PGM/PPM images to JPEG-LS, and decode them back:
 
 ```bash
 # Encode raw pixel data to JPEG-LS
 jpegls encode input.raw output.jls --width 512 --height 512 --bits-per-sample 8
 
-# Decode JPEG-LS to raw pixel data
-jpegls decode input.jls output.raw
+# Encode a PGM or PPM image (dimensions detected automatically)
+jpegls encode input.pgm output.jls
+jpegls encode input.ppm output.jls
 
 # Near-lossless encoding
-jpegls encode input.raw output.jls -w 512 -h 512 --near 3
+jpegls encode input.pgm output.jls --near 3
+
+# Decode JPEG-LS to PGM/PPM
+jpegls decode input.jls output.pgm
+jpegls decode input.jls output.ppm
+
+# Compare two JPEG-LS or PGM/PPM files
+jpegls compare original.jls decoded.jls
 ```
 
 #### Batch Processing
@@ -273,14 +256,18 @@ let blue: [[Int]] = [[230, 180, 130], ...]
 ### Frame Headers and Scan Headers
 
 - **Frame Header**: Describes the entire image (dimensions, bits per sample, component count)
-- **Scan Header**: Describes how the image is encoded (interleaving, NEAR parameter, components)
+- **Encoder Configuration**: Specifies how the image is encoded (interleaving, NEAR parameter)
 
 ```swift
 // Frame header (created automatically from image data)
 let frameHeader = imageData.frameHeader
+print("Width: \(frameHeader.width), Height: \(frameHeader.height)")
 
-// Scan header (you create based on desired encoding)
-let scanHeader = try JPEGLSScanHeader.grayscaleLossless()
+// Encoder configuration
+let config = try JPEGLSEncoder.Configuration(
+    near: 0,               // 0 = lossless
+    interleaveMode: .none  // .none, .line, or .sample
+)
 ```
 
 ### Interleaving Modes
@@ -293,19 +280,10 @@ Three modes for multi-component images:
 
 ```swift
 // Sample-interleaved (recommended for RGB)
-let scanHeader = try JPEGLSScanHeader.rgbLossless()  // Uses .sample by default
+let config = try JPEGLSEncoder.Configuration(near: 0, interleaveMode: .sample)
 
 // Line-interleaved
-let scanHeader = try JPEGLSScanHeader(
-    componentCount: 3,
-    components: [
-        JPEGLSScanHeader.ComponentSelector(id: 1),
-        JPEGLSScanHeader.ComponentSelector(id: 2),
-        JPEGLSScanHeader.ComponentSelector(id: 3)
-    ],
-    near: 0,
-    interleaveMode: .line
-)
+let config = try JPEGLSEncoder.Configuration(near: 0, interleaveMode: .line)
 ```
 
 ### Lossless vs Near-Lossless
@@ -314,16 +292,12 @@ let scanHeader = try JPEGLSScanHeader(
 - **Near-Lossless** (`NEAR>0`): Controlled lossy compression with maximum error of ±NEAR
 
 ```swift
-// Lossless (NEAR=0)
-let lossless = try JPEGLSScanHeader.grayscaleLossless()
+// Lossless (NEAR=0, the default)
+let losslessData = try JPEGLSEncoder().encode(imageData)
 
 // Near-lossless (NEAR=3 means max error of ±3)
-let nearLossless = try JPEGLSScanHeader(
-    componentCount: 1,
-    components: [JPEGLSScanHeader.ComponentSelector(id: 1)],
-    near: 3,
-    interleaveMode: .none
-)
+let config = try JPEGLSEncoder.Configuration(near: 3)
+let nearLosslessData = try JPEGLSEncoder().encode(imageData, configuration: config)
 ```
 
 ## Common Patterns
@@ -419,16 +393,10 @@ do {
         bitsPerSample: 8
     )
     
-    let scanHeader = try JPEGLSScanHeader.grayscaleLossless()
-    let encoder = try JPEGLSMultiComponentEncoder(
-        frameHeader: imageData.frameHeader,
-        scanHeader: scanHeader
-    )
+    let encoder = JPEGLSEncoder()
+    let jpegLSData = try encoder.encode(imageData)
     
-    let buffer = JPEGLSPixelBuffer(imageData: imageData)
-    let statistics = try encoder.encodeScan(buffer: buffer)
-    
-    print("✓ Success: Encoded \(statistics.pixelsEncoded) pixels")
+    print("✓ Success: Encoded \(jpegLSData.count) bytes")
     
 } catch let error as JPEGLSError {
     switch error {

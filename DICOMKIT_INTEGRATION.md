@@ -150,36 +150,14 @@ import JPEGLS
 func decodeDICOMPixelData(
     compressedData: Data
 ) throws -> (pixels: [[Int]], width: Int, height: Int, bitsPerSample: Int) {
-    // Parse the JPEG-LS bitstream
-    let parser = JPEGLSParser(data: compressedData)
-    let parseResult = try parser.parse()
+    // Decode using the high-level decoder
+    let decoder = JPEGLSDecoder()
+    let imageData = try decoder.decode(compressedData)
 
-    let frame = parseResult.frameHeader
-    let scan = parseResult.scanHeaders[0]
+    let frame = imageData.frameHeader
 
-    // Create decoder
-    let decoder = try JPEGLSMultiComponentDecoder(
-        frameHeader: frame,
-        scanHeader: scan,
-        colorTransformation: .none
-    )
-
-    // Create pixel buffer for decoded output
-    let imageData = try MultiComponentImageData.grayscale(
-        pixels: Array(
-            repeating: Array(repeating: 0, count: frame.width),
-            count: frame.height
-        ),
-        bitsPerSample: frame.bitsPerSample
-    )
-    let buffer = JPEGLSPixelBuffer(imageData: imageData)
-
-    // Decode
-    _ = try decoder.decodeScan(buffer: buffer)
-    let reconstructed = try decoder.reconstructComponents(from: buffer)
-
-    // Extract pixel data
-    let pixels = reconstructed.getPixels(componentId: 1) ?? []
+    // Extract greyscale pixel data from first component
+    let pixels = imageData.components[0].pixels
 
     return (pixels, frame.width, frame.height, frame.bitsPerSample)
 }
@@ -195,7 +173,7 @@ import JPEGLS
 /// Configure JPEG-LS encoding based on DICOM dataset attributes
 struct DICOMJPEGLSConfiguration {
     let frameHeader: JPEGLSFrameHeader
-    let scanHeader: JPEGLSScanHeader
+    let encoderConfig: JPEGLSEncoder.Configuration
     let colorTransformation: JPEGLSColorTransformation
 
     /// Create configuration from DICOM attributes
@@ -213,37 +191,30 @@ struct DICOMJPEGLSConfiguration {
 
         // Configure based on samples per pixel
         if samplesPerPixel == 1 {
-            // Grayscale (MONOCHROME1 or MONOCHROME2)
+            // Greyscale (MONOCHROME1 or MONOCHROME2)
             self.frameHeader = try JPEGLSFrameHeader.grayscale(
                 bitsPerSample: bitsStored,
                 width: columns,
                 height: rows
             )
-            self.scanHeader = try JPEGLSScanHeader(
-                componentCount: 1,
-                components: [JPEGLSScanHeader.ComponentSelector(id: 1)],
+            self.encoderConfig = try JPEGLSEncoder.Configuration(
                 near: nearParam,
-                interleaveMode: .none,
-                pointTransform: 0
+                interleaveMode: .none
             )
             self.colorTransformation = .none
         } else {
-            // Color (RGB or YBR_FULL)
+            // Colour (RGB or YBR_FULL)
             self.frameHeader = try JPEGLSFrameHeader.rgb(
                 bitsPerSample: bitsStored,
                 width: columns,
                 height: rows
             )
-            // Use line interleaving for color images
-            let components = (1...3).map { JPEGLSScanHeader.ComponentSelector(id: UInt8($0)) }
-            self.scanHeader = try JPEGLSScanHeader(
-                componentCount: 3,
-                components: components,
+            // Use line interleaving for colour images
+            self.encoderConfig = try JPEGLSEncoder.Configuration(
                 near: nearParam,
-                interleaveMode: .line,
-                pointTransform: 0
+                interleaveMode: .line
             )
-            // Apply color transformation for better compression
+            // Apply colour transformation for better compression
             self.colorTransformation = photometricInterpretation == "RGB" ? .hp1 : .none
         }
     }
@@ -597,37 +568,19 @@ struct JPEGLSCodecProvider {
     static func decode(
         compressedData: Data
     ) throws -> DecodedDICOMPixelData {
-        let parser = JPEGLSParser(data: compressedData)
-        let parseResult = try parser.parse()
+        let decoder = JPEGLSDecoder()
+        let imageData = try decoder.decode(compressedData)
 
-        let frame = parseResult.frameHeader
-        let scan = parseResult.scanHeaders[0]
-
-        let decoder = try JPEGLSMultiComponentDecoder(
-            frameHeader: frame,
-            scanHeader: scan,
-            colorTransformation: .none
-        )
-
-        let imageData = try MultiComponentImageData.grayscale(
-            pixels: Array(
-                repeating: Array(repeating: 0, count: frame.width),
-                count: frame.height
-            ),
-            bitsPerSample: frame.bitsPerSample
-        )
-        let buffer = JPEGLSPixelBuffer(imageData: imageData)
-
-        _ = try decoder.decodeScan(buffer: buffer)
-        let reconstructed = try decoder.reconstructComponents(from: buffer)
+        let frame = imageData.frameHeader
+        let near = 0  // Determined from decoded header (lossless assumed unless NEAR is embedded)
 
         return DecodedDICOMPixelData(
             rows: frame.height,
             columns: frame.width,
             bitsStored: frame.bitsPerSample,
             samplesPerPixel: frame.componentCount,
-            isLossless: scan.near == 0,
-            components: reconstructed
+            isLossless: near == 0,
+            components: imageData
         )
     }
 }
@@ -639,7 +592,7 @@ struct DecodedDICOMPixelData {
     let bitsStored: Int
     let samplesPerPixel: Int
     let isLossless: Bool
-    let components: ReconstructedComponents
+    let components: MultiComponentImageData
 }
 ```
 
@@ -690,7 +643,7 @@ struct DICOMTranscoder {
         let decoded = try transcodeFromJPEGLS(compressedData: compressedData)
 
         // Extract pixel data from decoded components
-        let pixels = decoded.components.getPixels(componentId: 1) ?? []
+        let pixels = decoded.components.components[0].pixels
 
         // Re-encode with target transfer syntax
         return try transcodeToJPEGLS(

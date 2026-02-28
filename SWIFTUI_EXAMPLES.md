@@ -25,10 +25,9 @@ This guide demonstrates how to integrate JLSwift JPEG-LS compression into SwiftU
 
 JLSwift provides native JPEG-LS decoding capabilities that can be integrated into SwiftUI views. The key steps are:
 
-1. **Load and parse** the JPEG-LS file using `JPEGLSParser`
-2. **Decode** the image data using `JPEGLSMultiComponentDecoder`
-3. **Reconstruct** pixel data from the decoded components
-4. **Convert** pixel data to `CGImage`, then to platform-specific image types (`Image` in SwiftUI)
+1. **Load** the JPEG-LS file data
+2. **Decode** the image data using `JPEGLSDecoder`
+3. **Convert** pixel data to `CGImage`, then to platform-specific image types (`Image` in SwiftUI)
 
 ## Prerequisites
 
@@ -74,69 +73,43 @@ enum JPEGLSImageLoader {
         let parser = JPEGLSParser(data: data)
         let parseResult = try parser.parse()
         
-        // Create a decoder
-        let decoder = try JPEGLSMultiComponentDecoder(
-            frameHeader: parseResult.frameHeader,
-            scanHeader: parseResult.scanHeaders[0],
-            colorTransformation: .none
-        )
-        
-        // Create pixel buffer from parsed data
-        // Note: This example assumes the image data is available
-        // Full bitstream decoding integration is pending
-        let imageData = try MultiComponentImageData.grayscale(
-            pixels: [[0]], // Placeholder - will be from bitstream
-            bitsPerSample: Int(parseResult.frameHeader.bitsPerSample)
-        )
-        let buffer = JPEGLSPixelBuffer(imageData: imageData)
-        
-        // Decode the scan
-        _ = try decoder.decodeScan(buffer: buffer)
-        
-        // Reconstruct components
-        let reconstructed = try decoder.reconstructComponents(from: buffer)
+        // Decode using the high-level decoder
+        let decoder = JPEGLSDecoder()
+        let imageData = try decoder.decode(data)
         
         // Convert to CGImage
-        return try convertToCGImage(
-            reconstructed: reconstructed,
-            frameHeader: parseResult.frameHeader
-        )
+        return try convertToCGImage(imageData: imageData)
     }
     
-    /// Convert reconstructed components to CGImage
+    /// Convert decoded image data to CGImage
     private static func convertToCGImage(
-        reconstructed: ReconstructedComponents,
-        frameHeader: JPEGLSFrameHeader
+        imageData: MultiComponentImageData
     ) throws -> CGImage {
-        let width = reconstructed.width
-        let height = reconstructed.height
-        let bitsPerSample = Int(frameHeader.bitsPerSample)
-        let componentCount = Int(frameHeader.componentCount)
+        let width = imageData.frameHeader.width
+        let height = imageData.frameHeader.height
+        let bitsPerSample = imageData.frameHeader.bitsPerSample
+        let componentCount = imageData.frameHeader.componentCount
         
         if componentCount == 1 {
-            // Grayscale image
+            // Greyscale image
             return try createGrayscaleCGImage(
-                pixels: reconstructed.getPixels(componentId: 1)!,
+                pixels: imageData.components[0].pixels,
                 width: width,
                 height: height,
                 bitsPerSample: bitsPerSample
             )
         } else if componentCount == 3 {
             // RGB image
-            let red = reconstructed.getPixels(componentId: 1)!
-            let green = reconstructed.getPixels(componentId: 2)!
-            let blue = reconstructed.getPixels(componentId: 3)!
-            
             return try createRGBCGImage(
-                red: red,
-                green: green,
-                blue: blue,
+                red: imageData.components[0].pixels,
+                green: imageData.components[1].pixels,
+                blue: imageData.components[2].pixels,
                 width: width,
                 height: height,
                 bitsPerSample: bitsPerSample
             )
         } else {
-            throw JPEGLSError.invalidComponentCount
+            throw JPEGLSError.invalidComponentCount(count: componentCount)
         }
     }
     
@@ -658,39 +631,21 @@ struct RGBComponentViewer: View {
     private func loadImages() {
         Task {
             do {
-                // Load and parse JPEG-LS file
+                // Load and decode JPEG-LS file
                 let data = try Data(contentsOf: imageURL)
-                let parser = JPEGLSParser(data: data)
-                let parseResult = try parser.parse()
                 
-                // Create decoder
-                let decoder = try JPEGLSMultiComponentDecoder(
-                    frameHeader: parseResult.frameHeader,
-                    scanHeader: parseResult.scanHeaders[0],
-                    colorTransformation: .none
-                )
+                // Decode using the high-level decoder
+                let decoder = JPEGLSDecoder()
+                let imageData = try decoder.decode(data)
                 
-                // Decode (placeholder - requires bitstream integration)
-                let imageData = try MultiComponentImageData.rgb(
-                    redPixels: [[0]],
-                    greenPixels: [[0]],
-                    bluePixels: [[0]],
-                    bitsPerSample: 8
-                )
-                let buffer = JPEGLSPixelBuffer(imageData: imageData)
-                _ = try decoder.decodeScan(buffer: buffer)
+                // Access component pixel data
+                let width = imageData.frameHeader.width
+                let height = imageData.frameHeader.height
+                let bitsPerSample = imageData.frameHeader.bitsPerSample
                 
-                // Reconstruct components
-                let reconstructed = try decoder.reconstructComponents(from: buffer)
-                
-                // Create component images
-                let width = reconstructed.width
-                let height = reconstructed.height
-                let bitsPerSample = Int(parseResult.frameHeader.bitsPerSample)
-                
-                let redPixels = reconstructed.getPixels(componentId: 1)!
-                let greenPixels = reconstructed.getPixels(componentId: 2)!
-                let bluePixels = reconstructed.getPixels(componentId: 3)!
+                let redPixels = imageData.components[0].pixels
+                let greenPixels = imageData.components[1].pixels
+                let bluePixels = imageData.components[2].pixels
                 
                 // Create grayscale images for each component
                 let redCG = try JPEGLSImageLoader.createGrayscaleCGImage(

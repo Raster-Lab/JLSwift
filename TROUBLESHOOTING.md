@@ -193,12 +193,9 @@ let imageData = try MultiComponentImageData.rgb(
 
 let validNear = max(0, min(255, near))
 
-let scanHeader = try JPEGLSScanHeader(
-    componentCount: 1,
-    components: [JPEGLSScanHeader.ComponentSelector(id: 1)],
-    near: validNear,
-    interleaveMode: .none
-)
+let encoder = JPEGLSEncoder()
+let config = try JPEGLSEncoder.Configuration(near: validNear)
+let jpegLSData = try encoder.encode(imageData, configuration: config)
 ```
 
 ### Premature End of Stream Error
@@ -282,7 +279,7 @@ print("Using: \(type(of: accelerator).platformName)")
 3. **Use appropriate interleaving**:
 ```swift
 // For RGB: use sample-interleaved (fastest)
-let scanHeader = try JPEGLSScanHeader.rgbLossless()  // .sample
+let config = try JPEGLSEncoder.Configuration(near: 0, interleaveMode: .sample)
 ```
 
 4. **Profile your code**:
