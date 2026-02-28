@@ -953,7 +953,7 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 - [ ] Implement `jpegls convert` command for format-to-format conversion
 - [ ] Implement `jpegls benchmark` command for quick performance measurement
 - [ ] Implement `jpegls compare` command to diff two JPEG-LS files
-- [ ] Implement `--preset` parameter integration in the encoder (custom T1, T2, T3, RESET)
+- [x] Implement `--preset` parameter integration in the encoder (custom T1, T2, T3, RESET)
 - [ ] Implement `--part2` flag for Part 2 extensions encoding
 - [ ] Implement progress bars for long-running operations (large files, batch processing)
 - [ ] Implement `--version` flag displaying library and tool version information
@@ -978,12 +978,19 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
   - Decode → PGM/PPM output tests verified against CharLS reference fixtures (pixel-exact)
   - `bitsNeeded` and `isPNMFile` logic tests
 
+**Implementation Details (--preset / T1/T2/T3/RESET integration):**
+- `encode` command now wires custom `--t1`/`--t2`/`--t3`/`--reset` options into `JPEGLSPresetParameters`:
+  - When all four values are provided, a `JPEGLSPresetParameters` struct is created and passed to `JPEGLSEncoder.Configuration`, causing the encoder to write an LSE marker with the custom preset values.
+  - Validation is performed by `JPEGLSPresetParameters.init` (T1 ∈ [1, MAXVAL], T1 ≤ T2 ≤ T3 ≤ MAXVAL, RESET ∈ [3, 255]).
+  - The `maxValue` for the preset is derived from `resolvedBitsPerSample`: `(1 << bitsPerSample) - 1`.
+  - If fewer than all four are provided, falls back to the `--optimise` / default behaviour.
+
 #### Phase 17.2: British & American Spelling Support ✅
 - [x] Support both `--colour-transform` and `--color-transform` options
-- [ ] Support both `--colour` and `--color` in all relevant contexts
-- [ ] Support both `--optimise` and `--optimize` flags
-- [ ] Support both `--summarise` and `--summary` where applicable
-- [ ] Support both `--organisation` and `--organization` where applicable
+- [x] Support both `--no-colour` and `--no-color` in all relevant contexts (encode, decode, info, verify, batch)
+- [x] Support both `--optimise` and `--optimize` flags (encode command)
+- [x] Support both `--summarise` and `--summarize` flags (batch command)
+- [ ] Support both `--organisation` and `--organization` where applicable (no applicable context in current CLI scope)
 - [x] Ensure help text documents both spellings for each dual-spelling option
 - [x] Create unit tests validating both spellings produce identical behaviour
 
@@ -991,6 +998,12 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 - Both `--colour-transform` and `--color-transform` are accepted as option names in `encode` and `batch` commands; they set the same `colorTransform` property.
 - Help text updated to document both accepted spellings.
 - Added `BritishAmericanSpellingTests` suite in `CLIArgumentParsingTests.swift` (8 tests) covering: valid values for both spellings, equivalence for all four transforms, case-insensitivity, and rejection of invalid values.
+
+**Implementation Details (Phase 17.2 — remaining dual-spelling flags):**
+- `--no-colour`/`--no-color`: Added to all five CLI commands (`encode`, `decode`, `info`, `verify`, `batch`). Both option names map to the same `noColour: Bool` property. Reserved for disabling ANSI terminal colour codes once coloured output is added.
+- `--optimise`/`--optimize`: Added to the `encode` command. When set (and no custom `--t1`/`--t2`/`--t3`/`--reset` are provided), the encoder computes `JPEGLSPresetParameters.defaultParameters(bitsPerSample:near:)` and embeds them explicitly in the bitstream via the LSE marker, making the output file fully self-contained.
+- `--summarise`/`--summarize`: Added to the `batch` command. When set, the processing summary table is printed regardless of the `--quiet` flag, allowing summary-only output for scripting.
+- `--organisation`/`--organization`: Not yet applicable in the current CLI scope (deferred).
 
 #### Phase 17.3: CLI Help & Usage Documentation
 - [ ] Update man page (`jpegls.1`) with all new commands and options

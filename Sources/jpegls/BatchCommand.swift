@@ -64,6 +64,18 @@ struct Batch: ParsableCommand {
     @Flag(help: "Stop processing on first error (default: continue processing all files)")
     var failFast: Bool = false
     
+    @Flag(
+        name: [.customLong("summarise"), .customLong("summarize")],
+        help: "Print a detailed summary table after batch processing (shown even in quiet mode). Accepts both --summarise and --summarize."
+    )
+    var summarise: Bool = false
+    
+    @Flag(
+        name: [.customLong("no-colour"), .customLong("no-color")],
+        help: "Disable ANSI colour codes in terminal output. Accepts both --no-colour and --no-color."
+    )
+    var noColour: Bool = false
+    
     // MARK: - Validation
     
     mutating func validate() throws {
@@ -129,7 +141,9 @@ struct Batch: ParsableCommand {
             parallelism: parallelism ?? ProcessInfo.processInfo.processorCount,
             verbose: verbose,
             quiet: quiet,
-            failFast: failFast
+            failFast: failFast,
+            summarise: summarise,
+            noColour: noColour
         )
         
         try processor.process()
@@ -159,6 +173,8 @@ struct BatchProcessor: Sendable {
     let verbose: Bool
     let quiet: Bool
     let failFast: Bool
+    let summarise: Bool
+    let noColour: Bool
     
     func process() throws {
         // Find input files matching pattern
@@ -187,8 +203,8 @@ struct BatchProcessor: Sendable {
         // Process files concurrently using DispatchQueue
         let results = processFilesConcurrently(inputFiles)
         
-        // Print summary
-        if !quiet {
+        // Print summary: always when summarise is set; also when not quiet
+        if !quiet || summarise {
             printSummary(results: results)
         }
         
