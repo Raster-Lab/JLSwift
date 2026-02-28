@@ -1,15 +1,15 @@
 # JLSwift
 
-A native Swift implementation of **JPEG-LS** (ISO/IEC 14495-1:1999 / ITU-T.87) compression for DICOM medical imaging. Optimized for Apple Silicon with hardware acceleration support.
+A native Swift implementation of **JPEG-LS** (ISO/IEC 14495-1:1999 / ITU-T.87) compression for DICOM medical imaging. Optimised for Apple Silicon with hardware acceleration support.
 
 [![CI](https://github.com/Raster-Lab/JLSwift/actions/workflows/ci.yml/badge.svg)](https://github.com/Raster-Lab/JLSwift/actions/workflows/ci.yml)
 
 ## Overview
 
-JLSwift provides a native Swift JPEG-LS compression library designed for the DICOMkit project and optimized for medical imaging workflows. The library emphasizes:
+JLSwift provides a native Swift JPEG-LS compression library designed for the DICOMkit project and optimised for medical imaging workflows. The library emphasises:
 
 - **Type Safety**: Leverages Swift 6.2+ strict concurrency and type system
-- **Performance**: Optimized implementations with support for hardware acceleration
+- **Performance**: Optimised implementations with support for hardware acceleration
 - **Reliability**: Comprehensive test coverage exceeding 95% for all modules
 - **DICOM Compatible**: Full support for DICOM transfer syntaxes
 
@@ -24,8 +24,8 @@ JLSwift provides a native Swift JPEG-LS compression library designed for the DIC
 
 - **Swift 6.2** or later
 - **Platforms**: Linux, macOS 12+ (Monterey), iOS 15+
-- **Primary Target**: Apple Silicon (M1/M2/M3) with ARM64 optimizations
-- **Secondary Target**: x86-64 (Intel Macs, Linux) with SSE/AVX optimizations
+- **Primary Target**: Apple Silicon (M1/M2/M3) with ARM64 optimisations
+- **Secondary Target**: x86-64 (Intel Macs, Linux) with SSE/AVX optimisations
 
 ## Installation
 
@@ -46,7 +46,7 @@ Then add JPEGLS as a dependency of your target:
 
 ## JPEGLS Module
 
-**JPEGLS** is a native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compression, designed for the DICOMkit project and optimized for medical imaging workflows.
+**JPEGLS** is a native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compression, designed for the DICOMkit project and optimised for medical imaging workflows.
 
 ### What is JPEG-LS?
 
@@ -57,7 +57,7 @@ JPEG-LS is a lossless/near-lossless compression standard specifically designed f
 | Phase | Component | Status | Coverage |
 |-------|-----------|--------|----------|
 | 2.2 | Core Types & Bitstream | ✅ Complete | 96.24% |
-| 2.3 | Context Modeling | ✅ Complete | 96.91% |
+| 2.3 | Context Modelling | ✅ Complete | 96.91% |
 | 3.1 | Regular Mode Encoding | ✅ Complete | 100.00% |
 | 3.2 | Run Mode Encoding | ✅ Complete | 100.00% |
 | 3.3 | Near-Lossless Encoding | ✅ Complete | 100.00% |
@@ -66,10 +66,10 @@ JPEG-LS is a lossless/near-lossless compression standard specifically designed f
 | 4.2 | Regular Mode Decoding | ✅ Complete | 96.90% |
 | 4.3 | Run Mode Decoding | ✅ Complete | 100.00% |
 | 4.4 | Multi-Component Decoding | ✅ Complete | 92.10% |
-| 5.1 | ARM NEON / SIMD Optimization | ✅ Complete | 100.00% |
+| 5.1 | ARM NEON / SIMD Optimisation | ✅ Complete | 100.00% |
 | 5.2 | Apple Accelerate Integration | ✅ Complete | 100.00% |
 | 5.3 | Metal GPU Acceleration | ✅ Complete | 100.00% |
-| 5.4 | Memory Optimization | ✅ Complete | 100.00% |
+| 5.4 | Memory Optimisation | ✅ Complete | 100.00% |
 | 7.3 | CLI Argument Parsing Tests | ✅ Complete | N/A* |
 | 8.1 | CharLS Reference Integration | ⏳ In Progress | 100.00% |
 | 8.4 | Edge Cases & Robustness | ✅ Complete | 100.00% |
@@ -83,11 +83,11 @@ JPEG-LS is a lossless/near-lossless compression standard specifically designed f
 
 **Overall Project Coverage: 95.80%** (exceeds 95% threshold)
 
-**Recent conformance fixes** (PRs #74, #75, #76, and current): Gradient quantization, context update/bias correction, error correction XOR, LIMIT computation, default thresholds, run interruption coding overhaul, encoder RUNindex reset, error mapping formula, near-lossless boundary condition, **run-interruption adjustedLimit mismatch** (encoder now uses J[finalRunIndex] matching the decoder), and **near-lossless reconstructed-value tracking** for line-interleaved and sample-interleaved modes — all aligned with ITU-T.87 and CharLS reference implementation.
+**Recent conformance fixes** (PRs #74, #75, #76, and current): Gradient quantisation, context update/bias correction, error correction XOR, LIMIT computation, default thresholds, run interruption coding overhaul, encoder RUNindex reset, error mapping formula, near-lossless boundary condition, **run-interruption adjustedLimit mismatch** (encoder now uses J[finalRunIndex] matching the decoder), and **near-lossless reconstructed-value tracking** for line-interleaved and sample-interleaved modes — all aligned with ITU-T.87 and CharLS reference implementation.
 
 *CLI executable target not included in coverage metrics (Swift Package Manager limitation), but validation logic thoroughly tested with 60 comprehensive tests.
 
-**Note**: Coverage may vary slightly by platform due to conditional compilation of platform-specific optimizations (ARM64, Accelerate framework). The reported coverage is measured on Linux x86_64.
+**Note**: Coverage may vary slightly by platform due to conditional compilation of platform-specific optimisations (ARM64, Accelerate framework). The reported coverage is measured on Linux x86_64.
 
 ### Key Features
 
@@ -95,15 +95,15 @@ JPEG-LS is a lossless/near-lossless compression standard specifically designed f
 |---------|-------------|
 | **Native Swift** | Pure Swift implementation with no external C dependencies |
 | **Swift 6.2 Strict Concurrency** | Explicit `.swiftLanguageMode(.v6)` in Package.swift; all shared types are `Sendable`; batch processing uses `withTaskGroup` structured concurrency |
-| **Apple Silicon Optimized** | ARM NEON/SIMD acceleration with Swift SIMD4 types |
+| **Apple Silicon Optimised** | ARM NEON/SIMD acceleration with Swift SIMD4 types |
 | **Hardware Acceleration** | Apple Accelerate framework (vDSP) for batch operations & statistics |
 | **Metal GPU Acceleration** | Optional GPU acceleration for large images (macOS 10.13+, iOS 11+) |
-| **Memory Optimized** | Buffer pooling, tile-based processing, and cache-friendly data layouts |
+| **Memory Optimised** | Buffer pooling, tile-based processing, and cache-friendly data layouts |
 | **DICOM Compatible** | Full support for DICOM transfer syntaxes |
-| **Multi-Component Support** | Full RGB and grayscale encoding with all interleaving modes |
+| **Multi-Component Support** | Full RGB and greyscale encoding with all interleaving modes |
 | **Interleaving Modes** | None (separate scans), Line-interleaved, Sample-interleaved |
 | **Near-Lossless Support** | Configurable error tolerance encoding with NEAR parameter (1-255), with correct error quantisation per §4.2.2 and reconstructed-value tracking |
-| **ITU-T.87 Compliant** | Standard-conformant context index formula (365 contexts), A initialisation, sign-adjusted Golomb-Rice coding, bias correction per §4.3.3, run-mode RUNindex synchronisation, near-lossless quantisation/dequantisation, EOL terminator handling, gradient quantization per Table A.7, error correction XOR per §A.4.1, dual-context run interruption coding per §A.7, and correct LIMIT/threshold computations |
+| **ITU-T.87 Compliant** | Standard-conformant context index formula (365 contexts), A initialisation, sign-adjusted Golomb-Rice coding, bias correction per §4.3.3, run-mode RUNindex synchronisation, near-lossless quantisation/dequantisation, EOL terminator handling, gradient quantisation per Table A.7, error correction XOR per §A.4.1, dual-context run interruption coding per §A.7, and correct LIMIT/threshold computations |
 | **Mapping Table (Palette) Support** | LSE type 2/3 mapping tables parsed and applied per ITU-T.87 §5.1.1.3; scan header `Tdi` field used to reference tables per component; encoder can emit mapping table LSE segments |
 | **Extended Dimensions (LSE Type 4)** | Images with width or height > 65535 are fully supported via LSE type 4 per ITU-T.87 §5.1.1.4; encoder auto-emits the segment and writes 0 in SOF for extended fields; parser restores the true dimensions |
 | **Part 2 Colour Transforms** | HP1, HP2, HP3 colour transforms with modular arithmetic; APP8 "mrfx" marker written by encoder and read by decoder; round-trip verified for all transforms and interleave modes |
@@ -140,9 +140,9 @@ JPEGLS/
 └── PlatformProtocols        # Protocol-based platform abstraction
 ```
 
-### Memory Optimization Features
+### Memory Optimisation Features
 
-JLSwift includes comprehensive memory optimization features for handling large medical images:
+JLSwift includes comprehensive memory optimisation features for handling large medical images:
 
 #### Buffer Pooling (`JPEGLSBufferPool`)
 - Thread-safe buffer reuse to reduce allocation overhead
@@ -158,8 +158,8 @@ JLSwift includes comprehensive memory optimization features for handling large m
 
 #### Cache-Friendly Data Layout (`JPEGLSCacheFriendlyBuffer`)
 - Contiguous memory layout in row-major order
-- Optimized neighbor access patterns for CPU cache efficiency
-- Batch row access for vectorized operations
+- Optimised neighbour access patterns for CPU cache efficiency
+- Batch row access for vectorised operations
 - Compatible with existing encoder/decoder interfaces
 
 **Example Usage:**
@@ -187,7 +187,7 @@ defer { sharedBufferPool.release(contextBuffer, type: .contextArrays) }
 
 1. **Platform Abstraction**: All platform-specific code behind protocols for clean separation
 2. **Testability**: Every component designed for unit testing with >95% coverage
-3. **Performance First**: Optimized for Apple Silicon while maintaining correctness
+3. **Performance First**: Optimised for Apple Silicon while maintaining correctness
 4. **x86-64 Removability**: Clear compilation boundaries for future x86-64 deprecation
 5. **Memory Efficiency**: Buffer pooling, tile-based processing, and cache-friendly layouts for large images
 6. **Standards Compliance**: Strict adherence to ISO/IEC 14495-1:1999 / ITU-T.87
@@ -308,7 +308,7 @@ jpegls encode input.pgm output.jls --quiet
 - `-w, --width`: Image width in pixels (required for raw input; auto-detected from PGM/PPM)
 - `-h, --height`: Image height in pixels (required for raw input; auto-detected from PGM/PPM)
 - `-b, --bits-per-sample`: Bits per sample, 2-16 (default: 8; auto-detected from PGM/PPM MAXVAL)
-- `-c, --components`: Number of components - 1 (grayscale) or 3 (RGB) (default: 1; auto-detected from PGM/PPM)
+- `-c, --components`: Number of components - 1 (greyscale) or 3 (RGB) (default: 1; auto-detected from PGM/PPM)
 - `--near`: NEAR parameter, 0=lossless, 1-255=lossy (default: 0)
 - `--interleave`: Interleave mode - none, line, sample (default: none)
 - `--color-transform` / `--colour-transform`: Colour transformation - none, hp1, hp2, hp3 (default: none)
@@ -507,7 +507,7 @@ The man page includes:
 - Detailed option documentation
 - Usage examples for all commands
 - DICOM compatibility information
-- Performance optimization details
+- Performance optimisation details
 - Standards compliance (ISO/IEC 14495-1:1999 / ITU-T.87)
 
 ### Supported DICOM Transfer Syntaxes (Planned)
@@ -564,7 +564,7 @@ JLSwift includes comprehensive performance benchmarks to measure encoding and de
 **Test Configurations:**
 - Image sizes: 256x256, 512x512, 1024x1024, 2048x2048, 4096x4096
 - Bit depths: 8-bit, 12-bit, 16-bit
-- Component counts: grayscale (1), RGB (3)
+- Component counts: greyscale (1), RGB (3)
 - Encoding modes: lossless (NEAR=0), near-lossless (NEAR=3, NEAR=10)
 - Interleaving modes: none, line, sample
 - Content types: flat, gradient, checkerboard, medical-like
@@ -602,8 +602,8 @@ Performance will vary significantly based on hardware (Apple Silicon with ARM NE
 
 JLSwift includes automated performance regression tests that detect catastrophic performance regressions in CI. The `JPEGLSPerformanceRegressionTests` suite verifies:
 
-- **Encoding time** stays within baseline thresholds (256x256, 512x512 grayscale; 512x512 16-bit; 512x512 RGB)
-- **Decoding time** stays within baseline thresholds (256x256, 512x512 grayscale; 512x512 RGB)
+- **Encoding time** stays within baseline thresholds (256x256, 512x512 greyscale; 512x512 16-bit; 512x512 RGB)
+- **Decoding time** stays within baseline thresholds (256x256, 512x512 greyscale; 512x512 RGB)
 - **Round-trip time** (encode + decode) stays within baseline threshold
 - **Throughput** remains above minimum Mpixels/s baseline
 - **Compression ratio** doesn't degrade below minimum threshold
@@ -615,8 +615,8 @@ Baselines are established from x86_64 Linux CI with a 10x regression multiplier 
 
 Head-to-head performance comparison with [CharLS](https://github.com/team-charls/charls) (the reference C++ JPEG-LS implementation) is available as a test suite with disabled tests. The `JPEGLSCharLSComparisonBenchmarks` suite includes stubs for:
 
-- **Encoding speed**: grayscale, RGB, near-lossless comparison
-- **Decoding speed**: grayscale, RGB, near-lossless comparison
+- **Encoding speed**: greyscale, RGB, near-lossless comparison
+- **Decoding speed**: greyscale, RGB, near-lossless comparison
 - **Memory usage**: encoding and decoding memory comparison
 
 These tests are currently disabled pending CharLS C library integration. JLSwift measurement infrastructure is in place; CharLS wrapper functions will be added when the C library is available as a Swift Package Manager dependency.
@@ -629,22 +629,22 @@ JLSwift includes comprehensive conformance testing using reference files from th
 - **CharLS Byte Stuffing**: Extended support for CharLS escape sequences (`FF 60-7F`) and scan boundary detection
 - **Reference Images**: 12 JPEG-LS files covering various configurations:
   - 8-bit and 16-bit samples
-  - Grayscale and RGB color images
+  - Greyscale and RGB colour images
   - Lossless and near-lossless (NEAR=3) encoding
-  - Different color transformation modes
+  - Different colour transformation modes
   - Sub-sampling and interleaving modes
   - Non-default parameters
-- **Image Loading**: PGM (grayscale) and PPM (color) reference image parsing
+- **Image Loading**: PGM (greyscale) and PPM (colour) reference image parsing
 - **Bit-Exact Comparison**: All 12 non-sub-sampled + 2 sub-sampled reference files validated for bit-exact decoding
-  - 10 non-sub-sampled comparison test cases all passing (8-bit color modes 0/1/2, 12-bit grayscale, non-default parameters)
+  - 10 non-sub-sampled comparison test cases all passing (8-bit colour modes 0/1/2, 12-bit greyscale, non-default parameters)
   - 2 sub-sampled comparison test cases passing (t8sse0.jls lossless, t8sse3.jls near=3)
   - Pixel-by-pixel validation per component (lossless: exact match; near-lossless: error ≤ NEAR)
   - Non-default parameter tests validated against test8bs2.pgm reference
   - Sub-sampled tests compare each component against its reference PGM (R 256×256, G 256×64, B 128×128)
   - Flat-region (run mode) and near-lossless round-trip encoding/decoding verified correct
 - **Round-Trip Interoperability**: 33 JLSwift encode → decode → compare regression tests
-  - All bit depths (8/12/16-bit), grayscale and RGB, all interleave modes
-  - Color transforms (HP1, HP2, HP3)
+  - All bit depths (8/12/16-bit), greyscale and RGB, all interleave modes
+  - Colour transforms (HP1, HP2, HP3)
   - Medical imaging patterns (CT, MR, CR/DX, US, NM simulations)
   - Edge cases (1×1, boundary values, single-row/column, checkerboard)
 - **Colour Transform Interoperability**: 14 encode → decode tests on 256×256 CharLS reference image
@@ -694,7 +694,7 @@ JLSwift/
 | [APPKIT_EXAMPLES.md](APPKIT_EXAMPLES.md) | AppKit integration guide for macOS applications |
 | [SERVER_SIDE_EXAMPLES.md](SERVER_SIDE_EXAMPLES.md) | Server-side Swift integration guide (Vapor, Hummingbird, NIO) |
 | [DICOMKIT_INTEGRATION.md](DICOMKIT_INTEGRATION.md) | DICOMkit integration guide for DICOM imaging workflows |
-| [PERFORMANCE_TUNING.md](PERFORMANCE_TUNING.md) | Performance optimization and benchmarking guide |
+| [PERFORMANCE_TUNING.md](PERFORMANCE_TUNING.md) | Performance optimisation and benchmarking guide |
 | [METAL_GPU_ACCELERATION.md](METAL_GPU_ACCELERATION.md) | Metal GPU acceleration guide for large images |
 | [TROUBLESHOOTING.md](TROUBLESHOOTING.md) | Common issues and solutions |
 | [VERSIONING.md](VERSIONING.md) | Semantic versioning strategy and release guidelines |
@@ -715,7 +715,7 @@ swift package generate-documentation
 ### User Guides
 
 - **[Getting Started](GETTING_STARTED.md)**: Installation, quick start, and basic usage examples
-- **[Performance Tuning](PERFORMANCE_TUNING.md)**: Hardware acceleration, memory optimization, and profiling
+- **[Performance Tuning](PERFORMANCE_TUNING.md)**: Hardware acceleration, memory optimisation, and profiling
 - **[Troubleshooting](TROUBLESHOOTING.md)**: Solutions to common problems and debugging tips
 
 ## Contributing
@@ -726,6 +726,7 @@ When contributing to JLSwift, please follow these guidelines:
 2. **Testing**: All public APIs must have corresponding unit tests with >95% coverage
 3. **Documentation**: All public types and methods must have documentation comments
 4. **Documentation Updates**: Update README.md and MILESTONES.md when features or APIs change
+5. **British English**: All comments, documentation, help text, and error messages must use British English (e.g., colour, optimise, initialise, behaviour, organisation). Public API identifiers (type names, method names, property names) retain their original American spelling.
 
 ### Pull Request Checklist
 

@@ -26,7 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Cross-platform memory tracking (macOS/iOS)
 - Benchmarks for various image sizes (256x256 to 4096x4096)
 - Benchmarks for various bit depths (8-bit, 12-bit, 16-bit)
-- Benchmarks for various component counts (grayscale, RGB)
+- Benchmarks for various component counts (greyscale, RGB)
 - Near-lossless benchmarks (NEAR=3, NEAR=10)
 - Interleaving mode benchmarks (none, line, sample)
 - Content-type-specific benchmarks (flat, gradient, medical-like)
@@ -38,7 +38,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 #### Documentation (Milestone 9)
 - Comprehensive DocC documentation for all public APIs
 - GETTING_STARTED.md guide with installation and quick start examples
-- PERFORMANCE_TUNING.md guide covering hardware acceleration and optimization
+- PERFORMANCE_TUNING.md guide covering hardware acceleration and optimisation
 - TROUBLESHOOTING.md guide with solutions for common issues
 - USAGE_EXAMPLES.md with 25+ real-world standalone examples
 - SWIFTUI_EXAMPLES.md with SwiftUI integration patterns for iOS/macOS
@@ -48,7 +48,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - Overall project test coverage measured at 95.80% on Linux x86_64 (exceeds 95% threshold)
-- Coverage varies by platform due to conditional compilation of platform-specific optimizations
+- Coverage varies by platform due to conditional compilation of platform-specific optimisations
 - README.md updated with accurate coverage measurements and platform notes
 - README.md updated with links to new documentation guides
 - MILESTONES.md updated to reflect progress on Milestone 8 and 9
@@ -107,7 +107,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Mutual exclusivity validation for `--verbose`/`--quiet` and `--json`/`--quiet`
 - ValidationError type for consistent CLI argument validation
 - Comprehensive CLI argument parsing test suite (CLIArgumentParsingTests.swift)
-  - 60 tests organized into 11 test suites
+  - 60 tests organised into 11 test suites
   - Tests for all commands (encode, decode, info, verify, batch, completion)
   - Tests for flag combinations and mutual exclusivity
   - Parameter validation tests (width, height, bits-per-sample, NEAR, etc.)
@@ -118,7 +118,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-#### Memory Optimization (Milestone 5.4)
+#### Memory Optimisation (Milestone 5.4)
 - `JPEGLSBufferPool` for reusable buffer management
   - Thread-safe buffer acquisition and release
   - Support for multiple buffer types (context arrays, pixel data, bitstream)
@@ -132,27 +132,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - 16 comprehensive tests
 - `JPEGLSCacheFriendlyBuffer` with contiguous memory layout
   - Row-major order for cache efficiency
-  - Optimized neighbor access patterns
-  - Batch row access for vectorized operations
+  - Optimised neighbour access patterns
+  - Batch row access for vectorised operations
   - 22 comprehensive tests
 
 ## [0.5.0] - Completed
 
 ### Added
 
-#### Apple Silicon Optimization (Milestone 5)
-- `ARM64Accelerator` with NEON/SIMD optimizations
-  - NEON-optimized gradient computation
-  - NEON-optimized MED prediction
-  - NEON-optimized context quantization
-  - Uses Swift SIMD4 types for vectorized operations
+#### Apple Silicon Optimisation (Milestone 5)
+- `ARM64Accelerator` with NEON/SIMD optimisations
+  - NEON-optimised gradient computation
+  - NEON-optimised MED prediction
+  - NEON-optimised context quantisation
+  - Uses Swift SIMD4 types for vectorised operations
   - Compiles to native NEON instructions on Apple Silicon
   - Bit-exact results verified by comprehensive tests
-- `X86_64Accelerator` with SSE/AVX optimizations
-  - SSE/AVX-optimized gradient computation
-  - SSE/AVX-optimized MED prediction
-  - SSE/AVX-optimized context quantization
-  - Uses Swift SIMD4 types for vectorized operations
+- `X86_64Accelerator` with SSE/AVX optimisations
+  - SSE/AVX-optimised gradient computation
+  - SSE/AVX-optimised MED prediction
+  - SSE/AVX-optimised context quantisation
+  - Uses Swift SIMD4 types for vectorised operations
   - Compiles to SSE/AVX instructions on Intel processors
   - Bit-exact results verified by comprehensive tests
 - `AccelerateFrameworkAccelerator` using Apple's vDSP library
@@ -193,7 +193,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 #### Multi-Component Decoding (Milestone 4.4)
 - Deinterleaving for all modes (None, Line, Sample)
 - Component reconstruction from interleaved data
-- Color transformation inverse operations
+- Colour transformation inverse operations
 - 92.10% test coverage for multi-component decoding
 
 ## [0.3.0] - Completed
@@ -243,7 +243,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - 100% test coverage
 - Near-lossless encoding
   - NEAR parameter handling (error tolerance 1-255)
-  - Quantized prediction error calculation
+  - Quantised prediction error calculation
   - Reconstructed value computation for decoder tracking
   - Modified threshold parameters for near-lossless
   - Error bounds compliance validation
@@ -269,7 +269,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `Sources/JPEGLS/Core/` — Core codec types and protocols
   - `Sources/JPEGLS/Encoder/` — Encoding implementation
   - `Sources/JPEGLS/Decoder/` — Decoding implementation
-  - `Sources/JPEGLS/Platform/` — Platform-specific optimizations
+  - `Sources/JPEGLS/Platform/` — Platform-specific optimisations
   - `Sources/JPEGLS/Platform/ARM64/` — Apple Silicon / ARM NEON code
   - `Sources/JPEGLS/Platform/x86_64/` — x86-64 specific code
   - `Sources/jpegls/` — CLI tool source
@@ -277,19 +277,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `JPEGLSFrameHeader` structures per ITU-T.87
 - `JPEGLSScanHeader` structures
 - `JPEGLSPresetParameters` (MAXVAL, T1, T2, T3, RESET)
-- Color transformation types (None, HP1, HP2, HP3)
+- Colour transformation types (None, HP1, HP2, HP3)
 - `JPEGLSError` type with comprehensive error codes
 - `JPEGLSBitstreamReader` and `JPEGLSBitstreamWriter` utilities
 - 96.24% test coverage for core types
 
-#### Context Modeling (Milestone 2.3)
-- Context quantization (Q1, Q2, Q3 gradient calculations)
+#### Context Modelling (Milestone 2.3)
+- Context quantisation (Q1, Q2, Q3 gradient calculations)
 - Context index computation (365 regular contexts)
 - Run-length context handling
 - Context state management (A, B, C, N arrays)
 - Context initialization with default parameters
 - Context update and adaptation logic
-- 96.88% test coverage for context modeling
+- 96.88% test coverage for context modelling
 
 ## Release Notes Format
 
@@ -301,8 +301,8 @@ See [RELEASE_NOTES_TEMPLATE.md](RELEASE_NOTES_TEMPLATE.md) for the release notes
 - **0.2.0** - JPEG-LS encoder (regular mode, run mode, near-lossless)
 - **0.3.0** - JPEG-LS decoder (parsing, regular mode, run mode)
 - **0.4.0** - Multi-component support (RGB, interleaving)
-- **0.5.0** - Platform optimization (ARM64, x86_64, Accelerate)
-- **0.6.0** - Memory optimization (buffer pooling, tile processing)
+- **0.5.0** - Platform optimisation (ARM64, x86_64, Accelerate)
+- **0.6.0** - Memory optimisation (buffer pooling, tile processing)
 - **0.7.0** - CLI tool (info, verify, encode, decode, batch, completion)
 - **0.8.0** - Validation & conformance (CharLS, benchmarks, edge cases)
 - **1.0.0** - Planned stable release

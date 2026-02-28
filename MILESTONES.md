@@ -2,13 +2,13 @@
 
 ## JPEG-LS Implementation (DICOMkit Project)
 
-Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compression for DICOM medical imaging. Optimized for Apple Silicon with hardware acceleration support.
+Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compression for DICOM medical imaging. Optimised for Apple Silicon with hardware acceleration support.
 
 ### Milestone 1: Project Setup ✅
 **Target**: Initial release foundation  
 **Status**: Complete
 
-- [x] Initialize Swift Package (Swift 6.2+)
+- [x] Initialise Swift Package (Swift 6.2+)
 - [x] Set up project structure (`Sources/`, `Tests/`)
 - [x] Create GitHub Copilot instructions (`.github/copilot-instructions.md`)
 - [x] Set up CI pipeline with GitHub Actions
@@ -27,7 +27,7 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
   - [x] `Sources/JPEGLS/Core/` — Core codec types and protocols
   - [x] `Sources/JPEGLS/Encoder/` — Encoding implementation
   - [x] `Sources/JPEGLS/Decoder/` — Decoding implementation
-  - [x] `Sources/JPEGLS/Platform/` — Platform-specific optimizations
+  - [x] `Sources/JPEGLS/Platform/` — Platform-specific optimisations
   - [x] `Sources/JPEGLS/Platform/ARM64/` — Apple Silicon / ARM NEON code
   - [x] `Sources/JPEGLS/Platform/x86_64/` — x86-64 specific code (removable)
   - [x] `Sources/jpegls/` — CLI tool source
@@ -39,19 +39,19 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 - [x] Implement frame header structures per ITU-T.87
 - [x] Implement scan header structures
 - [x] Implement preset parameters structure (MAXVAL, T1, T2, T3, RESET)
-- [x] Implement color transformation types (None, HP1, HP2, HP3)
+- [x] Implement colour transformation types (None, HP1, HP2, HP3)
 - [x] Create `JPEGLSError` type with comprehensive error codes
 - [x] Implement bitstream reader/writer utilities
 - [x] Achieve >95% test coverage for core types (96.24%)
 
-#### Phase 2.3: Context Modeling Implementation ✅
-- [x] Implement context quantization (Q1, Q2, Q3 gradient calculations)
+#### Phase 2.3: Context Modelling Implementation ✅
+- [x] Implement context quantisation (Q1, Q2, Q3 gradient calculations)
 - [x] Implement context index computation (365 regular contexts)
 - [x] Implement run-length context handling
 - [x] Implement context state management (A, B, C, N arrays)
 - [x] Implement context initialization with default parameters
 - [x] Implement context update and adaptation logic
-- [x] Achieve >95% test coverage for context modeling (96.88%)
+- [x] Achieve >95% test coverage for context modelling (96.88%)
 
 ### Milestone 3: JPEG-LS Encoder ✅
 **Target**: Complete encoding pipeline  
@@ -72,12 +72,12 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 - [x] Implement J[RUNindex] mapping table
 - [x] Implement run mode context updates
 - [x] Implement run-length limit handling
-- [x] Enable run mode in encoder pipeline (triggered by zero quantized gradients)
+- [x] Enable run mode in encoder pipeline (triggered by zero quantised gradients)
 - [x] Achieve >95% test coverage for run mode (100.00%)
 
 #### Phase 3.3: Near-Lossless Encoding ✅
 - [x] Implement NEAR parameter handling (error tolerance)
-- [x] Implement quantized prediction error calculation
+- [x] Implement quantised prediction error calculation
 - [x] Implement reconstructed value computation for decoder tracking
 - [x] Implement modified threshold parameters for near-lossless
 - [x] Validate error bounds compliance
@@ -110,7 +110,7 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 - [x] Implement prediction reconstruction
 - [x] Implement Golomb-Rice decoding
 - [x] Implement prediction error recovery with bias correction
-- [x] Implement context state reconstruction (A initialized to 2 per ITU-T.87)
+- [x] Implement context state reconstruction (A initialised to 2 per ITU-T.87)
 - [x] Implement sample value computation with clamping
 - [x] Achieve >95% test coverage for regular mode decoding (96.90%)
 
@@ -118,29 +118,29 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 - [x] Implement run-length decoding logic
 - [x] Implement run interruption sample decoding
 - [x] Implement run mode context reconstruction
-- [x] Enable run mode in decoder pipeline (triggered by zero quantized gradients)
+- [x] Enable run mode in decoder pipeline (triggered by zero quantised gradients)
 - [x] Achieve >95% test coverage for run mode decoding (100.00%)
 
 #### Phase 4.4: Multi-Component Decoding ✅
 - [x] Implement deinterleaving for all modes
 - [x] Implement component reconstruction
-- [x] Implement color transformation inverse operations
+- [x] Implement colour transformation inverse operations
 - [x] Achieve >95% test coverage for multi-component decoding (92.10%)
 
-### Milestone 5: Apple Silicon Optimization (ARM64) ✅
+### Milestone 5: Apple Silicon Optimisation (ARM64) ✅
 **Target**: Hardware-accelerated performance on Apple Silicon  
 **Status**: Complete
 
-#### Phase 5.1: ARM NEON / SIMD Optimization ✅
-- [x] Implement NEON-optimized gradient computation
-- [x] Implement NEON-optimized prediction (vectorized MED)
-- [x] Implement NEON-optimized context quantization
+#### Phase 5.1: ARM NEON / SIMD Optimisation ✅
+- [x] Implement NEON-optimised gradient computation
+- [x] Implement NEON-optimised prediction (vectorised MED)
+- [x] Implement NEON-optimised context quantisation
 - [x] Create benchmarks comparing scalar vs SIMD implementations
 - [x] Achieve >95% test coverage with SIMD parity verification
-- [x] Implement SSE/AVX-optimized versions for x86_64 compatibility
+- [x] Implement SSE/AVX-optimised versions for x86_64 compatibility
 
 **Implementation Details:**
-- Used Swift's SIMD4 types for vectorized operations
+- Used Swift's SIMD4 types for vectorised operations
 - ARM64Accelerator compiles to native NEON instructions on Apple Silicon
 - X86_64Accelerator compiles to SSE/AVX instructions on Intel processors
 - All implementations produce bit-exact results verified by comprehensive tests
@@ -167,13 +167,13 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 - Implemented performance benchmarks comparing Accelerate vs scalar implementations
 - All implementations produce bit-exact results verified by comprehensive tests
 
-**Note**: The Accelerate framework is optimized for batch operations on arrays rather than single-pixel operations. For single-pixel operations, the ARM64Accelerator with SIMD4 types remains the optimal choice. The AccelerateFrameworkAccelerator is best suited for preprocessing, statistical analysis, and batch processing scenarios.
+**Note**: The Accelerate framework is optimised for batch operations on arrays rather than single-pixel operations. For single-pixel operations, the ARM64Accelerator with SIMD4 types remains the optimal choice. The AccelerateFrameworkAccelerator is best suited for preprocessing, statistical analysis, and batch processing scenarios.
 
 #### Phase 5.3: Metal GPU Acceleration (Optional/Experimental) ✅
 - [x] Design GPU-friendly encoding pipeline
 - [x] Implement Metal compute shaders for prediction
 - [x] Implement Metal-based parallel context computation
-- [x] Implement GPU-CPU data transfer optimization
+- [x] Implement GPU-CPU data transfer optimisation
 - [x] Evaluate GPU acceleration cost/benefit for various image sizes
 - [x] Implement fallback for non-Metal environments
 - [x] Create comprehensive test suite (14 tests)
@@ -183,10 +183,10 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 **Implementation Details:**
 - Created `MetalAccelerator` class for GPU-accelerated batch operations
 - Implemented two Metal compute shaders:
-  - `compute_gradients`: Parallel gradient computation for JPEG-LS context modeling
+  - `compute_gradients`: Parallel gradient computation for JPEG-LS context modelling
   - `compute_med_prediction`: GPU-accelerated MED prediction
 - Smart workload distribution: GPU for large batches (≥1024 pixels), CPU fallback for small batches
-- Automatic GPU threshold detection to optimize for transfer overhead vs. parallelism benefits
+- Automatic GPU threshold detection to optimise for transfer overhead vs. parallelism benefits
 - Shared memory mode (`.storageModeShared`) leverages Apple Silicon unified memory
 - Dynamic thread group sizing based on GPU capabilities
 - Comprehensive error handling with `MetalAcceleratorError` enum
@@ -212,11 +212,11 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 
 **Note**: Metal implementation focuses on batch gradient and prediction operations. Full pipeline GPU acceleration (context computation, encoding) deferred to future enhancements based on performance analysis.
 
-#### Phase 5.4: Memory Optimization ✅
+#### Phase 5.4: Memory Optimisation ✅
 - [x] Implement tile-based processing for large images
 - [x] Implement buffer pooling and reuse strategies
 - [x] Implement cache-friendly data layout
-- [x] Achieve >95% test coverage for memory optimization features (100.00%)
+- [x] Achieve >95% test coverage for memory optimisation features (100.00%)
 
 **Implementation Details:**
 - Created `JPEGLSBufferPool` for reusable buffer management with thread-safe operations
@@ -235,15 +235,15 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 
 #### Phase 6.1: x86-64 Baseline Implementation ✅
 - [x] Create separate x86-64 module with clear boundaries
-- [x] Implement x86-64 specific optimizations using SSE/AVX intrinsics
+- [x] Implement x86-64 specific optimisations using SSE/AVX intrinsics
 - [x] Ensure all x86-64 code is conditionally compiled (`#if arch(x86_64)`)
 - [x] Document all x86-64 specific files and dependencies
 - [x] Create removal guide for future x86-64 deprecation
 
 **Implementation Details:**
-- Created `X86_64Accelerator` in `Sources/JPEGLS/Platform/x86_64/` with SSE/AVX-optimized implementations
+- Created `X86_64Accelerator` in `Sources/JPEGLS/Platform/x86_64/` with SSE/AVX-optimised implementations
 - All x86-64 code isolated behind `#if arch(x86_64)` conditional compilation
-- Implemented gradient computation, MED prediction, and context quantization using Swift SIMD types
+- Implemented gradient computation, MED prediction, and context quantisation using Swift SIMD types
 - All implementations produce bit-exact results verified by comprehensive tests
 - Created comprehensive `X86_64_REMOVAL_GUIDE.md` with step-by-step removal instructions
 - Documented all x86-64 files, dependencies, and integration points
@@ -305,8 +305,8 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 
 **Decoder Status:**
 - Lossless decoding fully functional for 8-bit and 16-bit images in all interleaving modes
-- Round-trip encode/decode verified for grayscale, RGB, checkerboard, flat, and gradient patterns
-- Near-lossless round-trip deferred (requires encoder to implement error quantization and reconstructed value tracking)
+- Round-trip encode/decode verified for greyscale, RGB, checkerboard, flat, and gradient patterns
+- Near-lossless round-trip deferred (requires encoder to implement error quantisation and reconstructed value tracking)
 - Fixed Golomb-Rice encoding off-by-one bug that caused pixel value drift during decoding
 
 #### Phase 7.2: CLI Utilities ✅
@@ -346,9 +346,9 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 **Implementation Details:**
 - Created comprehensive test suite `CLIArgumentParsingTests.swift` with 60 tests covering all CLI commands
 - Tests validate argument parsing, flag combinations, parameter ranges, and edge cases
-- Organized into 11 test suites: Encode, Decode, Info, Verify, Batch, Completion, ValidationError, Edge Cases, Flag Combinations, Input Validation, and Parameter Range validation
+- Organised into 11 test suites: Encode, Decode, Info, Verify, Batch, Completion, ValidationError, Edge Cases, Flag Combinations, Input Validation, and Parameter Range validation
 - All commands tested for mutual exclusivity of flags (verbose/quiet, json/quiet)
-- Parameter validation tests for width, height, bits-per-sample, NEAR, component count, interleave modes, color transforms, and shell types
+- Parameter validation tests for width, height, bits-per-sample, NEAR, component count, interleave modes, colour transforms, and shell types
 - Edge case testing for boundary values (min/max dimensions, bits per sample range 2-16, NEAR range 0-255)
 - Overall project coverage maintained at 96.08% (exceeds 95% threshold)
 - Note: CLI executable target itself is not included in coverage metrics (Swift Package Manager limitation), but all validation logic is thoroughly tested
@@ -370,7 +370,7 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 - [x] **NEW**: Implement bit-exact comparison test infrastructure (10 test cases — all passing)
 - [x] **NEW**: Extend parser to handle CharLS byte stuffing (`FF XX` where XX is not a valid marker)
 - [x] **NEW**: Fix LSE preset parameters length validation (changed from 11 to 13 bytes)
-- [x] **NEW**: Fix gradient quantization boundaries — strict `<` for positive thresholds per Table A.7 (PR #74)
+- [x] **NEW**: Fix gradient quantisation boundaries — strict `<` for positive thresholds per Table A.7 (PR #74)
 - [x] **NEW**: Fix context update order & bias correction — reset check before N increment per §A.6.2 (PR #74)
 - [x] **NEW**: Implement error correction XOR (`bit_wise_sign(2·B + N − 1)`) for k=0 lossless per §A.4.1/§A.5.2 (PR #74)
 - [x] **NEW**: Fix LIMIT computation — `2*(bpp+max(8,bpp))` per §A.2.1, corrects 12-bit+ (PR #74)
@@ -380,13 +380,13 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 - [x] **NEW**: Fix encoder RUNindex reset — `context.setRunIndex(0)` at start of each scan line in all 3 interleave modes per §4.5.1 (PR #76)
 - [x] **NEW**: Fix encoder run interruption error mapping — `2*|error| - riType - map` matching CharLS (PR #76)
 - [x] **NEW**: Fix near-lossless boundary condition — row 0, col > 0 returns `(left, 0, 0, 0)` matching decoder (PR #76)
-- [x] **NEW**: Fix non-default parameter test reference images — t8nde0.jls/t8nde3.jls use test8bs2.pgm (128×128 grayscale, blue component sub-sampled 2×)
+- [x] **NEW**: Fix non-default parameter test reference images — t8nde0.jls/t8nde3.jls use test8bs2.pgm (128×128 greyscale, blue component sub-sampled 2×)
 - [ ] Complete CharLS bit-exact validation (in progress — encoder scan data diverges from CharLS at byte 551 for 12-bit test image; remaining issue in regular-mode or context-update logic)
 - [x] Document CharLS compatibility in parser code comments
 
 **Implementation Details:**
 - Downloaded CharLS test fixtures from `team-charls/charls/test/conformance`
-- 12 reference JPEG-LS files covering: 8-bit/16-bit, grayscale/color, lossless/near-lossless, various interleaving modes
+- 12 reference JPEG-LS files covering: 8-bit/16-bit, greyscale/colour, lossless/near-lossless, various interleaving modes
 - 7 reference images (PGM/PPM format) for encoder validation
 - TestFixtureLoader utility for loading and parsing reference images
 - CharLSConformanceTests suite validates file structure and markers - all tests pass
@@ -401,7 +401,7 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
   - Supports lossless (exact match) and near-lossless (error ≤ NEAR) validation
   - Non-default parameter tests (t8nde0.jls, t8nde3.jls) validated against test8bs2.pgm (128×128 blue component sub-sampled 2×)
 - **ITU-T.87 Conformance Fixes** (PRs #74, #75, #76):
-  - Gradient quantization: strict `<` on positive thresholds, `<=` on negative thresholds per Table A.7
+  - Gradient quantisation: strict `<` on positive thresholds, `<=` on negative thresholds per Table A.7
   - Context update: reset check before N increment; bias correction conditions `B+N≤0` / `B>0`; B clamped to `[-N+1, 0]`
   - Error correction: `bit_wise_sign(2·B + N − 1)` XOR applied when k=0 and NEAR=0
   - LIMIT: `2*(bpp+max(8,bpp))` — identical for ≤8-bit, fixes 12-bit+ (e.g., LIMIT=48 instead of 40)
@@ -423,7 +423,7 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 - [x] Generate benchmark reports for various:
   - [x] Image sizes (256x256, 512x512, 1024x1024, 2048x2048, 4096x4096)
   - [x] Bit depths (8-bit, 12-bit, 16-bit)
-  - [x] Component counts (grayscale, RGB)
+  - [x] Component counts (greyscale, RGB)
   - [x] Near-lossless parameters (NEAR=3, NEAR=10)
   - [ ] Hardware configurations (M1, M2, M3, Intel) - baseline on x86_64 Linux established
 
@@ -440,9 +440,9 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 
 **CharLS Comparison Benchmarks (deferred):**
 - Created `JPEGLSCharLSComparisonBenchmarks` test suite with 9 disabled tests
-- Encoding speed comparison: grayscale, RGB, near-lossless (NEAR=3)
-- Decoding speed comparison: grayscale, RGB, near-lossless (NEAR=3)
-- Memory usage comparison: encoding and decoding for grayscale and RGB
+- Encoding speed comparison: greyscale, RGB, near-lossless (NEAR=3)
+- Decoding speed comparison: greyscale, RGB, near-lossless (NEAR=3)
+- Memory usage comparison: encoding and decoding for greyscale and RGB
 - All tests disabled with `.disabled("Deferred — requires CharLS C library integration")`
 - JLSwift measurement helpers ready; CharLS wrappers to be added when C library is integrated
 
@@ -450,20 +450,20 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 - Created `JPEGLSPerformanceRegressionTests` test suite with 11 active tests
 - Baseline metrics established from x86_64 Linux CI environment
 - Automated threshold detection with 10x regression multiplier (catches catastrophic regressions while avoiding CI flakiness)
-- Encoding regression tests: 256x256/512x512 grayscale 8-bit, 512x512 16-bit, 512x512 RGB
-- Decoding regression tests: 256x256/512x512 grayscale, 512x512 RGB
-- Round-trip regression test: 256x256 grayscale encode+decode
+- Encoding regression tests: 256x256/512x512 greyscale 8-bit, 512x512 16-bit, 512x512 RGB
+- Decoding regression tests: 256x256/512x512 greyscale, 512x512 RGB
+- Round-trip regression test: 256x256 greyscale encode+decode
 - Throughput regression test: minimum Mpixels/s baseline
 - Compression ratio regression test: minimum compression ratio for medical-like content
 - Linear scaling regression test: verifies O(n) scaling by comparing 256x256 vs 512x512
 
 **Preliminary Performance Results (x86_64 Linux):**
-- 256x256 8-bit grayscale: ~2.69 Mpixels/s (2.56 MB/s)
-- 512x512 8-bit grayscale: ~2.69 Mpixels/s (2.56 MB/s)
-- 1024x1024 8-bit grayscale: ~2.66 Mpixels/s (2.54 MB/s)
-- 2048x2048 8-bit grayscale: ~4.18 Mpixels/s (3.99 MB/s)
-- 4096x4096 8-bit grayscale: ~3.76 Mpixels/s (3.58 MB/s)
-- 512x512 16-bit grayscale: ~3.31 Mpixels/s (6.31 MB/s)
+- 256x256 8-bit greyscale: ~2.69 Mpixels/s (2.56 MB/s)
+- 512x512 8-bit greyscale: ~2.69 Mpixels/s (2.56 MB/s)
+- 1024x1024 8-bit greyscale: ~2.66 Mpixels/s (2.54 MB/s)
+- 2048x2048 8-bit greyscale: ~4.18 Mpixels/s (3.99 MB/s)
+- 4096x4096 8-bit greyscale: ~3.76 Mpixels/s (3.58 MB/s)
+- 512x512 16-bit greyscale: ~3.31 Mpixels/s (6.31 MB/s)
 - 512x512 RGB sample-interleaved: ~1.80 Mpixels/s (1.71 MB/s)
 
 **Note**: Head-to-head CharLS comparison deferred to post-release as it requires CharLS C library integration. Performance regression detection is active with generous thresholds suitable for CI environments. Precise regression detection (e.g., 1.2x threshold) requires dedicated benchmark hardware.
@@ -480,13 +480,13 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 - Validated DICOM JPEG-LS transfer syntax UIDs: lossless (1.2.840.10008.1.2.4.80) and near-lossless (1.2.840.10008.1.2.4.81)
 - Transfer syntax validation: lossless requires NEAR=0, near-lossless allows NEAR 1-255
 - Modality-specific tests:
-  - **CT**: 16-bit grayscale, 12-bit stored in 16-bit, near-lossless with NEAR=3
-  - **MR**: 16-bit grayscale, multi-echo sequences with signal decay simulation
-  - **CR/DX**: 10-14 bit grayscale, large detector support (4Kx4K)
-  - **US**: 8-bit grayscale, color Doppler RGB
+  - **CT**: 16-bit greyscale, 12-bit stored in 16-bit, near-lossless with NEAR=3
+  - **MR**: 16-bit greyscale, multi-echo sequences with signal decay simulation
+  - **CR/DX**: 10-14 bit greyscale, large detector support (4Kx4K)
+  - **US**: 8-bit greyscale, colour Doppler RGB
 - Multi-frame DICOM tests: CT series (100 frames), Cine MR cardiac imaging (20 phases)
 - DICOM parameter mapping tests:
-  - Photometric interpretation: MONOCHROME2 (grayscale), RGB (color)
+  - Photometric interpretation: MONOCHROME2 (greyscale), RGB (colour)
   - Planar configuration: sample-interleaved vs component-interleaved
   - Bits allocated vs bits stored (12-bit in 16-bit, 10-bit in 16-bit)
   - Pixel representation: unsigned vs signed (two's complement)
@@ -499,7 +499,7 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 - [x] Test with malformed input handling
 - [x] Test boundary conditions (MAXVAL limits, extreme dimensions)
 - [x] Test memory pressure scenarios
-- [ ] Implement fuzz testing for decoder robustness (deferred - requires specialized infrastructure)
+- [ ] Implement fuzz testing for decoder robustness (deferred - requires specialised infrastructure)
 - [x] Achieve >95% overall test coverage (95.80% on Linux x86_64)
 
 **Implementation Details:**
@@ -508,7 +508,7 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 - Validates handling of boundary values: MAXVAL (2-65535), NEAR (0-255), dimensions (1x1 to 65535x65535)
 - Tests invalid parameter combinations and error handling
 - All 664 tests passing with 95.80% coverage on Linux x86_64 (exceeds 95% threshold)
-- **Note**: Fuzz testing for decoder robustness deferred to post-release as it requires specialized infrastructure
+- **Note**: Fuzz testing for decoder robustness deferred to post-release as it requires specialised infrastructure
 - **Note**: Coverage may vary by platform due to conditional compilation (e.g., ARM64, Accelerate framework code)
 
 ### Milestone 9: Documentation & Release ⏳
@@ -525,7 +525,7 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 **Implementation Details:**
 - Added comprehensive documentation comments to all public APIs (properties, methods, and types)
 - Created `GETTING_STARTED.md` with installation, quick start examples, core concepts, and common patterns
-- Created `PERFORMANCE_TUNING.md` covering hardware acceleration, memory optimization, profiling, and best practices
+- Created `PERFORMANCE_TUNING.md` covering hardware acceleration, memory optimisation, profiling, and best practices
 - Created `TROUBLESHOOTING.md` with solutions for common issues across installation, compilation, runtime, performance, and platform-specific problems
 - Updated README.md with links to new documentation guides
 - All 664 tests passing, build successful with no errors
@@ -540,7 +540,7 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 - Created comprehensive `DICOMKIT_INTEGRATION.md` with DICOMkit integration patterns
   - DICOM transfer syntax mapping (1.2.840.10008.1.2.4.80 lossless, 1.2.840.10008.1.2.4.81 near-lossless)
   - Basic integration: encoding/decoding DICOM pixel data, transfer syntax selection
-  - Advanced integration: multi-frame images, color images, near-lossless, custom presets
+  - Advanced integration: multi-frame images, colour images, near-lossless, custom presets
   - Modality-specific examples: CT, MR, CR/DX, US (with signed pixel handling)
   - DICOM codec provider pattern for DICOMkit registration
   - Transcoding pipeline for transfer syntax conversion
@@ -548,10 +548,10 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
   - Error handling with DICOM-specific context
   - Testing examples for DICOM JPEG-LS integration validation
 - Created comprehensive `USAGE_EXAMPLES.md` with real-world standalone usage examples
-- Includes 25+ complete working examples organized into categories:
-  - Basic examples: grayscale/RGB encoding, near-lossless compression, decoding
+- Includes 25+ complete working examples organised into categories:
+  - Basic examples: greyscale/RGB encoding, near-lossless compression, decoding
   - Advanced examples: medical imaging workflow, batch processing, large image tiling, custom presets, interleaving modes
-  - Performance optimization: buffer pooling, cache-friendly buffers, platform acceleration, memory-efficient streaming
+  - Performance optimisation: buffer pooling, cache-friendly buffers, platform acceleration, memory-efficient streaming
   - Error handling: robust file processing, validation and error recovery
   - CLI examples: file analysis, batch verification, scripting and automation
 - All examples are self-contained and can be run independently
@@ -564,7 +564,7 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
   - Medical image viewer with zoom/pan/window-level controls
   - RGB component viewer for multi-component images
   - Image inspector with comprehensive metadata display
-  - Performance optimization: caching, background decoding, tile-based loading
+  - Performance optimisation: caching, background decoding, tile-based loading
   - Platform-specific considerations for iOS, iPadOS, and macOS
 - Created comprehensive `APPKIT_EXAMPLES.md` with AppKit integration patterns for macOS
   - NSImage/NSImageView integration
@@ -575,13 +575,13 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
   - Window/level adjustment for medical imaging
   - Measurement and annotation tools
   - Quick Look preview support
-  - Performance optimization: background loading, thumbnail generation, memory management
+  - Performance optimisation: background loading, thumbnail generation, memory management
 - Created comprehensive `SERVER_SIDE_EXAMPLES.md` with server-side Swift integration patterns
   - Vapor framework examples: REST API, medical imaging upload service, streaming encoder, batch processing
   - Hummingbird framework examples: lightweight API service, file upload handlers
   - Swift NIO examples: custom protocol handlers, non-blocking file processing
   - Deployment guides: Docker containers, Kubernetes manifests, systemd services
-  - Performance optimization: connection pooling, worker thread management, memory-efficient streaming
+  - Performance optimisation: connection pooling, worker thread management, memory-efficient streaming
   - Middleware integration: authentication, rate limiting, response caching
   - Complete production-ready examples with error handling, logging, and monitoring
 - Updated README.md documentation table with links to new guides
@@ -608,7 +608,7 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 - Created `CHANGELOG.md` following Keep a Changelog format
   - Complete history from v0.1.0 to current (v0.8.0 in progress)
   - Detailed descriptions of all features, changes, and fixes
-  - Organized by milestone with Added/Changed/Fixed/Deprecated sections
+  - Organised by milestone with Added/Changed/Fixed/Deprecated sections
   - Test coverage metrics for each release
   - References to Semantic Versioning 2.0.0
 - Created `RELEASE_NOTES_TEMPLATE.md` for GitHub releases
@@ -749,10 +749,10 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 **Status**: In Progress (prerequisite conformance fixes completed in PRs #74, #75, #76)
 
 #### Phase 12.1: CharLS Decode Interoperability (CharLS-encoded → JLSwift-decoded) ⏳
-- [x] Fix decoder pixel drift root causes — gradient quantization, context update, error correction, LIMIT, default thresholds, run interruption coding (PRs #74, #75)
-- [x] Enable and pass all CharLS bit-exact comparison tests for non-sub-sampled reference files (10 test cases: 8-bit color modes 0/1/2 lossless+near, 12-bit grayscale lossless+near, non-default params lossless+near)
-- [x] Fix non-default parameter test reference images (t8nde0.jls/t8nde3.jls → test8bs2.pgm, 128×128 grayscale)
-- [x] Test decoding of CharLS-encoded 8-bit and 16-bit grayscale images (bit-exact verified)
+- [x] Fix decoder pixel drift root causes — gradient quantisation, context update, error correction, LIMIT, default thresholds, run interruption coding (PRs #74, #75)
+- [x] Enable and pass all CharLS bit-exact comparison tests for non-sub-sampled reference files (10 test cases: 8-bit colour modes 0/1/2 lossless+near, 12-bit greyscale lossless+near, non-default params lossless+near)
+- [x] Fix non-default parameter test reference images (t8nde0.jls/t8nde3.jls → test8bs2.pgm, 128×128 greyscale)
+- [x] Test decoding of CharLS-encoded 8-bit and 16-bit greyscale images (bit-exact verified)
 - [x] Test decoding of CharLS-encoded RGB images with all interleaving modes (bit-exact verified for modes 0/1/2)
 - [x] Test decoding of CharLS-encoded near-lossless images (error ≤ NEAR verified)
 - [x] Test decoding of CharLS-encoded images with non-default preset parameters (T1=T2=T3=9, RESET=31)
@@ -770,11 +770,11 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 - [x] Fix run-interruption adjustedLimit encoder/decoder mismatch: encoder now uses J[finalRunIndex] (post-continuation) for the Golomb limit, matching the decoder and CharLS
 - [x] Fix near-lossless encoder for line-interleaved and sample-interleaved modes: track reconstructed values and use them for gradient computation, run detection, and Rb in interruption pixels
 - [x] Create test infrastructure to invoke CharLS decoder on JLSwift-encoded output
-- [x] Validate that CharLS can decode all JLSwift-encoded lossless output (bit-exact) — 8-bit RGB (all 3 interleave modes), 12-bit grayscale, 16-bit grayscale
-- [x] Validate that CharLS can decode JLSwift-encoded near-lossless output (error ≤ NEAR) — 8-bit RGB near=3 (all 3 interleave modes), 12-bit grayscale near=3
+- [x] Validate that CharLS can decode all JLSwift-encoded lossless output (bit-exact) — 8-bit RGB (all 3 interleave modes), 12-bit greyscale, 16-bit greyscale
+- [x] Validate that CharLS can decode JLSwift-encoded near-lossless output (error ≤ NEAR) — 8-bit RGB near=3 (all 3 interleave modes), 12-bit greyscale near=3
 - [x] Test all interleaving modes (none, line, sample) for both lossless and near-lossless
 - [x] Test 8-bit, 12-bit, and 16-bit depths
-- [x] Test grayscale and RGB component configurations
+- [x] Test greyscale and RGB component configurations
 
 #### Phase 12.3: Round-Trip Interoperability Validation ⏳
 - [ ] Implement automated round-trip tests: JLSwift encode → CharLS decode → compare
@@ -786,10 +786,10 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 
 **Implementation Details (Phase 12.3 — JLSwift internal round-trip):**
 - Created `JPEGLSRoundTripInteroperabilityTests.swift` with **33 test cases** across 4 test suites — all passing
-- **Grayscale Lossless** (10 cases): gradient and noise patterns at 8/12/16-bit, 32×32 and 64×64
-- **RGB Lossless** (9 cases): all interleave modes (none, line, sample), color transforms (HP1, HP2, HP3), 8-bit and 12-bit
+- **Greyscale Lossless** (10 cases): gradient and noise patterns at 8/12/16-bit, 32×32 and 64×64
+- **RGB Lossless** (9 cases): all interleave modes (none, line, sample), colour transforms (HP1, HP2, HP3), 8-bit and 12-bit
 - **Medical Imaging Patterns** (5 tests): CT 12-bit with organ boundaries, MR 12-bit soft-tissue, CR/DX 16-bit radiograph, US 8-bit speckle, NM 8-bit hot spots
-- **Edge Cases** (13 tests): 1×1 (grayscale/16-bit/RGB), 2×2, single-row, single-column, narrow-tall, wide-short, checkerboard, mixed flat+gradient, 12-bit boundary values, 16-bit boundary values, near-lossless 1×1
+- **Edge Cases** (13 tests): 1×1 (greyscale/16-bit/RGB), 2×2, single-row, single-column, narrow-tall, wide-short, checkerboard, mixed flat+gradient, 12-bit boundary values, 16-bit boundary values, near-lossless 1×1
 - **Fixed**: Near-lossless encoder round-trip now works for large images in all interleave modes — the run-interruption adjustedLimit mismatch and missing reconstructed-value tracking in line-/sample-interleaved modes have been corrected
 
 ### Milestone 13: Apple Silicon Optimisation (ARM Neon & Accelerate) 📋
@@ -917,7 +917,7 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 - [ ] Optimise run-length detection and encoding (fast zero-comparison scanning)
 - [ ] Optimise bitstream reading and writing (minimise bit shifts, batch operations)
 - [ ] Optimise byte stuffing insertion and detection
-- [ ] Implement fast-path optimisations for common cases (8-bit lossless grayscale)
+- [ ] Implement fast-path optimisations for common cases (8-bit lossless greyscale)
 - [ ] Evaluate and implement table-driven approaches where beneficial
 - [ ] Benchmark each optimisation — only retain measurable improvements
 
@@ -932,8 +932,8 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 #### Phase 16.4: CharLS Head-to-Head Benchmarking
 - [ ] Integrate CharLS C library as a Swift Package Manager test dependency
 - [ ] Enable and complete all CharLS comparison benchmark tests
-- [ ] Benchmark encoding speed: JLSwift vs CharLS (grayscale, RGB, near-lossless, all bit depths)
-- [ ] Benchmark decoding speed: JLSwift vs CharLS (grayscale, RGB, near-lossless, all bit depths)
+- [ ] Benchmark encoding speed: JLSwift vs CharLS (greyscale, RGB, near-lossless, all bit depths)
+- [ ] Benchmark decoding speed: JLSwift vs CharLS (greyscale, RGB, near-lossless, all bit depths)
 - [ ] Benchmark memory usage: JLSwift vs CharLS (encoding and decoding)
 - [ ] Benchmark compression ratio: JLSwift vs CharLS (should be identical for lossless)
 - [ ] Establish performance targets: match or exceed CharLS in all categories
@@ -1042,16 +1042,16 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 - Zsh: added `compare` to command list; updated all per-command `_arguments` specs with new flags and `pgm`/`ppm` in decode format
 - Fish: added `compare` subcommand and all its options; updated encode/decode/info/verify/batch with new flags
 
-### Milestone 18: Localisation & British English Consistency ⏳
+### Milestone 18: Localisation & British English Consistency ✅
 **Target**: Consistent British English throughout all comments, help text, and documentation  
-**Status**: In Progress
+**Status**: Complete
 
 #### Phase 18.1: Source Code Comments ✅
 - [x] Audit all source code comments for American English spellings
 - [x] Convert all comments to British English (e.g., colour, optimise, initialise, centre, behaviour, licence, analyse, serialise, modelling, grey)
 - [x] Ensure documentation comments (`///`) use British English consistently
 - [x] Verify TODO/FIXME/NOTE comments use British English
-- [ ] Create a project spelling reference list for contributors
+- [x] Create a project spelling reference list for contributors (see Contributing section of README.md)
 
 **Implementation Details (Phase 18.1):**
 - Converted all `///` and `//` comments in `Sources/` and `Tests/` from American to British spelling:
@@ -1070,23 +1070,31 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 - [x] Convert all CLI help text to British English
 - [x] Convert all error messages to British English
 - [x] Convert all verbose/debug output to British English
-- [ ] Ensure man page uses British English throughout
-- [ ] Verify shell completion descriptions use British English
+- [x] Ensure man page uses British English throughout
+- [x] Verify shell completion descriptions use British English
 
 **Implementation Details (Phase 18.2):**
 - `EncodeCommand.swift`: inline comment "Parse colour transformation", verbose output "Colour transformation:", error message "Invalid colour transformation"
-- `DecodeCommand.swift`: inline comment "Write PGM (grayscale) or PPM (colour) file"
+- `DecodeCommand.swift`: inline comment "Write PGM (greyscale) or PPM (colour) file"
 - `JPEGLSMultiComponentDecoder.swift`: error message "Colour transformation … is invalid for … components"
 - `PNMSupport.swift`: doc comment "Number of colour components"
 
-#### Phase 18.3: Documentation
-- [ ] Convert README.md to British English
-- [ ] Convert MILESTONES.md to British English
-- [ ] Convert all guide documents (GETTING_STARTED, USAGE_EXAMPLES, PERFORMANCE_TUNING, TROUBLESHOOTING, etc.) to British English
-- [ ] Convert CHANGELOG.md to British English
-- [ ] Convert VERSIONING.md and RELEASE_NOTES_TEMPLATE.md to British English
-- [ ] Ensure all code examples in documentation use British English comments
-- [ ] Add a note to the contributing guidelines requiring British English
+#### Phase 18.3: Documentation ✅
+- [x] Convert README.md to British English
+- [x] Convert MILESTONES.md to British English
+- [x] Convert all guide documents (GETTING_STARTED, USAGE_EXAMPLES, PERFORMANCE_TUNING, TROUBLESHOOTING, etc.) to British English
+- [x] Convert CHANGELOG.md to British English
+- [x] Convert VERSIONING.md and RELEASE_NOTES_TEMPLATE.md to British English
+- [x] Ensure all code examples in documentation use British English comments
+- [x] Add a note to the contributing guidelines requiring British English
+
+**Implementation Details (Phase 18.3):**
+- Applied British English conversion to all documentation files: README.md, MILESTONES.md, CHANGELOG.md, VERSIONING.md, RELEASE_NOTES_TEMPLATE.md, GETTING_STARTED.md, USAGE_EXAMPLES.md, PERFORMANCE_TUNING.md, TROUBLESHOOTING.md, DICOMKIT_INTEGRATION.md, APPKIT_EXAMPLES.md, SERVER_SIDE_EXAMPLES.md, SWIFTUI_EXAMPLES.md, METAL_GPU_ACCELERATION.md, X86_64_REMOVAL_GUIDE.md, DECODER_IMPLEMENTATION_SPEC.md, DECODER_BUG_INVESTIGATION.md
+- Key conversions: `optimize/optimization` → `optimise/optimisation`, `color` → `colour`, `modeling` → `modelling`, `behavior` → `behaviour`, `grayscale` → `greyscale`, `quantize/quantization` → `quantise/quantisation`, `vectorize` → `vectorise`, `neighbor` → `neighbour`, and all other `-ize`/`-isation` words
+- Code blocks (fenced ``` and inline \`) preserved unchanged — CLI option names (`--optimize`, `--color-transform`), API names (`JPEGLSColorTransformation`), and code examples remain unaffected
+- Updated man page (`jpegls.1`) to use British English: `optimized` → `optimised`, `optimizations` → `optimisations`
+- Shell completion descriptions in `CompletionCommand.swift` verified — already use British English consistently
+- Added British English requirement to Contributing section of README.md
 
 ### Milestone 19: Documentation Revision & J2KSwift Consistency 📋
 **Target**: Comprehensive, consistent documentation with examples, sample code, and J2KSwift alignment  
@@ -1187,7 +1195,7 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 | **15** | GPU Compute | Metal pipeline enhancement, Vulkan compute support (Linux/Windows), GPU testing 📋 |
 | **16** | Performance Optimisation | Hotspot analysis, algorithmic optimisation, CharLS head-to-head benchmarking 📋 |
 | **17** | CLI Enhancement | Missing functionality ⏳, British & American spelling support ✅, help & usage docs ⏳ |
-| **18** | Localisation | British English in comments ✅, help text ✅, error messages ✅, documentation ⏳ |
+| **18** | Localisation | British English in comments ✅, help text ✅, error messages ✅, documentation ✅ |
 | **19** | Documentation & J2KSwift | Documentation revision, sample code, J2KSwift consistency alignment 📋 |
 | **20** | Final Integration & Release | DICOM independence, full test suite, performance validation, v1.0 release 📋 |
 

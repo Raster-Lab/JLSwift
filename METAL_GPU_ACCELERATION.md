@@ -98,7 +98,7 @@ do {
 ### GPU Advantages
 
 - **Massive Parallelism**: Process thousands of pixels simultaneously
-- **Vectorized Operations**: SIMD operations on pixel data
+- **Vectorised Operations**: SIMD operations on pixel data
 - **Memory Bandwidth**: High-bandwidth GPU memory for large datasets
 
 ### GPU Overhead
@@ -247,8 +247,8 @@ Potential improvements for future versions:
 1. **Persistent Command Buffers**: Reuse command buffers for repeated operations
 2. **Async Execution**: Non-blocking GPU operations with completion handlers
 3. **Multi-GPU Support**: Distribute work across multiple GPUs
-4. **Metal Performance Shaders**: Leverage MPS for additional optimizations
-5. **Context Quantization**: GPU-accelerated context computation
+4. **Metal Performance Shaders**: Leverage MPS for additional optimisations
+5. **Context Quantisation**: GPU-accelerated context computation
 6. **Full Pipeline**: End-to-end encoding on GPU
 
 ## Troubleshooting

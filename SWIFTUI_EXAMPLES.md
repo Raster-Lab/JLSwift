@@ -14,7 +14,7 @@ This guide demonstrates how to integrate JLSwift JPEG-LS compression into SwiftU
   - [Medical Image Viewer](#medical-image-viewer)
   - [Multi-Component RGB Display](#multi-component-rgb-display)
   - [Image Inspector with Metadata](#image-inspector-with-metadata)
-- [Performance Optimization](#performance-optimization)
+- [Performance Optimisation](#performance-optimisation)
   - [Caching Decoded Images](#caching-decoded-images)
   - [Background Decoding](#background-decoding)
   - [Memory-Efficient Tile Loading](#memory-efficient-tile-loading)
@@ -455,7 +455,7 @@ struct JPEGLSGalleryThumbnail: View {
 
 ### Medical Image Viewer
 
-A specialized viewer for medical imaging with windowing controls:
+A specialised viewer for medical imaging with windowing controls:
 
 ```swift
 import SwiftUI
@@ -981,7 +981,7 @@ extension JPEGLSColorTransformation: CustomStringConvertible {
 }
 ```
 
-## Performance Optimization
+## Performance Optimisation
 
 ### Caching Decoded Images
 
@@ -1297,7 +1297,7 @@ struct JPEGLSDropView: View {
 
 - Explore [APPKIT_EXAMPLES.md](APPKIT_EXAMPLES.md) for AppKit-specific integration patterns
 - See [USAGE_EXAMPLES.md](USAGE_EXAMPLES.md) for general library usage
-- Refer to [PERFORMANCE_TUNING.md](PERFORMANCE_TUNING.md) for optimization strategies
+- Refer to [PERFORMANCE_TUNING.md](PERFORMANCE_TUNING.md) for optimisation strategies
 - Check [TROUBLESHOOTING.md](TROUBLESHOOTING.md) for common issues
 
 ## Notes

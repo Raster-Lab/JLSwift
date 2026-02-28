@@ -44,8 +44,8 @@ The JPEG-LS decoder had a critical Golomb-Rice encoding off-by-one bug that caus
 
 ### Near-Lossless Round-Trip
 **Status**: ⚠️ NOT YET IMPLEMENTED
-**Cause**: The encoder's `JPEGLSRegularMode.encodePixel` does not quantize prediction errors by `(2*NEAR+1)` or track reconstructed pixel values. Near-lossless encoding requires:
-1. Error quantization: `Errval = Errval / (2*NEAR + 1)`
+**Cause**: The encoder's `JPEGLSRegularMode.encodePixel` does not quantise prediction errors by `(2*NEAR+1)` or track reconstructed pixel values. Near-lossless encoding requires:
+1. Error quantisation: `Errval = Errval / (2*NEAR + 1)`
 2. Reconstructed value tracking: `Rx = Px' + Errval_quantized * (2*NEAR + 1)`
 3. Using reconstructed values (not original) for subsequent predictions
 

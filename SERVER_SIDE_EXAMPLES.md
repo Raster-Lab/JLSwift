@@ -21,7 +21,7 @@ This guide demonstrates how to integrate JLSwift JPEG-LS compression into server
   - [Docker Container](#docker-container)
   - [Kubernetes Deployment](#kubernetes-deployment)
   - [Systemd Service](#systemd-service)
-- [Performance Optimization](#performance-optimization)
+- [Performance Optimisation](#performance-optimisation)
   - [Connection Pooling](#connection-pooling)
   - [Worker Thread Management](#worker-thread-management)
   - [Memory-Efficient Streaming](#memory-efficient-streaming)
@@ -255,7 +255,7 @@ func convertRawDataToPixels(
 
 ### Medical Imaging Upload Service
 
-Create a specialized service for handling medical imaging uploads with validation:
+Create a specialised service for handling medical imaging uploads with validation:
 
 ```swift
 import Vapor
@@ -412,7 +412,7 @@ func validateMedicalImageParameters(_ metadata: MedicalImageMetadata) throws {
 
 ### Streaming Large File Encoder
 
-Process large files with streaming to minimize memory usage:
+Process large files with streaming to minimise memory usage:
 
 ```swift
 import Vapor
@@ -1178,7 +1178,7 @@ sudo systemctl status jpegls-service
 sudo journalctl -u jpegls-service -f
 ```
 
-## Performance Optimization
+## Performance Optimisation
 
 ### Connection Pooling
 
@@ -1234,7 +1234,7 @@ struct ConnectionPoolKey: StorageKey {
 
 ### Worker Thread Management
 
-Optimize CPU-bound operations with dedicated worker threads:
+Optimise CPU-bound operations with dedicated worker threads:
 
 ```swift
 import Vapor
@@ -1668,7 +1668,7 @@ func configureMonitoring(_ app: Application) {
 This guide provides comprehensive examples for integrating JLSwift into server-side Swift applications. Key takeaways:
 
 1. **Use appropriate frameworks**: Vapor for full-featured apps, Hummingbird for lightweight services, NIO for custom protocols
-2. **Optimize for performance**: Buffer pooling, tile-based processing, worker threads
+2. **Optimise for performance**: Buffer pooling, tile-based processing, worker threads
 3. **Handle errors gracefully**: Comprehensive error handling and validation
 4. **Secure your API**: Authentication, rate limiting, input validation
 5. **Monitor and log**: Health checks, structured logging, metrics
@@ -1676,6 +1676,6 @@ This guide provides comprehensive examples for integrating JLSwift into server-s
 
 For more information:
 - [USAGE_EXAMPLES.md](USAGE_EXAMPLES.md) - General usage patterns
-- [PERFORMANCE_TUNING.md](PERFORMANCE_TUNING.md) - Performance optimization guide
+- [PERFORMANCE_TUNING.md](PERFORMANCE_TUNING.md) - Performance optimisation guide
 - [TROUBLESHOOTING.md](TROUBLESHOOTING.md) - Common issues and solutions
 - [README.md](README.md) - Project overview and API reference

@@ -25,7 +25,7 @@ Increment the MAJOR version when making **incompatible API changes**:
 - Changing public protocol requirements
 - Removing or renaming public properties
 - Breaking changes to encoding/decoding formats
-- Changing behavior that breaks existing client code
+- Changing behaviour that breaks existing client code
 
 **Example**: `1.0.0` → `2.0.0`
 
@@ -37,7 +37,7 @@ Increment the MINOR version when adding **backward-compatible functionality**:
 - Adding optional protocol methods with default implementations
 - Deprecating APIs (without removal)
 - Internal improvements that don't affect public API
-- Performance optimizations
+- Performance optimisations
 - New platform support (e.g., watchOS, tvOS)
 
 **Example**: `1.0.0` → `1.1.0`
@@ -162,12 +162,12 @@ When deprecating platform support:
 
 Current development phase leading to 1.0.0:
 
-- **0.1.0**: Foundation (project setup, core types, context modeling)
+- **0.1.0**: Foundation (project setup, core types, context modelling)
 - **0.2.0**: Basic encoder (regular mode, run mode)
 - **0.3.0**: Basic decoder (parsing, regular mode, run mode)
 - **0.4.0**: Multi-component support (RGB, interleaving)
-- **0.5.0**: Platform optimization (ARM64, x86_64, Accelerate)
-- **0.6.0**: Memory optimization (buffer pooling, tile processing)
+- **0.5.0**: Platform optimisation (ARM64, x86_64, Accelerate)
+- **0.6.0**: Memory optimisation (buffer pooling, tile processing)
 - **0.7.0**: CLI tool (encode, decode, info, verify, batch)
 - **0.8.0**: Validation & conformance (CharLS compatibility, benchmarks)
 - **0.9.0-beta**: Beta testing with real-world usage

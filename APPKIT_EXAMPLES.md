@@ -22,7 +22,7 @@ This guide demonstrates how to integrate JLSwift JPEG-LS compression into AppKit
   - [DICOM-Style Viewer](#dicom-style-viewer)
   - [Window/Level Adjustment](#windowlevel-adjustment)
   - [Measurement Tools](#measurement-tools)
-- [Performance Optimization](#performance-optimization)
+- [Performance Optimisation](#performance-optimisation)
   - [Background Loading](#background-loading)
   - [Thumbnail Generation](#thumbnail-generation)
   - [Memory Management](#memory-management)
@@ -1140,7 +1140,7 @@ class MeasurementOverlay: NSView {
 }
 ```
 
-## Performance Optimization
+## Performance Optimisation
 
 ### Background Loading
 
@@ -1294,7 +1294,7 @@ class ManagedImageLoader {
 
 - Explore [SWIFTUI_EXAMPLES.md](SWIFTUI_EXAMPLES.md) for SwiftUI integration patterns
 - See [USAGE_EXAMPLES.md](USAGE_EXAMPLES.md) for general library usage
-- Refer to [PERFORMANCE_TUNING.md](PERFORMANCE_TUNING.md) for optimization strategies
+- Refer to [PERFORMANCE_TUNING.md](PERFORMANCE_TUNING.md) for optimisation strategies
 - Check [TROUBLESHOOTING.md](TROUBLESHOOTING.md) for common issues
 
 ## Notes
