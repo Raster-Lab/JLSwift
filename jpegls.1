@@ -15,10 +15,10 @@ JLSwift provides a native Swift implementation optimized for Apple Silicon with 
 .SH COMMANDS
 .TP
 .B encode
-Encode raw pixel data to JPEG-LS format.
+Encode raw pixel data, PGM, or PPM input to JPEG-LS format.
 .TP
 .B decode
-Decode JPEG-LS file to raw pixel data.
+Decode JPEG-LS file to raw pixel data, PGM, or PPM output.
 .TP
 .B info
 Display information about a JPEG-LS file.
@@ -29,6 +29,9 @@ Verify JPEG-LS file integrity and validate structure.
 .B batch
 Process multiple JPEG-LS files in batch with parallel processing.
 .TP
+.B compare
+Compare two image files pixel-by-pixel (JPEG-LS or PGM/PPM).
+.TP
 .B completion
 Generate shell completion scripts for bash, zsh, or fish.
 .SH ENCODE COMMAND
@@ -36,20 +39,24 @@ Generate shell completion scripts for bash, zsh, or fish.
 [\fIoptions\fR]
 .I input-file output-file
 .PP
-Encode raw pixel data to JPEG-LS format. Requires image dimensions and parameters.
+Encode an image to JPEG-LS format.
+Input may be raw pixel data, PGM (P5), or PPM (P6); the format is auto-detected from the
+file extension or magic bytes.
+For raw input, \fB\-\-width\fR and \fB\-\-height\fR are required.
+For PGM/PPM input, dimensions and component count are auto-detected from the file header.
 .SS Options
 .TP
 .BR \-w ", " \-\-width " " \fIpixels\fR
-Image width in pixels (required).
+Image width in pixels (required for raw input; auto-detected from PGM/PPM).
 .TP
 .BR \-h ", " \-\-height " " \fIpixels\fR
-Image height in pixels (required).
+Image height in pixels (required for raw input; auto-detected from PGM/PPM).
 .TP
 .BR \-b ", " \-\-bits\-per\-sample " " \fIbits\fR
-Bits per sample, range 2-16 (default: 8).
+Bits per sample, range 2-16 (default: 8; auto-detected from PGM/PPM MAXVAL).
 .TP
 .BR \-c ", " \-\-components " " \fIcount\fR
-Number of components: 1 for grayscale, 3 for RGB (default: 1).
+Number of components: 1 for grayscale, 3 for RGB (default: 1; auto-detected from PGM/PPM).
 .TP
 .B \-\-near \fIvalue\fR
 NEAR parameter for near-lossless encoding. 0 for lossless, 1-255 for lossy (default: 0).
@@ -58,20 +65,31 @@ NEAR parameter for near-lossless encoding. 0 for lossless, 1-255 for lossy (defa
 Interleaving mode: \fBnone\fR, \fBline\fR, or \fBsample\fR (default: none).
 Single-component images always use 'none'.
 .TP
-.B \-\-color\-transform \fItransform\fR
-Color transformation: \fBnone\fR, \fBhp1\fR, \fBhp2\fR, or \fBhp3\fR (default: none).
+.B \-\-colour\-transform " " \fItransform\fR (or \fB\-\-color\-transform\fR)
+Colour transformation: \fBnone\fR, \fBhp1\fR, \fBhp2\fR, or \fBhp3\fR (default: none).
+Both British (\-\-colour\-transform) and American (\-\-color\-transform) spellings are accepted.
 .TP
 .B \-\-t1 \fIvalue\fR
-Custom T1 threshold parameter (optional).
+Custom T1 threshold parameter. All four of \-\-t1, \-\-t2, \-\-t3, and \-\-reset must be
+provided together to activate custom preset parameters.
 .TP
 .B \-\-t2 \fIvalue\fR
-Custom T2 threshold parameter (optional).
+Custom T2 threshold parameter (see \-\-t1).
 .TP
 .B \-\-t3 \fIvalue\fR
-Custom T3 threshold parameter (optional).
+Custom T3 threshold parameter (see \-\-t1).
 .TP
 .B \-\-reset \fIvalue\fR
-Custom RESET value for context reinitialization (optional).
+Custom RESET value for context reinitialization (see \-\-t1).
+.TP
+.B \-\-optimise (or \-\-optimize)
+Explicitly compute and embed the default preset parameters in the output bitstream as an LSE
+marker, making the file fully self-contained. Accepts both British (\-\-optimise) and
+American (\-\-optimize) spellings.
+.TP
+.BR \-\-no\-colour " (or " \-\-no\-color )
+Disable ANSI colour codes in terminal output.
+Accepts both British (\-\-no\-colour) and American (\-\-no\-color) spellings.
 .TP
 .BR \-v ", " \-\-verbose
 Enable verbose output with encoding progress.
@@ -84,26 +102,43 @@ Encode grayscale image (lossless):
 .B jpegls encode
 input.raw output.jls \fB\-\-width\fR 512 \fB\-\-height\fR 512
 .TP
-Encode RGB image with line interleaving:
+Encode PGM image (dimensions auto-detected):
 .B jpegls encode
-input.raw output.jls \fB\-\-width\fR 512 \fB\-\-height\fR 512 \fB\-\-components\fR 3 \fB\-\-interleave\fR line
+scan.pgm output.jls
+.TP
+Encode PPM colour image with line interleaving:
+.B jpegls encode
+photo.ppm output.jls \fB\-\-interleave\fR line
+.TP
+Encode RGB image (raw) with sample interleaving and HP1 colour transform:
+.B jpegls encode
+input.raw output.jls \fB\-\-width\fR 512 \fB\-\-height\fR 512 \fB\-\-components\fR 3 \fB\-\-interleave\fR sample \fB\-\-colour\-transform\fR hp1
 .TP
 Near-lossless encoding (NEAR=3):
 .B jpegls encode
 input.raw output.jls \fB\-\-width\fR 512 \fB\-\-height\fR 512 \fB\-\-near\fR 3 \fB\-\-verbose\fR
-.PP
-\fBNote:\fR Full encode functionality requires bitstream writer integration, currently in development.
+.TP
+Encode with custom preset parameters:
+.B jpegls encode
+input.raw output.jls \fB\-\-width\fR 512 \fB\-\-height\fR 512 \fB\-\-bits\-per\-sample\fR 8 \fB\-\-t1\fR 3 \fB\-\-t2\fR 7 \fB\-\-t3\fR 21 \fB\-\-reset\fR 64
+.TP
+Encode with embedded default preset (self-contained file):
+.B jpegls encode
+input.pgm output.jls \fB\-\-optimise\fR
 .SH DECODE COMMAND
 .B jpegls decode
 [\fIoptions\fR]
 .I input-file output-file
 .PP
-Decode JPEG-LS file to raw pixel data.
+Decode JPEG-LS file to raw pixel data or an image file.
 .SS Options
 .TP
 .B \-\-format \fIformat\fR
-Output format: \fBraw\fR, \fBpng\fR, or \fBtiff\fR (default: raw).
-PNG and TIFF support is planned.
+Output format: \fBraw\fR, \fBpgm\fR, \fBppm\fR, \fBpng\fR, or \fBtiff\fR (default: raw).
+PGM and PPM output are supported. PNG and TIFF support is planned.
+.TP
+.BR \-\-no\-colour " (or " \-\-no\-color )
+Disable ANSI colour codes in terminal output.
 .TP
 .BR \-v ", " \-\-verbose
 Enable verbose output with decoding progress.
@@ -116,11 +151,13 @@ Decode to raw format:
 .B jpegls decode
 input.jls output.raw
 .TP
+Decode to PGM (grayscale) or PPM (colour):
+.B jpegls decode
+input.jls output.pgm \fB\-\-format\fR pgm
+.TP
 Decode with verbose output:
 .B jpegls decode
 input.jls output.raw \fB\-\-verbose\fR
-.PP
-\fBNote:\fR Full decode functionality requires bitstream reader integration, currently in development.
 .SH INFO COMMAND
 .B jpegls info
 [\fIoptions\fR]
@@ -131,6 +168,9 @@ Display detailed information about a JPEG-LS file, including frame header, scan 
 .TP
 .B \-\-json
 Output in JSON format for programmatic use.
+.TP
+.BR \-\-no\-colour " (or " \-\-no\-color )
+Disable ANSI colour codes in terminal output.
 .TP
 .BR \-q ", " \-\-quiet
 Minimal output: single line with essential information only.
@@ -169,6 +209,9 @@ Component ID consistency across headers
 .TP
 .BR \-v ", " \-\-verbose
 Enable verbose output with detailed validation steps.
+.TP
+.BR \-\-no\-colour " (or " \-\-no\-color )
+Disable ANSI colour codes in terminal output.
 .TP
 .BR \-q ", " \-\-quiet
 Suppress all output. Exit code 0 indicates success, non-zero indicates failure.
@@ -221,11 +264,19 @@ NEAR parameter, 0=lossless, 1-255=lossy (default: 0, for encode operation).
 .B \-\-interleave \fImode\fR
 Interleave mode: \fBnone\fR, \fBline\fR, or \fBsample\fR (default: none, for encode operation).
 .TP
-.B \-\-color\-transform \fItransform\fR
-Color transformation: \fBnone\fR, \fBhp1\fR, \fBhp2\fR, or \fBhp3\fR (default: none, for encode operation).
+.B \-\-colour\-transform \fItransform\fR (or \fB\-\-color\-transform\fR)
+Colour transformation: \fBnone\fR, \fBhp1\fR, \fBhp2\fR, or \fBhp3\fR (default: none, for encode operation).
+Both British (\-\-colour\-transform) and American (\-\-color\-transform) spellings are accepted.
 .TP
 .BR \-p ", " \-\-parallelism " " \fIcount\fR
 Maximum number of parallel operations (default: CPU count).
+.TP
+.BR \-\-summarise " (or " \-\-summarize )
+Always print the processing summary table, even when \-\-quiet is set.
+Accepts both British (\-\-summarise) and American (\-\-summarize) spellings.
+.TP
+.BR \-\-no\-colour " (or " \-\-no\-color )
+Disable ANSI colour codes in terminal output.
 .TP
 .BR \-v ", " \-\-verbose
 Show detailed progress for each file.
@@ -252,6 +303,65 @@ Process with custom parallelism:
 Stop on first error:
 .B jpegls batch info
 "*.jls" \fB\-\-fail\-fast\fR
+.TP
+Quiet batch with summary printed at the end:
+.B jpegls batch verify
+"*.jls" \fB\-\-quiet\fR \fB\-\-summarise\fR
+.SH COMPARE COMMAND
+.B jpegls compare
+[\fIoptions\fR]
+.I first-file second-file
+.PP
+Compare two image files pixel-by-pixel. Both inputs may be JPEG-LS (.jls) files or
+PGM/PPM reference images. The decoded pixel data is compared component-by-component
+and statistics are reported.
+.PP
+Exit code 0 indicates the images are identical (or every pixel is within the \fB\-\-near\fR
+tolerance); exit code 1 indicates the images differ or an error occurred.
+.SS Options
+.TP
+.B \-\-near \fIvalue\fR
+Maximum per-pixel error tolerance (default: 0 for exact match).
+.TP
+.B \-\-json
+Output comparison statistics in JSON format.
+.TP
+.BR \-\-no\-colour " (or " \-\-no\-color )
+Disable ANSI colour codes in terminal output.
+.TP
+.BR \-v ", " \-\-verbose
+Enable verbose output showing both image dimensions before comparing.
+.TP
+.BR \-q ", " \-\-quiet
+Suppress all output. Use the exit code to determine the result.
+.SS Statistics reported
+.IP \(bu 2
+\fBMax error\fR — largest per-sample absolute difference
+.IP \(bu 2
+\fBMean absolute error\fR — average absolute difference across all samples
+.IP \(bu 2
+\fBMismatch count\fR — number of samples exceeding \-\-near tolerance
+.SS Examples
+.TP
+Exact pixel comparison of two JPEG-LS files:
+.B jpegls compare
+reference.jls output.jls
+.TP
+Near-lossless comparison (tolerance NEAR=3):
+.B jpegls compare
+original.jls encoded.jls \fB\-\-near\fR 3
+.TP
+Compare JPEG-LS against PGM reference:
+.B jpegls compare
+reference.pgm decoded.jls
+.TP
+JSON output for scripting:
+.B jpegls compare
+a.jls b.jls \fB\-\-json\fR
+.TP
+Quiet comparison (exit code only):
+.B jpegls compare
+a.jls b.jls \fB\-\-quiet\fR && echo "match"
 .SH COMPLETION COMMAND
 .B jpegls completion
 .I shell
@@ -371,13 +481,9 @@ ISO/IEC 14495-1:1999 - Lossless and near-lossless compression of continuous-tone
 ITU-T Recommendation T.87 (identical to ISO/IEC 14495-1)
 .SH BUGS
 .IP \(bu 2
-Full encode functionality requires bitstream writer integration (in development).
+PNG and TIFF output formats for the decode command are planned but not yet implemented.
 .IP \(bu 2
-Full decode functionality requires bitstream reader integration (in development).
-.IP \(bu 2
-PNG and TIFF output formats for decode command are planned but not yet implemented.
-.IP \(bu 2
-Custom preset parameters (--t1, --t2, --t3, --reset) are not yet supported by the encoder.
+PNG and TIFF input formats for the encode command are planned but not yet implemented.
 .PP
 Report bugs at: https://github.com/Raster-Lab/JLSwift/issues
 .SH EXAMPLES
@@ -392,12 +498,17 @@ Verify file integrity:
 .B jpegls verify
 medical-image.jls \fB\-\-verbose\fR
 .PP
-Encode a grayscale medical image:
+Encode a grayscale medical image from raw data:
 .IP
 .B jpegls encode
 ct-scan.raw ct-scan.jls \e
 .br
   \fB\-\-width\fR 512 \fB\-\-height\fR 512 \fB\-\-bits\-per\-sample\fR 12
+.PP
+Encode a PGM image (dimensions auto-detected):
+.IP
+.B jpegls encode
+ct-scan.pgm ct-scan.jls
 .PP
 Encode RGB image with sample interleaving:
 .IP
@@ -414,6 +525,16 @@ Near-lossless encoding with NEAR=2:
 image.raw image.jls \e
 .br
   \fB\-\-width\fR 1024 \fB\-\-height\fR 768 \fB\-\-near\fR 2
+.PP
+Decode to PGM:
+.IP
+.B jpegls decode
+image.jls output.pgm \fB\-\-format\fR pgm
+.PP
+Compare decoded output against reference:
+.IP
+.B jpegls compare
+reference.pgm output.jls \fB\-\-verbose\fR
 .PP
 Batch verify all JPEG-LS files in a directory:
 .IP

@@ -395,6 +395,40 @@ jpegls batch info "*.jls" --fail-fast
 - `--summarise` / `--summarize`: Print a summary table after processing (even in quiet mode)
 - `--no-colour` / `--no-color`: Disable ANSI colour codes in terminal output
 
+#### `jpegls compare` - Compare Two Image Files
+
+Compare two image files (JPEG-LS or PGM/PPM) pixel-by-pixel:
+
+```bash
+# Exact comparison of two JPEG-LS files (exit 0 = identical)
+jpegls compare reference.jls output.jls
+
+# Near-lossless comparison with NEAR=3 tolerance
+jpegls compare original.jls encoded.jls --near 3
+
+# Compare JPEG-LS against PGM reference image
+jpegls compare reference.pgm decoded.jls --verbose
+
+# JSON output for scripted pipelines
+jpegls compare a.jls b.jls --json
+
+# Quiet mode — use exit code only
+jpegls compare a.jls b.jls --quiet && echo "match"
+```
+
+**Options:**
+- `--near N`: Maximum per-pixel error tolerance (default: 0 for exact match)
+- `--json`: Output comparison statistics as JSON
+- `--verbose` / `-v`: Show image dimensions before comparing
+- `--quiet` / `-q`: Suppress output; use exit code only
+- `--no-colour` / `--no-color`: Disable ANSI colour codes
+
+**Exit codes:**
+- `0`: All samples are within `--near` tolerance (images match)
+- `1`: One or more samples exceed tolerance, or an error occurred
+
+**Statistics reported:** max error, mean absolute error, mismatch sample count.
+
 #### `jpegls completion` - Generate Shell Completions
 
 Generate shell completion scripts for bash, zsh, or fish:

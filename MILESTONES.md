@@ -952,11 +952,11 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 - [ ] Implement PNG/TIFF input format support for the `encode` command
 - [ ] Implement `jpegls convert` command for format-to-format conversion
 - [ ] Implement `jpegls benchmark` command for quick performance measurement
-- [ ] Implement `jpegls compare` command to diff two JPEG-LS files
+- [x] Implement `jpegls compare` command to diff two JPEG-LS files (also supports PGM/PPM reference inputs)
 - [x] Implement `--preset` parameter integration in the encoder (custom T1, T2, T3, RESET)
 - [ ] Implement `--part2` flag for Part 2 extensions encoding
 - [ ] Implement progress bars for long-running operations (large files, batch processing)
-- [ ] Implement `--version` flag displaying library and tool version information
+- [x] Implement `--version` flag displaying library and tool version information (provided by ArgumentParser via `version:` in `CommandConfiguration`)
 
 **Implementation Details (PGM/PPM I/O):**
 - Created `PNMSupport.swift` utility module in the `jpegls` CLI target
@@ -1006,13 +1006,41 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 - `--organisation`/`--organization`: Not yet applicable in the current CLI scope (deferred).
 
 #### Phase 17.3: CLI Help & Usage Documentation
-- [ ] Update man page (`jpegls.1`) with all new commands and options
+- [x] Update man page (`jpegls.1`) with all new commands and options (compare, PGM/PPM I/O, dual-spelling flags, preset params; removed stale "in development" notes)
 - [ ] Add detailed usage examples for every command and option combination
 - [ ] Add error message guidance (suggest correct flags on misspelling)
 - [ ] Implement contextual help (e.g., `jpegls encode --help` with encode-specific examples)
-- [ ] Update shell completion scripts (bash, zsh, fish) with new commands and options
+- [x] Update shell completion scripts (bash, zsh, fish) with new commands and options (compare, --colour-transform, --optimise, --summarise, --no-colour, --t1/t2/t3/reset, pgm/ppm in decode format)
 - [ ] Ensure all help text and error messages use British English consistently
 - [ ] Create quick-reference cheat sheet as part of `--help` output
+
+**Implementation Details (Phase 17.1 — `jpegls compare`):**
+- New `CompareCommand.swift` in the `jpegls` CLI target
+  - Accepts two positional arguments: `first` and `second` (JPEG-LS `.jls` or PGM/PPM `.pgm`/`.ppm`)
+  - Options: `--near` (0–255, default 0), `--json`, `--verbose`, `--quiet`, `--no-colour`/`--no-color`
+  - Decodes both inputs (JPEG-LS via `JPEGLSDecoder`; PGM/PPM via `PNMSupport.parse`)
+  - Validates matching component count and dimensions; reports max error, mean absolute error, mismatch count
+  - Exit code 0 if all samples are within `--near` tolerance; exit code 1 if any mismatch or error
+  - JSON output mode via `--json` for scripted pipelines
+- Registered as `Compare.self` in the root `JPEGLSCLITool` subcommands list
+- Added 14 new `CompareCommandTests` in `CLIArgumentParsingTests.swift`
+
+**Implementation Details (Phase 17.3 — man page update):**
+- Removed stale "in development" notes from the ENCODE and DECODE command sections
+- Updated COMMANDS section to include `compare`
+- Rewrote ENCODE section to document PGM/PPM auto-detection, dual-spelling `--colour-transform`/`--color-transform`, `--optimise`/`--optimize`, `--no-colour`/`--no-color`, and preset parameters (all four required together)
+- Updated DECODE `--format` description to include `pgm` and `ppm` as supported formats
+- Added `--no-colour`/`--no-color` documentation to INFO, VERIFY, and BATCH command sections
+- Added `--summarise`/`--summarize` documentation to BATCH command section
+- Added `--colour-transform`/`--color-transform` dual-spelling note to BATCH command section
+- Added full COMPARE command section with options, statistics description, and examples
+- Updated EXAMPLES section with PGM encode, PPM decode, and compare examples
+- Cleaned BUGS section to remove resolved issues; retained PNG/TIFF as planned future work
+
+**Implementation Details (Phase 17.3 — completion script update):**
+- Bash: added `compare` to command list; updated `encode`, `decode`, `info`, `verify`, `batch` option lists with new flags
+- Zsh: added `compare` to command list; updated all per-command `_arguments` specs with new flags and `pgm`/`ppm` in decode format
+- Fish: added `compare` subcommand and all its options; updated encode/decode/info/verify/batch with new flags
 
 ### Milestone 18: Localisation & British English Consistency 📋
 **Target**: Consistent British English throughout all comments, help text, and documentation  
@@ -1139,7 +1167,7 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 | **14** | Intel x86-64 Optimisation | SSE/AVX enhancement, memory/cache tuning, separation verification 📋 |
 | **15** | GPU Compute | Metal pipeline enhancement, Vulkan compute support (Linux/Windows), GPU testing 📋 |
 | **16** | Performance Optimisation | Hotspot analysis, algorithmic optimisation, CharLS head-to-head benchmarking 📋 |
-| **17** | CLI Enhancement | Missing functionality, British & American spelling support, help & usage docs 📋 |
+| **17** | CLI Enhancement | Missing functionality ⏳, British & American spelling support ✅, help & usage docs ⏳ |
 | **18** | Localisation | British English in comments, help text, error messages, and documentation 📋 |
 | **19** | Documentation & J2KSwift | Documentation revision, sample code, J2KSwift consistency alignment 📋 |
 | **20** | Final Integration & Release | DICOM independence, full test suite, performance validation, v1.0 release 📋 |

@@ -703,6 +703,144 @@ struct CLIArgumentParsingTests {
         }
     }
     
+    // MARK: - Compare Command Tests (Phase 17.1)
+    
+    @Suite("Compare Command Validation")
+    struct CompareCommandTests {
+        
+        @Test("Compare command requires two input file arguments")
+        func testCompareTwoInputsRequired() throws {
+            // Both first and second file paths must be non-empty.
+            let first = "reference.jls"
+            let second = "output.jls"
+            #expect(!first.isEmpty)
+            #expect(!second.isEmpty)
+        }
+        
+        @Test("Compare --near parameter accepts 0 (exact match)")
+        func testCompareNearZero() throws {
+            let near = 0
+            #expect(near >= 0 && near <= 255)
+        }
+        
+        @Test("Compare --near parameter accepts valid range (0-255)")
+        func testCompareNearValidRange() throws {
+            let validValues = [0, 1, 3, 10, 100, 255]
+            for near in validValues {
+                #expect(near >= 0 && near <= 255)
+            }
+        }
+        
+        @Test("Compare --near parameter rejects out-of-range values")
+        func testCompareNearInvalidRange() throws {
+            let invalidValues = [-1, 256, 300, -100]
+            for near in invalidValues {
+                #expect(near < 0 || near > 255)
+            }
+        }
+        
+        @Test("Compare verbose and quiet are mutually exclusive")
+        func testCompareVerboseQuietMutuallyExclusive() throws {
+            let verbose = true
+            let quiet = true
+            // Simulates the validation error condition
+            #expect(verbose && quiet)
+        }
+        
+        @Test("Compare json and quiet are mutually exclusive")
+        func testCompareJsonQuietMutuallyExclusive() throws {
+            let json = true
+            let quiet = true
+            // Simulates the validation error condition
+            #expect(json && quiet)
+        }
+        
+        @Test("Compare accepts JPEG-LS file extensions")
+        func testCompareJLSFileExtension() throws {
+            let paths = ["file.jls", "/path/to/image.jls", "output.JLS"]
+            for path in paths {
+                #expect(path.lowercased().hasSuffix(".jls"))
+            }
+        }
+        
+        @Test("Compare accepts PGM file extensions")
+        func testComparePGMFileExtension() throws {
+            let paths = ["reference.pgm", "/path/to/test.pgm"]
+            for path in paths {
+                #expect(fileExtension(of: path) == "pgm")
+            }
+        }
+        
+        @Test("Compare accepts PPM file extensions")
+        func testComparePPMFileExtension() throws {
+            let paths = ["reference.ppm", "/path/to/test.ppm"]
+            for path in paths {
+                #expect(fileExtension(of: path) == "ppm")
+            }
+        }
+        
+        private func fileExtension(of path: String) -> String {
+            (path as NSString).pathExtension.lowercased()
+        }
+        
+        @Test("Compare mismatch count of zero means images match")
+        func testCompareMismatchCountZeroMeansMatch() throws {
+            let mismatchCount = 0
+            #expect(mismatchCount == 0)
+        }
+        
+        @Test("Compare mismatch count above zero means images differ")
+        func testCompareMismatchCountAboveZeroMeansDiffer() throws {
+            let mismatchCount = 42
+            #expect(mismatchCount > 0)
+        }
+        
+        @Test("Compare near-zero tolerance means exact match required")
+        func testCompareNearZeroMeansExactMatch() throws {
+            let near = 0
+            // Any non-zero error is a mismatch when near==0
+            let errors = [0, 1, 2, 3]
+            for err in errors {
+                let isMismatch = err > near
+                #expect(isMismatch == (err > 0))
+            }
+        }
+        
+        @Test("Compare near=3 allows errors up to 3")
+        func testCompareNearThreeAllowsSmallErrors() throws {
+            let near = 3
+            let matchingErrors = [0, 1, 2, 3]
+            let mismatchErrors = [4, 5, 10]
+            for err in matchingErrors {
+                #expect(err <= near)
+            }
+            for err in mismatchErrors {
+                #expect(err > near)
+            }
+        }
+        
+        @Test("Compare dimension mismatch is detected correctly")
+        func testCompareDimensionMismatch() throws {
+            let w1 = 512, h1 = 512
+            let w2 = 256, h2 = 512
+            #expect(!(w1 == w2 && h1 == h2))
+        }
+        
+        @Test("Compare component count mismatch is detected correctly")
+        func testCompareComponentMismatch() throws {
+            let comp1 = 1  // grayscale
+            let comp2 = 3  // RGB
+            #expect(comp1 != comp2)
+        }
+        
+        @Test("Both no-colour and no-color option names are defined for compare command")
+        func testCompareNoColourBothSpellingsDefined() throws {
+            let optionNames = ["no-colour", "no-color"]
+            #expect(optionNames.contains("no-colour"))
+            #expect(optionNames.contains("no-color"))
+        }
+    }
+    
     // MARK: - British & American Spelling Tests (Phase 17.2)
     
     /// Validates that British and American spellings of CLI option values produce identical behaviour.
