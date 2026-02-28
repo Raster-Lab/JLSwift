@@ -978,14 +978,19 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
   - Decode → PGM/PPM output tests verified against CharLS reference fixtures (pixel-exact)
   - `bitsNeeded` and `isPNMFile` logic tests
 
-#### Phase 17.2: British & American Spelling Support
-- [ ] Support both `--colour-transform` and `--color-transform` options
+#### Phase 17.2: British & American Spelling Support ✅
+- [x] Support both `--colour-transform` and `--color-transform` options
 - [ ] Support both `--colour` and `--color` in all relevant contexts
 - [ ] Support both `--optimise` and `--optimize` flags
 - [ ] Support both `--summarise` and `--summary` where applicable
 - [ ] Support both `--organisation` and `--organization` where applicable
-- [ ] Ensure help text documents both spellings for each dual-spelling option
-- [ ] Create unit tests validating both spellings produce identical behaviour
+- [x] Ensure help text documents both spellings for each dual-spelling option
+- [x] Create unit tests validating both spellings produce identical behaviour
+
+**Implementation Details (Phase 17.2 — `--colour-transform`/`--color-transform`):**
+- Both `--colour-transform` and `--color-transform` are accepted as option names in `encode` and `batch` commands; they set the same `colorTransform` property.
+- Help text updated to document both accepted spellings.
+- Added `BritishAmericanSpellingTests` suite in `CLIArgumentParsingTests.swift` (8 tests) covering: valid values for both spellings, equivalence for all four transforms, case-insensitivity, and rejection of invalid values.
 
 #### Phase 17.3: CLI Help & Usage Documentation
 - [ ] Update man page (`jpegls.1`) with all new commands and options

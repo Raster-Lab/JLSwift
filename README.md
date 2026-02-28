@@ -311,7 +311,7 @@ jpegls encode input.pgm output.jls --quiet
 - `-c, --components`: Number of components - 1 (grayscale) or 3 (RGB) (default: 1; auto-detected from PGM/PPM)
 - `--near`: NEAR parameter, 0=lossless, 1-255=lossy (default: 0)
 - `--interleave`: Interleave mode - none, line, sample (default: none)
-- `--color-transform`: Color transformation - none, hp1, hp2, hp3 (default: none)
+- `--color-transform` / `--colour-transform`: Colour transformation - none, hp1, hp2, hp3 (default: none)
 - `--verbose`: Enable verbose output
 - `--quiet`: Suppress non-essential output
 

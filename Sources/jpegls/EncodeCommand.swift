@@ -32,7 +32,10 @@ extension JPEGLSCLITool {
         @Option(name: .long, help: "Interleave mode: none, line, sample (default: none)")
         var interleave: String = "none"
         
-        @Option(name: .long, help: "Color transformation: none, hp1, hp2, hp3 (default: none)")
+        @Option(
+            name: [.customLong("color-transform"), .customLong("colour-transform")],
+            help: "Colour transformation: none, hp1, hp2, hp3 (default: none). Accepts both --color-transform and --colour-transform."
+        )
         var colorTransform: String = "none"
         
         @Option(name: .long, help: "Custom T1 threshold (optional)")
