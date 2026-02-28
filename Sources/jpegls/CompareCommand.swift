@@ -217,24 +217,13 @@ extension JPEGLSCLITool {
         private func isPNGFile(path: String, data: Data) -> Bool {
             let ext = (path as NSString).pathExtension.lowercased()
             if ext == "png" { return true }
-            let sig: [UInt8] = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]
-            return data.count >= 8 && Array(data.prefix(8)) == sig
+            return PNGSupport.isPNG(data)
         }
 
         private func isTIFFFile(path: String, data: Data) -> Bool {
             let ext = (path as NSString).pathExtension.lowercased()
             if ext == "tiff" || ext == "tif" { return true }
-            if data.count >= 4 {
-                let isLE = data[0] == 0x49 && data[1] == 0x49
-                let isBE = data[0] == 0x4D && data[1] == 0x4D
-                if isLE || isBE {
-                    let magic = isLE
-                        ? (UInt16(data[2]) | UInt16(data[3]) << 8)
-                        : (UInt16(data[2]) << 8 | UInt16(data[3]))
-                    return magic == 42
-                }
-            }
-            return false
+            return TIFFSupport.isTIFF(data)
         }
 
         private func bitsNeeded(forMaxVal maxVal: Int) -> Int {

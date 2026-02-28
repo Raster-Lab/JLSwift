@@ -54,6 +54,21 @@ public enum TIFFSupport {
 
     // MARK: - Public API
 
+    /// Returns `true` if `data` begins with a valid TIFF byte-order mark ('II' or 'MM') and
+    /// the TIFF magic number 42.
+    ///
+    /// Use this to detect TIFF input before attempting to decode.
+    public static func isTIFF(_ data: Data) -> Bool {
+        guard data.count >= 4 else { return false }
+        let isLE = data[0] == 0x49 && data[1] == 0x49  // 'II'
+        let isBE = data[0] == 0x4D && data[1] == 0x4D  // 'MM'
+        guard isLE || isBE else { return false }
+        let magic: UInt16 = isLE
+            ? (UInt16(data[2]) | UInt16(data[3]) << 8)
+            : (UInt16(data[2]) << 8 | UInt16(data[3]))
+        return magic == 42
+    }
+
     /// Encode pixel data as a Baseline TIFF file.
     ///
     /// - Parameters:

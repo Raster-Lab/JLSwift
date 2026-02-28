@@ -270,10 +270,14 @@ extension JPEGLSCLITool {
             return try encoder.encode(imageData, configuration: config)
         }
 
-        /// Pack pixel data into raw bytes (big-endian for 16-bit samples).
+        /// Pack pixel data into raw bytes (big-endian for multi-byte samples).
+        ///
+        /// Samples with `bitsPerSample` ≤ 8 are written as single bytes; samples with
+        /// `bitsPerSample` 9–16 (e.g. 12-bit or 16-bit JPEG-LS) are written as 2-byte
+        /// big-endian values, matching the raw input format expected by the `encode` command.
         private func encodeRaw(decoded: DecodedImage) -> Data {
             let numComponents = decoded.componentPixels.count
-            let bytesPerSample = (decoded.bitsPerSample + 7) / 8
+            let bytesPerSample = (decoded.bitsPerSample + 7) / 8  // 1 for ≤8-bit, 2 for 9-16-bit
             var output = Data(capacity: decoded.width * decoded.height * numComponents * bytesPerSample)
             for row in 0..<decoded.height {
                 for col in 0..<decoded.width {
@@ -307,24 +311,13 @@ extension JPEGLSCLITool {
         private func isPNGFile(path: String, data: Data) -> Bool {
             let ext = (path as NSString).pathExtension.lowercased()
             if ext == "png" { return true }
-            let sig: [UInt8] = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]
-            return data.count >= 8 && Array(data.prefix(8)) == sig
+            return PNGSupport.isPNG(data)
         }
 
         private func isTIFFFile(path: String, data: Data) -> Bool {
             let ext = (path as NSString).pathExtension.lowercased()
             if ext == "tiff" || ext == "tif" { return true }
-            if data.count >= 4 {
-                let isLE = data[0] == 0x49 && data[1] == 0x49
-                let isBE = data[0] == 0x4D && data[1] == 0x4D
-                if isLE || isBE {
-                    let magic = isLE
-                        ? (UInt16(data[2]) | UInt16(data[3]) << 8)
-                        : (UInt16(data[2]) << 8 | UInt16(data[3]))
-                    return magic == 42
-                }
-            }
-            return false
+            return TIFFSupport.isTIFF(data)
         }
 
         // MARK: - Parameter parsing

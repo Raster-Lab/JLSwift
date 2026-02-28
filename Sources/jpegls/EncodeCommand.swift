@@ -281,28 +281,14 @@ extension JPEGLSCLITool {
         private func isPNGFile(path: String, data: Data) -> Bool {
             let ext = (path as NSString).pathExtension.lowercased()
             if ext == "png" { return true }
-            // PNG signature: 137 80 78 71 13 10 26 10
-            let sig: [UInt8] = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]
-            return data.count >= 8 && Array(data.prefix(8)) == sig
+            return PNGSupport.isPNG(data)
         }
         
         /// Returns `true` if the file at `path` is a TIFF image.
         private func isTIFFFile(path: String, data: Data) -> Bool {
             let ext = (path as NSString).pathExtension.lowercased()
             if ext == "tiff" || ext == "tif" { return true }
-            // TIFF byte-order marks: 'II' (little-endian) or 'MM' (big-endian).
-            if data.count >= 4 {
-                let isLE = data[0] == 0x49 && data[1] == 0x49
-                let isBE = data[0] == 0x4D && data[1] == 0x4D
-                if isLE || isBE {
-                    // Also check magic number 42.
-                    let magic = isLE
-                        ? (UInt16(data[2]) | UInt16(data[3]) << 8)
-                        : (UInt16(data[2]) << 8 | UInt16(data[3]))
-                    return magic == 42
-                }
-            }
-            return false
+            return TIFFSupport.isTIFF(data)
         }
         
         /// Returns the minimum number of bits needed to represent values up to `maxVal`.

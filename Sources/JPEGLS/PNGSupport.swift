@@ -53,6 +53,14 @@ public enum PNGSupport {
 
     // MARK: - Public API
 
+    /// Returns `true` if `data` begins with the standard 8-byte PNG signature.
+    ///
+    /// Use this to detect PNG input before attempting to decode.
+    public static func isPNG(_ data: Data) -> Bool {
+        let sig: [UInt8] = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]
+        return data.count >= 8 && Array(data.prefix(8)) == sig
+    }
+
     /// Encode pixel data as a PNG file.
     ///
     /// - Parameters:
