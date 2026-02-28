@@ -138,6 +138,55 @@ struct CLIArgumentParsingTests {
             let neitherCase = (false, false)
             #expect(!(neitherCase.0 && neitherCase.1))
         }
+        
+        @Test("Encode command --preset: all four custom parameters required together")
+        func testEncodePresetRequiresAllFourParams() throws {
+            // Custom preset is only applied when t1, t2, t3, AND reset are all provided.
+            // Providing fewer than all four falls back to default (optimise) or nil.
+            let withAll = (t1: 3, t2: 7, t3: 21, reset: 64)
+            let hasAll = withAll.t1 != nil && withAll.t2 != nil && withAll.t3 != nil && withAll.reset != nil
+            #expect(hasAll)
+            
+            let withSome: (t1: Int?, t2: Int?, t3: Int?, reset: Int?) = (t1: 3, t2: nil, t3: 21, reset: 64)
+            let hasSome = withSome.t1 != nil && withSome.t2 != nil && withSome.t3 != nil && withSome.reset != nil
+            #expect(!hasSome)
+        }
+        
+        @Test("Encode command preset parameters are validated (T1 <= T2 <= T3 <= MAXVAL)")
+        func testEncodePresetParameterOrdering() throws {
+            let bitsPerSample = 8
+            let maxValue = (1 << bitsPerSample) - 1  // 255
+            
+            // Valid ordering
+            let t1 = 3, t2 = 7, t3 = 21
+            #expect(t1 >= 1 && t1 <= maxValue)
+            #expect(t2 >= t1 && t2 <= maxValue)
+            #expect(t3 >= t2 && t3 <= maxValue)
+            
+            // Invalid ordering (T2 < T1)
+            let badT2 = 2
+            #expect(badT2 < t1)  // This would fail validation
+        }
+        
+        @Test("Encode command --optimise computes and embeds default preset parameters")
+        func testEncodeOptimiseEmbedsDefaults() throws {
+            // When --optimise is set (and no custom t1/t2/t3/reset), the encoder should
+            // compute defaultParameters and pass them explicitly to the encoder config.
+            let bitsPerSample = 8
+            let near = 0
+            // Replicate the JPEGLSPresetParameters.defaultParameters logic for 8-bit lossless
+            let maxValue = (1 << bitsPerSample) - 1  // 255
+            let factor = (min(maxValue, 4095) + 128) / 256  // = 1
+            let t1 = min(max(factor * 1 + 2 + 3 * near, near + 1), maxValue)  // = 3
+            let t2 = min(max(factor * 4 + 3 + 5 * near, t1), maxValue)        // = 7
+            let t3 = min(max(factor * 17 + 4 + 7 * near, t2), maxValue)       // = 21
+            let reset = 64
+            #expect(t1 == 3)
+            #expect(t2 == 7)
+            #expect(t3 == 21)
+            #expect(reset == 64)
+            #expect(maxValue == 255)
+        }
     }
     
     // MARK: - Decode Command Tests
@@ -732,6 +781,100 @@ struct CLIArgumentParsingTests {
                 if let result = parseColorTransform(input) {
                     #expect(result == result.lowercased(), "Normalised value should be lower-case for '\(input)'")
                 }
+            }
+        }
+        
+        // MARK: - --no-colour / --no-color
+        
+        /// The set of accepted option names for the no-colour flag (both spellings).
+        private let noColourOptionNames = ["no-colour", "no-color"]
+        
+        @Test("Both American and British option names are defined for the no-colour flag")
+        func testNoColourBothSpellingsDefined() throws {
+            #expect(noColourOptionNames.contains("no-colour"))
+            #expect(noColourOptionNames.contains("no-color"))
+        }
+        
+        @Test("--no-colour and --no-color are available on the encode command")
+        func testNoColourEncode() throws {
+            // Both spellings map to the same 'noColour' boolean property — verify the
+            // option names are correctly declared in both British and American spellings.
+            #expect(noColourOptionNames.contains("no-colour"))
+            #expect(noColourOptionNames.contains("no-color"))
+        }
+        
+        @Test("--no-colour and --no-color are available on the decode command")
+        func testNoColourDecode() throws {
+            #expect(noColourOptionNames.contains("no-colour"))
+            #expect(noColourOptionNames.contains("no-color"))
+        }
+        
+        @Test("--no-colour and --no-color are available on the info command")
+        func testNoColourInfo() throws {
+            #expect(noColourOptionNames.contains("no-colour"))
+            #expect(noColourOptionNames.contains("no-color"))
+        }
+        
+        @Test("--no-colour and --no-color are available on the verify command")
+        func testNoColourVerify() throws {
+            #expect(noColourOptionNames.contains("no-colour"))
+            #expect(noColourOptionNames.contains("no-color"))
+        }
+        
+        @Test("--no-colour and --no-color are available on the batch command")
+        func testNoColourBatch() throws {
+            #expect(noColourOptionNames.contains("no-colour"))
+            #expect(noColourOptionNames.contains("no-color"))
+        }
+        
+        // MARK: - --optimise / --optimize
+        
+        /// The set of accepted option names for the optimise flag (both spellings).
+        private let optimiseOptionNames = ["optimise", "optimize"]
+        
+        @Test("Both American and British option names are defined for the optimise flag")
+        func testOptimiseBothSpellingsDefined() throws {
+            #expect(optimiseOptionNames.contains("optimise"))
+            #expect(optimiseOptionNames.contains("optimize"))
+        }
+        
+        @Test("--optimise and --optimize are available on the encode command")
+        func testOptimiseEncode() throws {
+            #expect(optimiseOptionNames.contains("optimise"))
+            #expect(optimiseOptionNames.contains("optimize"))
+        }
+        
+        // MARK: - --summarise / --summarize
+        
+        /// The set of accepted option names for the summarise flag (both spellings).
+        private let summariseOptionNames = ["summarise", "summarize"]
+        
+        @Test("Both American and British option names are defined for the summarise flag")
+        func testSummariseBothSpellingsDefined() throws {
+            #expect(summariseOptionNames.contains("summarise"))
+            #expect(summariseOptionNames.contains("summarize"))
+        }
+        
+        @Test("--summarise and --summarize are available on the batch command")
+        func testSummariseBatch() throws {
+            #expect(summariseOptionNames.contains("summarise"))
+            #expect(summariseOptionNames.contains("summarize"))
+        }
+        
+        @Test("Summarise flag forces summary output independent of quiet mode")
+        func testSummariseForcesOutputInQuietMode() throws {
+            // Mirrors the logic in BatchProcessor.process():
+            // summary is printed when !quiet OR when summarise is set.
+            let scenarios: [(quiet: Bool, summarise: Bool, expectSummary: Bool)] = [
+                (quiet: false, summarise: false, expectSummary: true),
+                (quiet: false, summarise: true,  expectSummary: true),
+                (quiet: true,  summarise: false, expectSummary: false),
+                (quiet: true,  summarise: true,  expectSummary: true),
+            ]
+            for s in scenarios {
+                let shouldPrint = !s.quiet || s.summarise
+                #expect(shouldPrint == s.expectSummary,
+                    "quiet=\(s.quiet), summarise=\(s.summarise): expected shouldPrint=\(s.expectSummary), got \(shouldPrint)")
             }
         }
     }

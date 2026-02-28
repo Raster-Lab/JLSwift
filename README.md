@@ -312,8 +312,11 @@ jpegls encode input.pgm output.jls --quiet
 - `--near`: NEAR parameter, 0=lossless, 1-255=lossy (default: 0)
 - `--interleave`: Interleave mode - none, line, sample (default: none)
 - `--color-transform` / `--colour-transform`: Colour transformation - none, hp1, hp2, hp3 (default: none)
+- `--t1`, `--t2`, `--t3`, `--reset`: Custom preset parameters (T1, T2, T3, RESET); all four must be supplied together
+- `--optimise` / `--optimize`: Embed computed default preset parameters explicitly in the bitstream (self-contained output)
 - `--verbose`: Enable verbose output
 - `--quiet`: Suppress non-essential output
+- `--no-colour` / `--no-color`: Disable ANSI colour codes in terminal output
 
 **Supported input formats:** raw pixel data, PGM (P5 binary), PPM (P6 binary)
 
@@ -340,6 +343,7 @@ jpegls decode input.jls output.pgm --format pgm --quiet
 - `--format`: Output format - raw, pgm, ppm, png, tiff (default: raw) *(PNG/TIFF support planned)*
 - `--verbose`: Enable verbose output
 - `--quiet`: Suppress non-essential output
+- `--no-colour` / `--no-color`: Disable ANSI colour codes in terminal output
 
 **Supported output formats:** raw pixel data, PGM (P5 binary), PPM (P6 binary)
 
@@ -388,6 +392,8 @@ jpegls batch info "*.jls" --fail-fast
 - `-v, --verbose`: Show detailed progress for each file
 - `-q, --quiet`: Suppress all output except errors
 - `--fail-fast`: Stop on first error
+- `--summarise` / `--summarize`: Print a summary table after processing (even in quiet mode)
+- `--no-colour` / `--no-color`: Disable ANSI colour codes in terminal output
 
 #### `jpegls completion` - Generate Shell Completions
 

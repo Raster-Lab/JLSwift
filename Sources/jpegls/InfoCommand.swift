@@ -17,6 +17,12 @@ extension JPEGLSCLITool {
         @Flag(name: .long, help: "Suppress non-essential output (quiet mode)")
         var quiet: Bool = false
         
+        @Flag(
+            name: [.customLong("no-colour"), .customLong("no-color")],
+            help: "Disable ANSI colour codes in terminal output. Accepts both --no-colour and --no-color."
+        )
+        var noColour: Bool = false
+        
         mutating func run() throws {
             // Validate flags: json and quiet are mutually exclusive
             if json && quiet {

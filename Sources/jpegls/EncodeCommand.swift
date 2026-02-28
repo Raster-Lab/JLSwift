@@ -50,6 +50,18 @@ extension JPEGLSCLITool {
         @Option(name: .long, help: "Custom RESET value (optional)")
         var reset: Int?
         
+        @Flag(
+            name: [.customLong("optimise"), .customLong("optimize")],
+            help: "Explicitly write computed preset parameters to the bitstream (makes the file self-contained). Accepts both --optimise and --optimize."
+        )
+        var optimise: Bool = false
+
+        @Flag(
+            name: [.customLong("no-colour"), .customLong("no-color")],
+            help: "Disable ANSI colour codes in terminal output. Accepts both --no-colour and --no-color."
+        )
+        var noColour: Bool = false
+
         @Flag(name: .long, help: "Enable verbose output")
         var verbose: Bool = false
         
@@ -155,21 +167,43 @@ extension JPEGLSCLITool {
             // Determine interleave mode (grayscale always uses .none)
             let actualInterleaveMode: JPEGLSInterleaveMode = resolvedComponents == 1 ? .none : interleaveMode
             
+            // Resolve preset parameters:
+            // 1. If all four custom values (--t1/--t2/--t3/--reset) are provided, use them.
+            // 2. Else if --optimise is set, compute and embed the default parameters explicitly.
+            // 3. Otherwise pass nil (encoder computes defaults internally, no LSE marker written for near=0).
+            let resolvedPresetParameters: JPEGLSPresetParameters?
+            if let t1 = t1, let t2 = t2, let t3 = t3, let reset = reset {
+                let maxValue = (1 << resolvedBitsPerSample) - 1
+                resolvedPresetParameters = try JPEGLSPresetParameters(
+                    maxValue: maxValue,
+                    threshold1: t1,
+                    threshold2: t2,
+                    threshold3: t3,
+                    reset: reset
+                )
+                if verbose {
+                    print("Custom preset: T1=\(t1), T2=\(t2), T3=\(t3), RESET=\(reset)")
+                    print()
+                }
+            } else if optimise {
+                resolvedPresetParameters = try JPEGLSPresetParameters.defaultParameters(
+                    bitsPerSample: resolvedBitsPerSample, near: near
+                )
+                if verbose {
+                    print("Optimise: embedding default preset parameters in bitstream")
+                    print()
+                }
+            } else {
+                resolvedPresetParameters = nil
+            }
+            
             // Create encoder configuration
             let config = try JPEGLSEncoder.Configuration(
                 near: near,
                 interleaveMode: actualInterleaveMode,
-                presetParameters: nil,  // Custom presets not yet supported
+                presetParameters: resolvedPresetParameters,
                 colorTransformation: colorTransformValue
             )
-            
-            // Log warning if custom parameters were requested but not applied
-            if t1 != nil || t2 != nil || t3 != nil || reset != nil {
-                if verbose {
-                    print("Warning: Custom preset parameters are not yet supported by the encoder")
-                    print()
-                }
-            }
             
             if verbose {
                 print("Encoding...")
