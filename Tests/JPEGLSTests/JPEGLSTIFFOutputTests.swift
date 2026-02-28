@@ -410,4 +410,126 @@ struct JPEGLSTIFFOutputTests {
         (UInt32(data[offset + 2]) << 16) |
         (UInt32(data[offset + 3]) << 24)
     }
+
+    // MARK: - TIFF Decoder Tests
+
+    @Test("TIFF decoder round-trip: 8-bit greyscale encode → decode preserves pixel values")
+    func testTIFFDecodeGreyscale8bit() throws {
+        let pixels: [[[Int]]] = [[[10, 20], [30, 40]]]
+        let tiffData = try TIFFSupport.encode(componentPixels: pixels, width: 2, height: 2, maxVal: 255)
+        let decoded = try TIFFSupport.decode(tiffData)
+        #expect(decoded.width == 2)
+        #expect(decoded.height == 2)
+        #expect(decoded.bitsPerSample == 8)
+        #expect(decoded.componentPixels.count == 1)
+        #expect(decoded.componentPixels[0][0][0] == 10)
+        #expect(decoded.componentPixels[0][0][1] == 20)
+        #expect(decoded.componentPixels[0][1][0] == 30)
+        #expect(decoded.componentPixels[0][1][1] == 40)
+    }
+
+    @Test("TIFF decoder round-trip: 16-bit greyscale encode → decode preserves pixel values")
+    func testTIFFDecodeGreyscale16bit() throws {
+        let pixels: [[[Int]]] = [[[0x0F00, 0x1234], [0xABCD, 0xFFFF]]]
+        let tiffData = try TIFFSupport.encode(componentPixels: pixels, width: 2, height: 2, maxVal: 65535)
+        let decoded = try TIFFSupport.decode(tiffData)
+        #expect(decoded.bitsPerSample == 16)
+        #expect(decoded.componentPixels[0][0][0] == 0x0F00)
+        #expect(decoded.componentPixels[0][0][1] == 0x1234)
+        #expect(decoded.componentPixels[0][1][0] == 0xABCD)
+        #expect(decoded.componentPixels[0][1][1] == 0xFFFF)
+    }
+
+    @Test("TIFF decoder round-trip: 8-bit RGB encode → decode preserves all three channels")
+    func testTIFFDecodeRGB8bit() throws {
+        let r: [[Int]] = [[255, 0], [128, 64]]
+        let g: [[Int]] = [[0, 200], [64, 100]]
+        let b: [[Int]] = [[50, 100], [200, 255]]
+        let pixels: [[[Int]]] = [r, g, b]
+        let tiffData = try TIFFSupport.encode(componentPixels: pixels, width: 2, height: 2, maxVal: 255)
+        let decoded = try TIFFSupport.decode(tiffData)
+        #expect(decoded.componentPixels.count == 3)
+        #expect(decoded.componentPixels[0] == r)
+        #expect(decoded.componentPixels[1] == g)
+        #expect(decoded.componentPixels[2] == b)
+    }
+
+    @Test("TIFF decoder round-trip: 16-bit RGB encode → decode preserves all three channels")
+    func testTIFFDecodeRGB16bit() throws {
+        let r: [[Int]] = [[1000, 2000], [3000, 4000]]
+        let g: [[Int]] = [[5000, 6000], [7000, 8000]]
+        let b: [[Int]] = [[9000, 10000], [11000, 12000]]
+        let pixels: [[[Int]]] = [r, g, b]
+        let tiffData = try TIFFSupport.encode(componentPixels: pixels, width: 2, height: 2, maxVal: 65535)
+        let decoded = try TIFFSupport.decode(tiffData)
+        #expect(decoded.componentPixels[0] == r)
+        #expect(decoded.componentPixels[1] == g)
+        #expect(decoded.componentPixels[2] == b)
+    }
+
+    @Test("TIFF decoder rejects data that is too short to be a valid TIFF file")
+    func testTIFFDecodeTooShort() {
+        let tinyData = Data([0x49, 0x49, 0x2A])  // 'II' + part of magic
+        #expect(throws: TIFFDecoderError.invalidByteOrderMark) {
+            try TIFFSupport.decode(tinyData)
+        }
+    }
+
+    @Test("TIFF decoder rejects files with an invalid byte-order mark")
+    func testTIFFDecodeInvalidByteOrder() {
+        var bad = Data(repeating: 0, count: 10)
+        bad[0] = 0x4A; bad[1] = 0x4A  // 'JJ' — not valid
+        #expect(throws: TIFFDecoderError.invalidByteOrderMark) {
+            try TIFFSupport.decode(bad)
+        }
+    }
+
+    @Test("TIFF decoder rejects files with an invalid magic number")
+    func testTIFFDecodeInvalidMagic() {
+        var bad = Data(repeating: 0, count: 10)
+        bad[0] = 0x49; bad[1] = 0x49  // 'II'
+        bad[2] = 0x2B; bad[3] = 0x00  // magic = 43, not 42
+        #expect(throws: TIFFDecoderError.invalidMagicNumber) {
+            try TIFFSupport.decode(bad)
+        }
+    }
+
+    @Test("TIFF decoder rejects compressed TIFF files (Compression ≠ 1)")
+    func testTIFFDecodeCompressed() throws {
+        // Build a minimal TIFF with Compression = 5 (LZW).
+        var tiffData = try TIFFSupport.encode(
+            componentPixels: [[[0]]], width: 1, height: 1, maxVal: 255
+        )
+        // Patch the Compression tag value in the IFD.
+        // IFD starts at offset 8; entry count at offset 8 (2 bytes LE).
+        // Each IFD entry is 12 bytes; Compression is tag 259 (0x0103).
+        let entryCount = Int(readLE16(tiffData, at: 8))
+        let entriesStart = 10
+        for i in 0..<entryCount {
+            let base = entriesStart + i * 12
+            let tag = readLE16(tiffData, at: base)
+            if tag == 259 {  // Compression tag
+                // Set value to 5 (LZW): for SHORT with count=1 the value is in bytes 8-9 of the entry.
+                tiffData[base + 8] = 0x05
+                tiffData[base + 9] = 0x00
+                break
+            }
+        }
+        #expect(throws: TIFFDecoderError.unsupportedCompression(5)) {
+            try TIFFSupport.decode(tiffData)
+        }
+    }
+
+    @Test("TIFF decoder maxVal property returns 255 for 8-bit and 65535 for 16-bit images")
+    func testTIFFImageMaxVal() throws {
+        let pixels8: [[[Int]]] = [[[100]]]
+        let tiff8 = try TIFFSupport.encode(componentPixels: pixels8, width: 1, height: 1, maxVal: 255)
+        let decoded8 = try TIFFSupport.decode(tiff8)
+        #expect(decoded8.maxVal == 255)
+
+        let pixels16: [[[Int]]] = [[[1000]]]
+        let tiff16 = try TIFFSupport.encode(componentPixels: pixels16, width: 1, height: 1, maxVal: 65535)
+        let decoded16 = try TIFFSupport.decode(tiff16)
+        #expect(decoded16.maxVal == 65535)
+    }
 }

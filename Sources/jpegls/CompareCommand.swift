@@ -162,7 +162,7 @@ extension JPEGLSCLITool {
             let components: [[[Int]]]
         }
 
-        /// Loads and decodes an image from `path`.  Supports JPEG-LS and PGM/PPM formats.
+        /// Loads and decodes an image from `path`.  Supports JPEG-LS, PGM/PPM, PNG, and TIFF formats.
         private func loadImage(path: String) throws -> DecodedImage {
             let data = try Data(contentsOf: URL(fileURLWithPath: path))
             if isPNMFile(path: path, data: data) {
@@ -172,6 +172,22 @@ extension JPEGLSCLITool {
                     height: pnm.height,
                     bitsPerSample: bitsNeeded(forMaxVal: pnm.maxVal),
                     components: pnm.componentPixels
+                )
+            } else if isPNGFile(path: path, data: data) {
+                let png = try PNGSupport.decode(data)
+                return DecodedImage(
+                    width: png.width,
+                    height: png.height,
+                    bitsPerSample: png.bitDepth,
+                    components: png.componentPixels
+                )
+            } else if isTIFFFile(path: path, data: data) {
+                let tiff = try TIFFSupport.decode(data)
+                return DecodedImage(
+                    width: tiff.width,
+                    height: tiff.height,
+                    bitsPerSample: tiff.bitsPerSample,
+                    components: tiff.componentPixels
                 )
             } else {
                 // Assume JPEG-LS
@@ -196,6 +212,18 @@ extension JPEGLSCLITool {
                     && (magic[1] == UInt8(ascii: "5") || magic[1] == UInt8(ascii: "6"))
             }
             return false
+        }
+
+        private func isPNGFile(path: String, data: Data) -> Bool {
+            let ext = (path as NSString).pathExtension.lowercased()
+            if ext == "png" { return true }
+            return PNGSupport.isPNG(data)
+        }
+
+        private func isTIFFFile(path: String, data: Data) -> Bool {
+            let ext = (path as NSString).pathExtension.lowercased()
+            if ext == "tiff" || ext == "tif" { return true }
+            return TIFFSupport.isTIFF(data)
         }
 
         private func bitsNeeded(forMaxVal maxVal: Int) -> Int {

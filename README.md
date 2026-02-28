@@ -279,11 +279,17 @@ The verify command checks:
 
 #### `jpegls encode` - Encode Image Data
 
-Encode raw pixel data or PGM/PPM images to JPEG-LS format:
+Encode raw pixel data, PGM/PPM, PNG, or TIFF images to JPEG-LS format:
 
 ```bash
 # Encode a PGM file (dimensions/components auto-detected from header)
 jpegls encode input.pgm output.jls
+
+# Encode a PNG file (dimensions/bit depth auto-detected)
+jpegls encode input.png output.jls
+
+# Encode a TIFF file
+jpegls encode input.tiff output.jls
 
 # Encode a PPM file with sample interleaving
 jpegls encode input.ppm output.jls --interleave sample
@@ -305,10 +311,10 @@ jpegls encode input.pgm output.jls --quiet
 ```
 
 **Options:**
-- `-w, --width`: Image width in pixels (required for raw input; auto-detected from PGM/PPM)
-- `-h, --height`: Image height in pixels (required for raw input; auto-detected from PGM/PPM)
-- `-b, --bits-per-sample`: Bits per sample, 2-16 (default: 8; auto-detected from PGM/PPM MAXVAL)
-- `-c, --components`: Number of components - 1 (greyscale) or 3 (RGB) (default: 1; auto-detected from PGM/PPM)
+- `-w, --width`: Image width in pixels (required for raw input; auto-detected from PGM/PPM/PNG/TIFF)
+- `-h, --height`: Image height in pixels (required for raw input; auto-detected from PGM/PPM/PNG/TIFF)
+- `-b, --bits-per-sample`: Bits per sample, 2-16 (default: 8; auto-detected from PGM/PPM MAXVAL or PNG/TIFF bit depth)
+- `-c, --components`: Number of components - 1 (greyscale) or 3 (RGB) (default: 1; auto-detected from PGM/PPM/PNG/TIFF)
 - `--near`: NEAR parameter, 0=lossless, 1-255=lossy (default: 0)
 - `--interleave`: Interleave mode - none, line, sample (default: none)
 - `--color-transform` / `--colour-transform`: Colour transformation - none, hp1, hp2, hp3 (default: none)
@@ -318,7 +324,7 @@ jpegls encode input.pgm output.jls --quiet
 - `--quiet`: Suppress non-essential output
 - `--no-colour` / `--no-color`: Disable ANSI colour codes in terminal output
 
-**Supported input formats:** raw pixel data, PGM (P5 binary), PPM (P6 binary)
+**Supported input formats:** raw pixel data, PGM (P5 binary), PPM (P6 binary), PNG (uncompressed stored-DEFLATE), TIFF (uncompressed baseline)
 
 #### `jpegls decode` - Decode JPEG-LS File
 
@@ -340,14 +346,14 @@ jpegls decode input.jls output.pgm --format pgm --quiet
 ```
 
 **Options:**
-- `--format`: Output format - raw, pgm, ppm, png, tiff (default: raw) *(PNG/TIFF support planned)*
+- `--format`: Output format - raw, pgm, ppm, png, tiff (default: raw)
 - `--verbose`: Enable verbose output
 - `--quiet`: Suppress non-essential output
 - `--no-colour` / `--no-color`: Disable ANSI colour codes in terminal output
 
-**Supported output formats:** raw pixel data, PGM (P5 binary), PPM (P6 binary)
+**Supported output formats:** raw pixel data, PGM (P5 binary), PPM (P6 binary), PNG (uncompressed stored-DEFLATE), TIFF (uncompressed baseline)
 
-**Note:** All four commands (`encode`, `decode`, `info`, `verify`) are fully functional. Lossless decoding supports 8-bit and 16-bit images in all interleaving modes (none, line, sample). The `encode` command accepts PGM/PPM files directly with auto-detected parameters, and the `decode` command can output PGM/PPM files.
+**Note:** All four commands (`encode`, `decode`, `info`, `verify`) are fully functional. Lossless decoding supports 8-bit and 16-bit images in all interleaving modes (none, line, sample). The `encode` command accepts PGM/PPM/PNG/TIFF files directly with auto-detected parameters, and the `decode` command can output PGM/PPM/PNG/TIFF files.
 
 #### `jpegls batch` - Batch Process Multiple Files
 
@@ -397,7 +403,7 @@ jpegls batch info "*.jls" --fail-fast
 
 #### `jpegls compare` - Compare Two Image Files
 
-Compare two image files (JPEG-LS or PGM/PPM) pixel-by-pixel:
+Compare two image files (JPEG-LS, PGM/PPM, PNG, or TIFF) pixel-by-pixel:
 
 ```bash
 # Exact comparison of two JPEG-LS files (exit 0 = identical)
@@ -408,6 +414,10 @@ jpegls compare original.jls encoded.jls --near 3
 
 # Compare JPEG-LS against PGM reference image
 jpegls compare reference.pgm decoded.jls --verbose
+
+# Compare JPEG-LS against PNG or TIFF reference
+jpegls compare reference.png decoded.jls
+jpegls compare reference.tiff decoded.jls
 
 # JSON output for scripted pipelines
 jpegls compare a.jls b.jls --json
@@ -428,6 +438,50 @@ jpegls compare a.jls b.jls --quiet && echo "match"
 - `1`: One or more samples exceed tolerance, or an error occurred
 
 **Statistics reported:** max error, mean absolute error, mismatch sample count.
+
+**Supported input formats:** JPEG-LS (`.jls`), PGM (`.pgm`), PPM (`.ppm`), PNG (`.png`), TIFF (`.tiff`/`.tif`)
+
+#### `jpegls convert` - Convert Between Image Formats
+
+Convert an image from one format to another:
+
+```bash
+# Convert JPEG-LS to PNG
+jpegls convert image.jls image.png
+
+# Convert JPEG-LS to TIFF
+jpegls convert image.jls image.tiff
+
+# Convert PNG to JPEG-LS (lossless)
+jpegls convert image.png image.jls
+
+# Convert TIFF to JPEG-LS with near-lossless encoding
+jpegls convert image.tiff image.jls --near 3
+
+# Convert PGM to PNG
+jpegls convert image.pgm image.png
+
+# Convert with colour transformation
+jpegls convert rgb.png rgb.jls --colour-transform hp1
+
+# Convert JPEG-LS to PGM/PPM
+jpegls convert image.jls image.pgm
+jpegls convert image.jls image.ppm
+```
+
+**Options:**
+- `--near N`: NEAR parameter for JPEG-LS output (0=lossless, 1-255=lossy; default: 0)
+- `--interleave`: Interleave mode for JPEG-LS output — none, line, sample (default: none)
+- `--color-transform` / `--colour-transform`: Colour transformation for JPEG-LS output — none, hp1, hp2, hp3 (default: none)
+- `--t1`, `--t2`, `--t3`, `--reset`: Custom preset parameters for JPEG-LS output (all four required together)
+- `--optimise` / `--optimize`: Embed computed preset parameters in JPEG-LS output bitstream
+- `--verbose`: Enable verbose output
+- `--quiet`: Suppress non-essential output
+- `--no-colour` / `--no-color`: Disable ANSI colour codes in terminal output
+
+**Supported input formats:** JPEG-LS (`.jls`), PNG (`.png`), TIFF (`.tiff`/`.tif`), PGM (`.pgm`), PPM (`.ppm`)
+
+**Supported output formats:** JPEG-LS (`.jls`), PNG (`.png`), TIFF (`.tiff`/`.tif`), PGM (`.pgm`), PPM (`.ppm`), raw (any other extension)
 
 #### `jpegls completion` - Generate Shell Completions
 

@@ -949,8 +949,8 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 - [x] Implement TIFF output format support for the `decode` command
 - [x] Implement PGM/PPM output format support for the `decode` command
 - [x] Implement PGM/PPM input format support for the `encode` command (auto-detect dimensions/components)
-- [ ] Implement PNG/TIFF input format support for the `encode` command
-- [ ] Implement `jpegls convert` command for format-to-format conversion
+- [x] Implement PNG/TIFF input format support for the `encode` command
+- [x] Implement `jpegls convert` command for format-to-format conversion
 - [ ] Implement `jpegls benchmark` command for quick performance measurement
 - [x] Implement `jpegls compare` command to diff two JPEG-LS files (also supports PGM/PPM reference inputs)
 - [x] Implement `--preset` parameter integration in the encoder (custom T1, T2, T3, RESET)
@@ -1034,6 +1034,31 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
   - The `maxValue` for the preset is derived from `resolvedBitsPerSample`: `(1 << bitsPerSample) - 1`.
   - If fewer than all four are provided, falls back to the `--optimise` / default behaviour.
 
+**Implementation Details (PNG/TIFF input for `encode`):**
+- Added `PNGDecoder` (static `PNGSupport.decode(_:)`) and `TIFFDecoder` (static `TIFFSupport.decode(_:)`) to `PNGSupport.swift` and `TIFFSupport.swift` respectively:
+  - PNG decoder: supports 8-bit and 16-bit greyscale and RGB PNG files using stored (uncompressed) DEFLATE blocks and filter type 0 (None), matching all PNG files produced by `PNGSupport.encode`; compressed PNGs from other tools are not supported
+  - TIFF decoder: supports uncompressed (Compression=1) Baseline TIFF files with 8-bit or 16-bit samples, greyscale (1 component) or RGB (3 components), and chunky planar configuration, matching all TIFF files produced by `TIFFSupport.encode`
+  - Both decoders return pixel data as `[component][row][col]` with full error enumerations (`PNGDecoderError`, `TIFFDecoderError`)
+  - Added corresponding `PNGImage` and `TIFFImage` value types
+- Updated `EncodeCommand.swift`:
+  - Added `isPNGFile(path:data:)` and `isTIFFFile(path:data:)` detection helpers (extension check + magic bytes)
+  - Extended the auto-detection branch to handle PNG (via `PNGSupport.decode`) and TIFF (via `TIFFSupport.decode`) inputs alongside the existing PGM/PPM branch
+  - Updated argument help text and error messages to list PNG and TIFF as auto-detected input formats
+- Updated `CompareCommand.swift`: `loadImage` now also handles PNG and TIFF inputs for pixel-by-pixel comparison
+- 13 new PNG decoder tests added to `JPEGLSPNGOutputTests.swift` (round-trips 8/16-bit greyscale and RGB; error cases for invalid signature, missing IHDR/IDAT, unsupported bit depth/colour type, interlaced, Huffman DEFLATE, non-None filter)
+- 10 new TIFF decoder tests added to `JPEGLSTIFFOutputTests.swift` (round-trips 8/16-bit greyscale and RGB; error cases for short data, invalid byte order, invalid magic, compressed TIFF)
+
+**Implementation Details (Phase 17.1 — `jpegls convert`):**
+- New `ConvertCommand.swift` in the `jpegls` CLI target
+  - Accepts two positional arguments: `input` (any supported format) and `output` (format determined by extension)
+  - Supported input formats: JPEG-LS (`.jls`), PNG (`.png`), TIFF (`.tiff`/`.tif`), PGM (`.pgm`), PPM (`.ppm`)
+  - Supported output formats: JPEG-LS (`.jls`), PNG (`.png`), TIFF (`.tiff`/`.tif`), PGM (`.pgm`), PPM (`.ppm`), raw (any other extension)
+  - JPEG-LS output options: `--near`, `--interleave`, `--colour-transform`/`--color-transform`, `--t1`/`--t2`/`--t3`/`--reset`, `--optimise`/`--optimize`
+  - Global options: `--verbose`, `--quiet`, `--no-colour`/`--no-color`
+  - Auto-detects input format by file extension and magic bytes (same logic as encode/compare)
+- Registered as `Convert.self` in the root `JPEGLSCLITool` subcommands list
+- Added `ConvertCommandTests` suite in `CLIArgumentParsingTests.swift` (13 tests) covering: output format recognition, NEAR range validation, interleave mode validation, colour-transform validation, verbose/quiet mutual exclusivity, PNG/TIFF decoder availability, and JPEG-LS encode from PNG/TIFF round-trip tests
+
 #### Phase 17.2: British & American Spelling Support ✅
 - [x] Support both `--colour-transform` and `--color-transform` options
 - [x] Support both `--no-colour` and `--no-color` in all relevant contexts (encode, decode, info, verify, batch)
@@ -1065,9 +1090,9 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 
 **Implementation Details (Phase 17.1 — `jpegls compare`):**
 - New `CompareCommand.swift` in the `jpegls` CLI target
-  - Accepts two positional arguments: `first` and `second` (JPEG-LS `.jls` or PGM/PPM `.pgm`/`.ppm`)
+  - Accepts two positional arguments: `first` and `second` (JPEG-LS `.jls`, PGM/PPM `.pgm`/`.ppm`, PNG `.png`, or TIFF `.tiff`/`.tif`)
   - Options: `--near` (0–255, default 0), `--json`, `--verbose`, `--quiet`, `--no-colour`/`--no-color`
-  - Decodes both inputs (JPEG-LS via `JPEGLSDecoder`; PGM/PPM via `PNMSupport.parse`)
+  - Decodes both inputs (JPEG-LS via `JPEGLSDecoder`; PGM/PPM via `PNMSupport.parse`; PNG via `PNGSupport.decode`; TIFF via `TIFFSupport.decode`)
   - Validates matching component count and dimensions; reports max error, mean absolute error, mismatch count
   - Exit code 0 if all samples are within `--near` tolerance; exit code 1 if any mismatch or error
   - JSON output mode via `--json` for scripted pipelines
@@ -1278,7 +1303,7 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 | **14** | Intel x86-64 Optimisation | SSE/AVX enhancement, memory/cache tuning, separation verification 📋 |
 | **15** | GPU Compute | Metal pipeline enhancement, Vulkan compute support (Linux/Windows), GPU testing 📋 |
 | **16** | Performance Optimisation | Hotspot analysis, algorithmic optimisation, CharLS head-to-head benchmarking 📋 |
-| **17** | CLI Enhancement | Missing functionality ⏳, British & American spelling support ✅, help & usage docs ⏳ |
+| **17** | CLI Enhancement | PNG/TIFF input for encode ✅, convert command ✅, British & American spelling support ✅, help & usage docs ⏳ |
 | **18** | Localisation | British English in comments ✅, help text ✅, error messages ✅, documentation ✅ |
 | **19** | Documentation & J2KSwift | Documentation revision ✅, sample code ✅, J2KSwift consistency alignment 📋 |
 | **20** | Final Integration & Release | DICOM independence, full test suite, performance validation, v1.0 release 📋 |
