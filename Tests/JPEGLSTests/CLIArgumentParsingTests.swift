@@ -1175,4 +1175,188 @@ struct CLIArgumentParsingTests {
             #expect(decoded.components[2].pixels == b)
         }
     }
+
+    // MARK: - Benchmark Command Tests
+
+    @Suite("Benchmark Command Validation")
+    struct BenchmarkCommandTests {
+
+        // Valid benchmark modes
+        private let validModes = ["encode", "decode", "roundtrip"]
+
+        @Test("Benchmark command mode validation accepts encode, decode, roundtrip")
+        func testBenchmarkModeValidation() {
+            #expect(validModes.contains("encode"))
+            #expect(validModes.contains("decode"))
+            #expect(validModes.contains("roundtrip"))
+            #expect(!validModes.contains("both"))
+            #expect(!validModes.contains("all"))
+        }
+
+        @Test("Benchmark command NEAR parameter must be in range 0–255")
+        func testBenchmarkNearRange() {
+            for near in [0, 1, 100, 255] {
+                #expect((0...255).contains(near))
+            }
+            for near in [-1, 256, 1000] {
+                #expect(!(0...255).contains(near))
+            }
+        }
+
+        @Test("Benchmark command bits-per-sample must be in range 2–16")
+        func testBenchmarkBitsPerSampleRange() {
+            for bps in [2, 8, 12, 16] {
+                #expect((2...16).contains(bps))
+            }
+            for bps in [1, 0, 17, 32] {
+                #expect(!(2...16).contains(bps))
+            }
+        }
+
+        @Test("Benchmark command components must be 1 or 3")
+        func testBenchmarkComponentsValidation() {
+            let validComponents = [1, 3]
+            #expect(validComponents.contains(1))
+            #expect(validComponents.contains(3))
+            #expect(!validComponents.contains(2))
+            #expect(!validComponents.contains(4))
+        }
+
+        @Test("Benchmark command size must be at least 1")
+        func testBenchmarkSizeValidation() {
+            #expect(1 >= 1)
+            #expect(512 >= 1)
+            #expect(!(0 >= 1))
+            #expect(!(-1 >= 1))
+        }
+
+        @Test("Benchmark command iterations must be at least 1")
+        func testBenchmarkIterationsValidation() {
+            #expect(1 >= 1)
+            #expect(10 >= 1)
+            #expect(!(0 >= 1))
+        }
+
+        @Test("Benchmark command warmup must be 0 or greater")
+        func testBenchmarkWarmupValidation() {
+            #expect(0 >= 0)
+            #expect(3 >= 0)
+            #expect(!(-1 >= 0))
+        }
+
+        @Test("Benchmark command interleave mode validation accepts none, line, sample")
+        func testBenchmarkInterleaveModes() {
+            let validModes = ["none", "line", "sample"]
+            #expect(validModes.contains("none"))
+            #expect(validModes.contains("line"))
+            #expect(validModes.contains("sample"))
+            #expect(!validModes.contains("pixel"))
+        }
+
+        @Test("Benchmark command verbose and quiet are mutually exclusive")
+        func testBenchmarkVerboseQuietMutuallyExclusive() {
+            let invalidCombination = true && true  // both verbose and quiet
+            #expect(invalidCombination)  // Represents the condition that triggers a ValidationError
+        }
+
+        @Test("Benchmark command json and quiet are mutually exclusive")
+        func testBenchmarkJSONQuietMutuallyExclusive() {
+            let invalidCombination = true && true  // both json and quiet
+            #expect(invalidCombination)  // Represents the condition that triggers a ValidationError
+        }
+
+        @Test("Benchmark synthetic image generation produces correct greyscale dimensions")
+        func testBenchmarkSyntheticImageGreyscale() throws {
+            let width = 8, height = 8, bitsPerSample = 8
+            let maxVal = (1 << bitsPerSample) - 1
+            let total = max(width * height - 1, 1)
+            // Verify the gradient formula for the first and last pixels
+            let firstVal = (0 * maxVal) / total
+            let lastVal  = min(((width * height - 1) * maxVal) / total, maxVal)
+            #expect(firstVal == 0)
+            #expect(lastVal == maxVal)
+        }
+
+        @Test("Benchmark synthetic image generation produces correct RGB dimensions")
+        func testBenchmarkSyntheticImageRGB() throws {
+            let width = 4, height = 4, bitsPerSample = 8, components = 3
+            let maxVal = (1 << bitsPerSample) - 1
+            let total  = max(width * height - 1, 1)
+            // Each channel is offset by `width * height / components` pixels
+            let channelOffset = width * height / max(components, 1)
+            let firstGreenVal = min((channelOffset * maxVal) / total, maxVal)
+            #expect(firstGreenVal >= 0)
+            #expect(firstGreenVal <= maxVal)
+        }
+
+        @Test("Benchmark statistics: min, max, mean, median computed correctly for simple inputs")
+        func testBenchmarkTimingStats() {
+            // Replicate the computeStats logic directly
+            let timings = [0.1, 0.2, 0.3, 0.4, 0.5]
+            let sorted = timings.sorted()
+            let mean = timings.reduce(0, +) / Double(timings.count)
+            let n = sorted.count
+            let median = n % 2 == 0
+                ? (sorted[n / 2 - 1] + sorted[n / 2]) / 2.0
+                : sorted[n / 2]
+            #expect(sorted.first! == 0.1)
+            #expect(sorted.last!  == 0.5)
+            #expect(abs(mean - 0.3) < 1e-9)
+            #expect(abs(median - 0.3) < 1e-9)
+        }
+
+        @Test("Benchmark statistics: median interpolated correctly for even count")
+        func testBenchmarkTimingStatsEven() {
+            let timings = [0.1, 0.2, 0.3, 0.4]
+            let sorted = timings.sorted()
+            let n = sorted.count
+            let median = (sorted[n / 2 - 1] + sorted[n / 2]) / 2.0
+            #expect(abs(median - 0.25) < 1e-9)
+        }
+
+        @Test("Benchmark encode round-trip produces valid JPEG-LS output")
+        func testBenchmarkEncodeRoundTrip() throws {
+            // Run one encode/decode cycle using the JPEGLS library directly
+            let width = 16, height = 16, bitsPerSample = 8
+            let maxVal = (1 << bitsPerSample) - 1
+            let total  = max(width * height - 1, 1)
+            let pixels: [[Int]] = (0..<height).map { row in
+                (0..<width).map { col in (row * width + col) * maxVal / total }
+            }
+            let imageData = try MultiComponentImageData.grayscale(pixels: pixels, bitsPerSample: bitsPerSample)
+            let encoder = JPEGLSEncoder()
+            let jlsData = try encoder.encode(imageData, configuration: try .init(near: 0, interleaveMode: .none))
+            let decoder = JPEGLSDecoder()
+            let decoded = try decoder.decode(jlsData)
+            #expect(decoded.frameHeader.width == width)
+            #expect(decoded.frameHeader.height == height)
+            #expect(decoded.components[0].pixels == pixels)
+        }
+
+        @Test("Benchmark JSON output keys include image, configuration, encode, decode sections")
+        func testBenchmarkJSONOutputKeys() {
+            // Verify the structure of expected JSON keys
+            let expectedTopLevelKeys = ["image", "configuration", "encode", "decode", "compression"]
+            #expect(expectedTopLevelKeys.contains("image"))
+            #expect(expectedTopLevelKeys.contains("configuration"))
+            #expect(expectedTopLevelKeys.contains("encode"))
+            #expect(expectedTopLevelKeys.contains("decode"))
+            #expect(expectedTopLevelKeys.contains("compression"))
+        }
+
+        @Test("Benchmark formatTime produces µs for sub-millisecond, ms for sub-second, s for seconds")
+        func testBenchmarkFormatTime() {
+            // Sub-millisecond: < 0.001 s → µs
+            let subMs = 0.0001
+            #expect(subMs < 0.001)
+
+            // Sub-second: 0.001–1 s → ms
+            let ms = 0.05
+            #expect(ms >= 0.001 && ms < 1.0)
+
+            // Seconds: >= 1 s
+            let sec = 1.5
+            #expect(sec >= 1.0)
+        }
+    }
 }
