@@ -438,7 +438,7 @@ extension JPEGLSCLITool {
             case "line":   return .line
             case "sample": return .sample
             default:
-                throw ValidationError("Invalid interleave mode '\(s)'. Must be none, line, or sample")
+                throw ValidationError("Invalid interleave mode '\(s)'. Valid values: none, line, sample. See 'jpegls benchmark --help' for examples.")
             }
         }
 

@@ -5,7 +5,33 @@ import JPEGLS
 extension JPEGLSCLITool {
     struct Decode: ParsableCommand {
         static let configuration = CommandConfiguration(
-            abstract: "Decode JPEG-LS file to raw pixel data"
+            abstract: "Decode JPEG-LS file to raw pixel data",
+            discussion: """
+            Decodes a JPEG-LS file and writes the pixel data in the chosen format.
+
+            Supported output formats (--format):
+              raw   — packed pixel bytes; 8-bit samples as bytes, 16-bit as big-endian words (default)
+              pgm   — PGM binary (P5) for greyscale; auto-selected based on component count
+              ppm   — PPM binary (P6) for colour; auto-selected based on component count
+              png   — PNG file (8-bit or 16-bit greyscale or RGB)
+              tiff  — TIFF file (uncompressed baseline, 8-bit or 16-bit greyscale or RGB)
+
+            Examples:
+              # Decode to raw pixel data (default)
+              jpegls decode input.jls output.raw
+
+              # Decode to PNG
+              jpegls decode input.jls output.png --format png
+
+              # Decode to TIFF
+              jpegls decode input.jls output.tiff --format tiff
+
+              # Decode to PGM (greyscale) or PPM (colour) — format matches component count
+              jpegls decode input.jls output.pgm --format pgm
+
+              # Verbose output showing decoded image properties
+              jpegls decode input.jls output.png --format png --verbose
+            """
         )
         
         @Argument(help: "Input JPEG-LS file path")
@@ -94,7 +120,7 @@ extension JPEGLSCLITool {
                 }
                 
             case "pgm", "ppm":
-                // Write PGM (grayscale) or PPM (colour) file
+                // Write PGM (greyscale) or PPM (colour) file
                 let componentPixels: [[[Int]]] = imageData.components.map { $0.pixels }
                 let maxVal = (1 << imageData.frameHeader.bitsPerSample) - 1
                 let pnmData = try PNMSupport.encode(
@@ -143,7 +169,7 @@ extension JPEGLSCLITool {
                 }
                 
             default:
-                throw ValidationError("Unknown format '\(format)' — supported formats: raw, pgm, ppm, png, tiff")
+                throw ValidationError("Unknown format '\(format)' — supported formats: raw, pgm, ppm, png, tiff. See 'jpegls decode --help' for examples.")
             }
         }
     }

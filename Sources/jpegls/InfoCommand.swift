@@ -5,7 +5,21 @@ import JPEGLS
 extension JPEGLSCLITool {
     struct Info: ParsableCommand {
         static let configuration = CommandConfiguration(
-            abstract: "Display information about JPEG-LS file"
+            abstract: "Display information about JPEG-LS file",
+            discussion: """
+            Parses a JPEG-LS file and displays its metadata including frame dimensions,
+            bit depth, component count, scan parameters, and compression ratio.
+
+            Examples:
+              # Display human-readable file information
+              jpegls info image.jls
+
+              # Output metadata as JSON (for scripted pipelines)
+              jpegls info image.jls --json
+
+              # Compact one-line summary (quiet mode)
+              jpegls info image.jls --quiet
+            """
         )
         
         @Argument(help: "JPEG-LS file path")

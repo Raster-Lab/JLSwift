@@ -5,7 +5,28 @@ import JPEGLS
 extension JPEGLSCLITool {
     struct Verify: ParsableCommand {
         static let configuration = CommandConfiguration(
-            abstract: "Verify JPEG-LS file integrity and perform round-trip validation"
+            abstract: "Verify JPEG-LS file integrity and perform round-trip validation",
+            discussion: """
+            Validates the structure and parameters of a JPEG-LS file by checking:
+              • File structure (SOI, SOF, SOS, EOI markers)
+              • Frame header fields (width, height, bit depth, component count)
+              • Scan header fields (component selectors, interleave mode, NEAR)
+              • Preset parameters (MAXVAL, threshold ordering, RESET range)
+
+            Examples:
+              # Verify a JPEG-LS file
+              jpegls verify image.jls
+
+              # Verbose verification showing each validation step
+              jpegls verify image.jls --verbose
+
+              # Suppress all output (use exit code only)
+              jpegls verify image.jls --quiet
+
+            Exit codes:
+              0  Verification passed
+              1  Verification failed (error details printed unless --quiet)
+            """
         )
         
         @Argument(help: "JPEG-LS file path to verify")

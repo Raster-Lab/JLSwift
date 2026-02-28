@@ -5,7 +5,41 @@ import JPEGLS
 extension JPEGLSCLITool {
     struct Encode: ParsableCommand {
         static let configuration = CommandConfiguration(
-            abstract: "Encode image to JPEG-LS format"
+            abstract: "Encode image to JPEG-LS format",
+            discussion: """
+            Encodes an image file to JPEG-LS format.
+
+            Supported input formats (auto-detected):
+              Raw pixel data  — requires --width, --height (and optionally --bits-per-sample, --components)
+              PGM / PPM       (.pgm / .ppm) — dimensions and bit depth auto-detected from header
+              PNG             (.png) — 8-bit and 16-bit greyscale or RGB; uncompressed stored-DEFLATE only
+              TIFF            (.tiff / .tif) — uncompressed baseline TIFF; 8-bit or 16-bit greyscale or RGB
+
+            Examples:
+              # Lossless encode from PNG
+              jpegls encode photo.png photo.jls
+
+              # Lossless encode from PGM (dimensions auto-detected)
+              jpegls encode scan.pgm scan.jls
+
+              # Lossless encode from raw 8-bit greyscale pixels
+              jpegls encode pixels.raw output.jls --width 512 --height 512
+
+              # Near-lossless encode with NEAR=3
+              jpegls encode input.png output.jls --near 3
+
+              # Encode with line-interleaved RGB and HP1 colour transform
+              jpegls encode input.ppm output.jls --interleave line --colour-transform hp1
+
+              # Encode with custom preset parameters
+              jpegls encode input.png output.jls --t1 3 --t2 7 --t3 21 --reset 64
+
+              # Embed default preset parameters explicitly (self-contained file)
+              jpegls encode input.png output.jls --optimise
+
+              # Verbose output showing encoding details
+              jpegls encode input.png output.jls --verbose
+            """
         )
         
         @Argument(help: "Input image file path (raw pixel data, PGM, PPM, PNG, or TIFF)")
@@ -23,7 +57,7 @@ extension JPEGLSCLITool {
         @Option(name: .shortAndLong, help: "Bits per sample (2-16, default: 8; auto-detected from PGM/PPM MAXVAL)")
         var bitsPerSample: Int?
         
-        @Option(name: .shortAndLong, help: "Number of components (1=grayscale, 3=RGB, default: 1; auto-detected from PGM/PPM)")
+        @Option(name: .shortAndLong, help: "Number of components (1=greyscale, 3=RGB, default: 1; auto-detected from PGM/PPM)")
         var components: Int?
         
         @Option(name: .long, help: "NEAR parameter for near-lossless encoding (0=lossless, 1-255=lossy, default: 0)")
@@ -164,7 +198,7 @@ extension JPEGLSCLITool {
                     throw ValidationError("Bits per sample must be between 2 and 16")
                 }
                 guard [1, 3].contains(resolvedComponents) else {
-                    throw ValidationError("Components must be 1 (grayscale) or 3 (RGB)")
+                    throw ValidationError("Components must be 1 (greyscale) or 3 (RGB)")
                 }
                 
                 let expectedSize = resolvedWidth * resolvedHeight * resolvedComponents * ((resolvedBitsPerSample + 7) / 8)
@@ -198,7 +232,7 @@ extension JPEGLSCLITool {
                 print()
             }
             
-            // Determine interleave mode (grayscale always uses .none)
+            // Determine interleave mode (greyscale always uses .none)
             let actualInterleaveMode: JPEGLSInterleaveMode = resolvedComponents == 1 ? .none : interleaveMode
             
             // Resolve preset parameters:
@@ -362,7 +396,7 @@ extension JPEGLSCLITool {
             case "line":   return .line
             case "sample": return .sample
             default:
-                throw ValidationError("Invalid interleave mode: \(mode). Must be none, line, or sample")
+                throw ValidationError("Invalid interleave mode '\(mode)'. Valid values: none, line, sample. See 'jpegls encode --help' for examples.")
             }
         }
         
@@ -373,7 +407,7 @@ extension JPEGLSCLITool {
             case "hp2":  return .hp2
             case "hp3":  return .hp3
             default:
-                throw ValidationError("Invalid colour transformation: \(transform). Must be none, hp1, hp2, or hp3")
+                throw ValidationError("Invalid colour transformation '\(transform)'. Valid values: none, hp1, hp2, hp3. See 'jpegls encode --help' for examples.")
             }
         }
         

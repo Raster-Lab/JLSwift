@@ -35,7 +35,7 @@ struct Batch: ParsableCommand {
     @Option(name: .shortAndLong, help: "Bits per sample, 2-16 (default: 8)")
     var bitsPerSample: Int = 8
     
-    @Option(name: .shortAndLong, help: "Number of components - 1 (grayscale) or 3 (RGB) (default: 1)")
+    @Option(name: .shortAndLong, help: "Number of components - 1 (greyscale) or 3 (RGB) (default: 1)")
     var components: Int = 1
     
     @Option(help: "NEAR parameter, 0=lossless, 1-255=lossy (default: 0)")
@@ -102,7 +102,7 @@ struct Batch: ParsableCommand {
                 throw ValidationError("--bits-per-sample must be between 2 and 16")
             }
             guard components == 1 || components == 3 else {
-                throw ValidationError("--components must be 1 (grayscale) or 3 (RGB)")
+                throw ValidationError("--components must be 1 (greyscale) or 3 (RGB)")
             }
             guard (0...255).contains(near) else {
                 throw ValidationError("--near must be between 0 and 255")
