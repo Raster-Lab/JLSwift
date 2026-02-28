@@ -134,8 +134,9 @@ Decode JPEG-LS file to raw pixel data or an image file.
 .SS Options
 .TP
 .B \-\-format \fIformat\fR
-Output format: \fBraw\fR, \fBpgm\fR, \fBppm\fR, \fBpng\fR, or \fBtiff\fR (default: raw).
-PGM and PPM output are supported. PNG and TIFF support is planned.
+Output format: \fBraw\fR, \fBpgm\fR, \fBppm\fR, or \fBpng\fR (default: raw).
+PNG output encodes the decoded image as a valid PNG file using uncompressed DEFLATE (compatible with all PNG readers, no external library required).
+PGM/PPM and PNG output are fully supported. TIFF support is planned.
 .TP
 .BR \-\-no\-colour " (or " \-\-no\-color )
 Disable ANSI colour codes in terminal output.
@@ -481,7 +482,7 @@ ISO/IEC 14495-1:1999 - Lossless and near-lossless compression of continuous-tone
 ITU-T Recommendation T.87 (identical to ISO/IEC 14495-1)
 .SH BUGS
 .IP \(bu 2
-PNG and TIFF output formats for the decode command are planned but not yet implemented.
+TIFF output format for the decode command is planned but not yet implemented.
 .IP \(bu 2
 PNG and TIFF input formats for the encode command are planned but not yet implemented.
 .PP
@@ -530,6 +531,11 @@ Decode to PGM:
 .IP
 .B jpegls decode
 image.jls output.pgm \fB\-\-format\fR pgm
+.PP
+Decode to PNG:
+.IP
+.B jpegls decode
+image.jls output.png \fB\-\-format\fR png
 .PP
 Compare decoded output against reference:
 .IP
