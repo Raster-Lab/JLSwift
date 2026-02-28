@@ -13,6 +13,7 @@
 //   - All target bit depths (8-bit, 12-bit, 16-bit) are correctly handled.
 //   - Near-lossless coding (NEAR > 0) respects the error bound on natural images.
 //   - Grayscale and RGB component configurations are both correctly encoded.
+//   - Part 2 colour transforms (HP1, HP2, HP3) work correctly on natural images.
 //
 // Coverage:
 //   Phase 12.2 items addressed:
@@ -22,6 +23,8 @@
 //     ✅ All interleaving modes: none, line, sample
 //     ✅ Bit depths: 8-bit and 12-bit (natural images); 16-bit in RoundTripTests
 //     ✅ Grayscale and RGB configurations
+//   Phase 12.1 items addressed:
+//     ✅ Test encoding/decoding with colour transformations (HP1, HP2, HP3) on natural images
 //
 // Note: Bit depth listed as "16-bit" in the JLS standard actually stores 12-bit
 // (MAXVAL=4095) samples for the CharLS test16 reference image.
@@ -48,6 +51,8 @@ struct EncodeInteropTestCase: CustomTestStringConvertible, Sendable {
     let near: Int
     /// Interleave mode used for encoding
     let interleaveMode: JPEGLSInterleaveMode
+    /// Part 2 colour transformation applied before encoding
+    let colorTransformation: JPEGLSColorTransformation
     /// Human-readable description used as the Swift Testing test name
     let description: String
 
@@ -72,33 +77,33 @@ struct CharLSEncodeInteropTests {
         EncodeInteropTestCase(
             referenceFile: "test8.ppm",
             width: 256, height: 256, components: 3, maxVal: 255, near: 0,
-            interleaveMode: .none,
+            interleaveMode: .none, colorTransformation: .none,
             description: "8-bit RGB none-ILV lossless"
         ),
         EncodeInteropTestCase(
             referenceFile: "test8.ppm",
             width: 256, height: 256, components: 3, maxVal: 255, near: 0,
-            interleaveMode: .line,
+            interleaveMode: .line, colorTransformation: .none,
             description: "8-bit RGB line-ILV lossless"
         ),
         EncodeInteropTestCase(
             referenceFile: "test8.ppm",
             width: 256, height: 256, components: 3, maxVal: 255, near: 0,
-            interleaveMode: .sample,
+            interleaveMode: .sample, colorTransformation: .none,
             description: "8-bit RGB sample-ILV lossless"
         ),
         // 8-bit grayscale (test8r.pgm — R component of test8)
         EncodeInteropTestCase(
             referenceFile: "test8r.pgm",
             width: 256, height: 256, components: 1, maxVal: 255, near: 0,
-            interleaveMode: .none,
+            interleaveMode: .none, colorTransformation: .none,
             description: "8-bit grayscale lossless"
         ),
         // 12-bit grayscale (test16.pgm — stored with MAXVAL=4095)
         EncodeInteropTestCase(
             referenceFile: "test16.pgm",
             width: 256, height: 256, components: 1, maxVal: 4095, near: 0,
-            interleaveMode: .none,
+            interleaveMode: .none, colorTransformation: .none,
             description: "12-bit grayscale lossless"
         ),
     ]
@@ -111,27 +116,131 @@ struct CharLSEncodeInteropTests {
         EncodeInteropTestCase(
             referenceFile: "test8.ppm",
             width: 256, height: 256, components: 3, maxVal: 255, near: 3,
-            interleaveMode: .none,
+            interleaveMode: .none, colorTransformation: .none,
             description: "8-bit RGB none-ILV near=3"
         ),
         EncodeInteropTestCase(
             referenceFile: "test8.ppm",
             width: 256, height: 256, components: 3, maxVal: 255, near: 3,
-            interleaveMode: .line,
+            interleaveMode: .line, colorTransformation: .none,
             description: "8-bit RGB line-ILV near=3"
         ),
         EncodeInteropTestCase(
             referenceFile: "test8.ppm",
             width: 256, height: 256, components: 3, maxVal: 255, near: 3,
-            interleaveMode: .sample,
+            interleaveMode: .sample, colorTransformation: .none,
             description: "8-bit RGB sample-ILV near=3"
         ),
         // 12-bit grayscale near=3
         EncodeInteropTestCase(
             referenceFile: "test16.pgm",
             width: 256, height: 256, components: 1, maxVal: 4095, near: 3,
-            interleaveMode: .none,
+            interleaveMode: .none, colorTransformation: .none,
             description: "12-bit grayscale near=3"
+        ),
+    ]
+
+    // MARK: - Colour transform lossless test cases
+
+    /// Parameterised lossless test cases with Part 2 colour transforms (HP1, HP2, HP3)
+    /// applied to the 256×256 RGB reference image (test8.ppm).
+    static let colorTransformLosslessTestCases: [EncodeInteropTestCase] = [
+        // HP1 colour transform — all interleave modes
+        EncodeInteropTestCase(
+            referenceFile: "test8.ppm",
+            width: 256, height: 256, components: 3, maxVal: 255, near: 0,
+            interleaveMode: .none, colorTransformation: .hp1,
+            description: "8-bit RGB HP1 none-ILV lossless"
+        ),
+        EncodeInteropTestCase(
+            referenceFile: "test8.ppm",
+            width: 256, height: 256, components: 3, maxVal: 255, near: 0,
+            interleaveMode: .line, colorTransformation: .hp1,
+            description: "8-bit RGB HP1 line-ILV lossless"
+        ),
+        EncodeInteropTestCase(
+            referenceFile: "test8.ppm",
+            width: 256, height: 256, components: 3, maxVal: 255, near: 0,
+            interleaveMode: .sample, colorTransformation: .hp1,
+            description: "8-bit RGB HP1 sample-ILV lossless"
+        ),
+        // HP2 colour transform — all interleave modes
+        EncodeInteropTestCase(
+            referenceFile: "test8.ppm",
+            width: 256, height: 256, components: 3, maxVal: 255, near: 0,
+            interleaveMode: .none, colorTransformation: .hp2,
+            description: "8-bit RGB HP2 none-ILV lossless"
+        ),
+        EncodeInteropTestCase(
+            referenceFile: "test8.ppm",
+            width: 256, height: 256, components: 3, maxVal: 255, near: 0,
+            interleaveMode: .line, colorTransformation: .hp2,
+            description: "8-bit RGB HP2 line-ILV lossless"
+        ),
+        EncodeInteropTestCase(
+            referenceFile: "test8.ppm",
+            width: 256, height: 256, components: 3, maxVal: 255, near: 0,
+            interleaveMode: .sample, colorTransformation: .hp2,
+            description: "8-bit RGB HP2 sample-ILV lossless"
+        ),
+        // HP3 colour transform — all interleave modes
+        EncodeInteropTestCase(
+            referenceFile: "test8.ppm",
+            width: 256, height: 256, components: 3, maxVal: 255, near: 0,
+            interleaveMode: .none, colorTransformation: .hp3,
+            description: "8-bit RGB HP3 none-ILV lossless"
+        ),
+        EncodeInteropTestCase(
+            referenceFile: "test8.ppm",
+            width: 256, height: 256, components: 3, maxVal: 255, near: 0,
+            interleaveMode: .line, colorTransformation: .hp3,
+            description: "8-bit RGB HP3 line-ILV lossless"
+        ),
+        EncodeInteropTestCase(
+            referenceFile: "test8.ppm",
+            width: 256, height: 256, components: 3, maxVal: 255, near: 0,
+            interleaveMode: .sample, colorTransformation: .hp3,
+            description: "8-bit RGB HP3 sample-ILV lossless"
+        ),
+    ]
+
+    // MARK: - Colour transform near-lossless test cases
+
+    /// Parameterised near-lossless test cases with Part 2 colour transforms (HP1, HP2, HP3)
+    /// applied to the 256×256 RGB reference image (test8.ppm) with NEAR=3.
+    static let colorTransformNearLosslessTestCases: [EncodeInteropTestCase] = [
+        // HP1 colour transform near=3 — all interleave modes
+        EncodeInteropTestCase(
+            referenceFile: "test8.ppm",
+            width: 256, height: 256, components: 3, maxVal: 255, near: 3,
+            interleaveMode: .none, colorTransformation: .hp1,
+            description: "8-bit RGB HP1 none-ILV near=3"
+        ),
+        EncodeInteropTestCase(
+            referenceFile: "test8.ppm",
+            width: 256, height: 256, components: 3, maxVal: 255, near: 3,
+            interleaveMode: .line, colorTransformation: .hp1,
+            description: "8-bit RGB HP1 line-ILV near=3"
+        ),
+        EncodeInteropTestCase(
+            referenceFile: "test8.ppm",
+            width: 256, height: 256, components: 3, maxVal: 255, near: 3,
+            interleaveMode: .sample, colorTransformation: .hp1,
+            description: "8-bit RGB HP1 sample-ILV near=3"
+        ),
+        // HP2 colour transform near=3
+        EncodeInteropTestCase(
+            referenceFile: "test8.ppm",
+            width: 256, height: 256, components: 3, maxVal: 255, near: 3,
+            interleaveMode: .none, colorTransformation: .hp2,
+            description: "8-bit RGB HP2 none-ILV near=3"
+        ),
+        // HP3 colour transform near=3
+        EncodeInteropTestCase(
+            referenceFile: "test8.ppm",
+            width: 256, height: 256, components: 3, maxVal: 255, near: 3,
+            interleaveMode: .none, colorTransformation: .hp3,
+            description: "8-bit RGB HP3 none-ILV near=3"
         ),
     ]
 
@@ -198,7 +307,10 @@ struct CharLSEncodeInteropTests {
         let referencePixels = try loadReferencePixels(testCase: testCase)
         let imageData = try buildImageData(pixels: referencePixels, testCase: testCase)
 
-        let config = try JPEGLSEncoder.Configuration(near: 0, interleaveMode: testCase.interleaveMode)
+        let config = try JPEGLSEncoder.Configuration(
+            near: 0, interleaveMode: testCase.interleaveMode,
+            colorTransformation: testCase.colorTransformation
+        )
         let encoded = try JPEGLSEncoder().encode(imageData, configuration: config)
         let decoded = try JPEGLSDecoder().decode(encoded)
 
@@ -229,7 +341,10 @@ struct CharLSEncodeInteropTests {
         let referencePixels = try loadReferencePixels(testCase: testCase)
         let imageData = try buildImageData(pixels: referencePixels, testCase: testCase)
 
-        let config = try JPEGLSEncoder.Configuration(near: testCase.near, interleaveMode: testCase.interleaveMode)
+        let config = try JPEGLSEncoder.Configuration(
+            near: testCase.near, interleaveMode: testCase.interleaveMode,
+            colorTransformation: testCase.colorTransformation
+        )
         let encoded = try JPEGLSEncoder().encode(imageData, configuration: config)
         let decoded = try JPEGLSDecoder().decode(encoded)
 
@@ -249,6 +364,88 @@ struct CharLSEncodeInteropTests {
                     let diff = abs(actual - expected)
                     #expect(diff <= testCase.near,
                            "comp\(compIdx) [\(row),\(col)]: diff=\(diff) > NEAR=\(testCase.near) (\(testCase.description))")
+                }
+            }
+        }
+    }
+
+    // MARK: - Colour transform lossless encode/decode round-trip
+
+    @Test("Colour transform lossless encode round-trip for reference image",
+          arguments: colorTransformLosslessTestCases)
+    func testColorTransformLosslessRoundTrip(testCase: EncodeInteropTestCase) throws {
+        let referencePixels = try loadReferencePixels(testCase: testCase)
+        let imageData = try buildImageData(pixels: referencePixels, testCase: testCase)
+
+        let config = try JPEGLSEncoder.Configuration(
+            near: 0, interleaveMode: testCase.interleaveMode,
+            colorTransformation: testCase.colorTransformation
+        )
+        let encoded = try JPEGLSEncoder().encode(imageData, configuration: config)
+        let decoded = try JPEGLSDecoder().decode(encoded)
+
+        // Verify dimensions
+        #expect(decoded.frameHeader.width == testCase.width)
+        #expect(decoded.frameHeader.height == testCase.height)
+        #expect(decoded.components.count == testCase.components)
+
+        // Lossless: every decoded pixel must exactly equal the original
+        for compIdx in 0..<testCase.components {
+            let decodedComp = decoded.components[compIdx]
+            for row in 0..<testCase.height {
+                for col in 0..<testCase.width {
+                    let refBase = (row * testCase.width + col) * testCase.components + compIdx
+                    let expected = Int(referencePixels[refBase])
+                    let actual = decodedComp.pixels[row][col]
+                    #expect(actual == expected,
+                           "comp\(compIdx) [\(row),\(col)]: decoded=\(actual) expected=\(expected) (\(testCase.description))")
+                }
+            }
+        }
+    }
+
+    // MARK: - Colour transform near-lossless encode/decode round-trip
+
+    @Test("Colour transform near-lossless encode round-trip for reference image",
+          arguments: colorTransformNearLosslessTestCases)
+    func testColorTransformNearLosslessRoundTrip(testCase: EncodeInteropTestCase) throws {
+        let referencePixels = try loadReferencePixels(testCase: testCase)
+        let imageData = try buildImageData(pixels: referencePixels, testCase: testCase)
+
+        let config = try JPEGLSEncoder.Configuration(
+            near: testCase.near, interleaveMode: testCase.interleaveMode,
+            colorTransformation: testCase.colorTransformation
+        )
+        let encoded = try JPEGLSEncoder().encode(imageData, configuration: config)
+        let decoded = try JPEGLSDecoder().decode(encoded)
+
+        // Verify dimensions
+        #expect(decoded.frameHeader.width == testCase.width)
+        #expect(decoded.frameHeader.height == testCase.height)
+        #expect(decoded.components.count == testCase.components)
+
+        // Near-lossless with colour transform: the NEAR error bound applies to
+        // each component in the *transformed* domain (per ITU-T T.870).  After
+        // inverse transform, the original-domain error can be amplified.  We
+        // therefore verify the bound in the transformed domain.
+        let ct = testCase.colorTransformation
+        let maxVal = testCase.maxVal
+        for row in 0..<testCase.height {
+            for col in 0..<testCase.width {
+                let base = (row * testCase.width + col) * testCase.components
+                let origRGB = (0..<testCase.components).map { Int(referencePixels[base + $0]) }
+                let decRGB = (0..<testCase.components).map { decoded.components[$0].pixels[row][col] }
+
+                let origT = try ct.transformForward(origRGB, maxValue: maxVal)
+                let decT = try ct.transformForward(decRGB, maxValue: maxVal)
+
+                for c in 0..<testCase.components {
+                    // Account for modular wrap-around when computing distance
+                    let modulus = maxVal + 1
+                    let rawDiff = abs(origT[c] - decT[c])
+                    let diff = min(rawDiff, modulus - rawDiff)
+                    #expect(diff <= testCase.near,
+                           "transformed comp\(c) [\(row),\(col)]: diff=\(diff) > NEAR=\(testCase.near) (\(testCase.description))")
                 }
             }
         }
