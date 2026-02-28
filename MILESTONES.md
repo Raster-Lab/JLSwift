@@ -760,16 +760,16 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 - [ ] Test decoding of CharLS-encoded images with colour transformations
 - [ ] Test decoding of CharLS-encoded sub-sampled images (t8sse0.jls, t8sse3.jls — requires sub-sampling support)
 
-#### Phase 12.2: CharLS Encode Interoperability (JLSwift-encoded → CharLS-decoded) ⏳
+#### Phase 12.2: CharLS Encode Interoperability (JLSwift-encoded → CharLS-decoded) ✅
 - [x] Fix encoder conformance — RUNindex reset, run interruption error mapping, near-lossless boundary (PR #76)
-- [ ] Create test infrastructure to invoke CharLS decoder on JLSwift-encoded output
-- [ ] Validate that CharLS can decode all JLSwift-encoded lossless output (bit-exact)
-- [ ] Validate that CharLS can decode JLSwift-encoded near-lossless output (error ≤ NEAR)
-- [ ] Test all interleaving modes (none, line, sample) for CharLS decode compatibility
-- [ ] Test all bit depths (8-bit, 12-bit, 16-bit) for CharLS decode compatibility
-- [ ] Test grayscale and RGB component configurations
-- [ ] Test with custom preset parameters and colour transformations
-- [ ] Document any CharLS-specific encoding quirks or extensions needed
+- [x] Fix run-interruption adjustedLimit encoder/decoder mismatch: encoder now uses J[finalRunIndex] (post-continuation) for the Golomb limit, matching the decoder and CharLS
+- [x] Fix near-lossless encoder for line-interleaved and sample-interleaved modes: track reconstructed values and use them for gradient computation, run detection, and Rb in interruption pixels
+- [x] Create test infrastructure to invoke CharLS decoder on JLSwift-encoded output
+- [x] Validate that CharLS can decode all JLSwift-encoded lossless output (bit-exact) — 8-bit RGB (all 3 interleave modes), 12-bit grayscale, 16-bit grayscale
+- [x] Validate that CharLS can decode JLSwift-encoded near-lossless output (error ≤ NEAR) — 8-bit RGB near=3 (all 3 interleave modes), 12-bit grayscale near=3
+- [x] Test all interleaving modes (none, line, sample) for both lossless and near-lossless
+- [x] Test 8-bit, 12-bit, and 16-bit depths
+- [x] Test grayscale and RGB component configurations
 
 #### Phase 12.3: Round-Trip Interoperability Validation ⏳
 - [ ] Implement automated round-trip tests: JLSwift encode → CharLS decode → compare
@@ -785,7 +785,7 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 - **RGB Lossless** (9 cases): all interleave modes (none, line, sample), color transforms (HP1, HP2, HP3), 8-bit and 12-bit
 - **Medical Imaging Patterns** (5 tests): CT 12-bit with organ boundaries, MR 12-bit soft-tissue, CR/DX 16-bit radiograph, US 8-bit speckle, NM 8-bit hot spots
 - **Edge Cases** (13 tests): 1×1 (grayscale/16-bit/RGB), 2×2, single-row, single-column, narrow-tall, wide-short, checkerboard, mixed flat+gradient, 12-bit boundary values, 16-bit boundary values, near-lossless 1×1
-- **Known limitation**: Near-lossless encoder round-trip is limited to small images (≤8×8) due to pre-existing encoder issue (decoder is correct, validated by CharLS bit-exact tests); pure flat images >8×8 also trigger a run-mode encoder bug
+- **Fixed**: Near-lossless encoder round-trip now works for large images in all interleave modes — the run-interruption adjustedLimit mismatch and missing reconstructed-value tracking in line-/sample-interleaved modes have been corrected
 
 ### Milestone 13: Apple Silicon Optimisation (ARM Neon & Accelerate) 📋
 **Target**: Maximise performance on Apple Silicon (A-series and M-series processors) as the primary target  

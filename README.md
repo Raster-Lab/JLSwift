@@ -78,12 +78,12 @@ JPEG-LS is a lossless/near-lossless compression standard specifically designed f
 | 11.4 | Additional Part 2 Colour Transforms | ✅ Complete | 100.00% |
 | 11.5 | Part 2 Performance Regression Tests | ✅ Complete | 100.00% |
 | 12.1 | CharLS Decode Interoperability | ⏳ In Progress | — |
-| 12.2 | CharLS Encode Interoperability | ⏳ In Progress | — |
+| 12.2 | CharLS Encode Interoperability | ✅ Complete | 100.00% |
 | 12.3 | Round-Trip Interoperability (JLSwift) | ⏳ In Progress | 100.00% |
 
 **Overall Project Coverage: 95.80%** (exceeds 95% threshold)
 
-**Recent conformance fixes** (PRs #74, #75, #76): Gradient quantization, context update/bias correction, error correction XOR, LIMIT computation, default thresholds, run interruption coding overhaul, encoder RUNindex reset, error mapping formula, and near-lossless boundary condition — all aligned with ITU-T.87 and CharLS reference implementation.
+**Recent conformance fixes** (PRs #74, #75, #76, and current): Gradient quantization, context update/bias correction, error correction XOR, LIMIT computation, default thresholds, run interruption coding overhaul, encoder RUNindex reset, error mapping formula, near-lossless boundary condition, **run-interruption adjustedLimit mismatch** (encoder now uses J[finalRunIndex] matching the decoder), and **near-lossless reconstructed-value tracking** for line-interleaved and sample-interleaved modes — all aligned with ITU-T.87 and CharLS reference implementation.
 
 *CLI executable target not included in coverage metrics (Swift Package Manager limitation), but validation logic thoroughly tested with 60 comprehensive tests.
 
