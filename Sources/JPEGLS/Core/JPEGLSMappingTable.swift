@@ -49,6 +49,14 @@ public struct JPEGLSMappingTable: Sendable {
 
     /// Initialise a mapping table with the given identifier, entry width, and entries.
     ///
+    /// ```swift
+    /// // 4-entry 1-byte palette: maps indices 0–3 to luminance values 0, 85, 170, 255
+    /// let palette = try JPEGLSMappingTable(id: 1, entryWidth: 1, entries: [0, 85, 170, 255])
+    ///
+    /// // 4-entry 2-byte palette for 12-bit output values
+    /// let palette12 = try JPEGLSMappingTable(id: 2, entryWidth: 2, entries: [0, 1365, 2730, 4095])
+    /// ```
+    ///
     /// - Parameters:
     ///   - id: Table identifier (1–255).
     ///   - entryWidth: Number of bytes per entry (1 or 2).
@@ -84,6 +92,12 @@ public struct JPEGLSMappingTable: Sendable {
     ///
     /// If `pixelValue` is out of range for this table, the raw value is returned
     /// unchanged to provide graceful degradation for malformed data.
+    ///
+    /// ```swift
+    /// let palette = try JPEGLSMappingTable(id: 1, entryWidth: 1, entries: [0, 85, 170, 255])
+    /// let output = palette.map(2)   // returns 170
+    /// let safe   = palette.map(99)  // out of range — returns 99 unchanged
+    /// ```
     ///
     /// - Parameter pixelValue: Raw decoded sample value used as a table index.
     /// - Returns: The mapped output sample value, or `pixelValue` if out of range.

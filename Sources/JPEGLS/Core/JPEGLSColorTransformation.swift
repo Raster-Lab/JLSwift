@@ -52,6 +52,15 @@ public enum JPEGLSColorTransformation: UInt8, Sendable, Equatable {
     /// and reversible. When `maxValue` is provided, modular arithmetic is applied
     /// so that all output values remain in [0, maxValue].
     ///
+    /// ```swift
+    /// // HP1 forward transform of an RGB pixel (0…255 range)
+    /// let encoded = try JPEGLSColorTransformation.hp1.transformForward([200, 100, 50], maxValue: 255)
+    /// // encoded = [100, 100, -50 mod 256] = [100, 100, 206]
+    ///
+    /// // HP2 forward transform
+    /// let hp2 = try JPEGLSColorTransformation.hp2.transformForward([200, 100, 50], maxValue: 255)
+    /// ```
+    ///
     /// - Parameters:
     ///   - components: Original component values [R, G, B] or single component
     ///   - maxValue: Maximum sample value for modular reduction (nil = no reduction)
@@ -91,6 +100,14 @@ public enum JPEGLSColorTransformation: UInt8, Sendable, Equatable {
     /// Transforms encoded components back to original colour space during decoding.
     /// When `maxValue` is provided, modular arithmetic is applied so that all output
     /// values remain in [0, maxValue].
+    ///
+    /// ```swift
+    /// // Inverse HP1 transform (round-trip)
+    /// let original = [200, 100, 50]
+    /// let encoded  = try JPEGLSColorTransformation.hp1.transformForward(original, maxValue: 255)
+    /// let decoded  = try JPEGLSColorTransformation.hp1.transformInverse(encoded, maxValue: 255)
+    /// assert(decoded == original)
+    /// ```
     ///
     /// - Parameters:
     ///   - components: Transformed component values

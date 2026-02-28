@@ -9,12 +9,14 @@ Comprehensive real-world examples demonstrating how to use JLSwift for JPEG-LS c
   - [RGB Image Encoding](#rgb-image-encoding)
   - [Near-Lossless Compression](#near-lossless-compression)
   - [Decoding JPEG-LS Files](#decoding-jpeg-ls-files)
+  - [End-to-End: Encode, Decode and Verify](#end-to-end-encode-decode-and-verify)
 - [Advanced Examples](#advanced-examples)
   - [Medical Imaging Workflow](#medical-imaging-workflow)
   - [Batch Image Processing](#batch-image-processing)
   - [Large Image Processing with Tiling](#large-image-processing-with-tiling)
   - [Custom Preset Parameters](#custom-preset-parameters)
   - [Multi-Component with Different Interleaving](#multi-component-with-different-interleaving)
+  - [Part 2 Extensions: Colour Transforms and Mapping Tables](#part-2-extensions-colour-transforms-and-mapping-tables)
 - [Performance Optimisation Examples](#performance-optimisation-examples)
   - [Using Buffer Pooling](#using-buffer-pooling)
   - [Cache-Friendly Data Layout](#cache-friendly-data-layout)
@@ -201,6 +203,84 @@ func decodeJPEGLSFile(from path: String) throws {
 
 // Example usage
 try decodeJPEGLSFile(from: "medical_image.jls")
+```
+
+### End-to-End: Encode, Decode and Verify
+
+Encode an image, decode it, and verify pixel-exact round-trip:
+
+```swift
+import JPEGLS
+
+/// Encodes image data to JPEG-LS, decodes it back, and verifies pixel equality.
+func roundTripVerify() throws {
+    let width = 128
+    let height = 128
+
+    // Build a gradient test image
+    let pixels: [[Int]] = (0..<height).map { y in
+        (0..<width).map { x in (x + y) % 256 }
+    }
+
+    // --- Encode ---
+    let imageData = try MultiComponentImageData.grayscale(
+        pixels: pixels,
+        bitsPerSample: 8
+    )
+    let encoder = JPEGLSEncoder()
+    let jpegLSData = try encoder.encode(imageData)
+
+    print("Encoded: \(jpegLSData.count) bytes (original: \(width * height) bytes)")
+
+    // --- Decode ---
+    let decoder = JPEGLSDecoder()
+    let decoded = try decoder.decode(jpegLSData)
+
+    // --- Verify ---
+    let decodedPixels = decoded.components[0].pixels
+    var mismatch = 0
+    for y in 0..<height {
+        for x in 0..<width {
+            if decodedPixels[y][x] != pixels[y][x] {
+                mismatch += 1
+            }
+        }
+    }
+
+    if mismatch == 0 {
+        print("✓ Lossless round-trip verified — all \(width * height) pixels match exactly.")
+    } else {
+        print("✗ \(mismatch) pixel(s) differ after round-trip.")
+    }
+}
+
+try roundTripVerify()
+```
+
+Near-lossless round-trip with bounded error verification:
+
+```swift
+import JPEGLS
+
+func roundTripNearLossless(near: Int = 3) throws {
+    let pixels: [[Int]] = (0..<64).map { y in (0..<64).map { x in x * 4 } }
+
+    let imageData = try MultiComponentImageData.grayscale(pixels: pixels, bitsPerSample: 8)
+
+    let config = try JPEGLSEncoder.Configuration(near: near, interleaveMode: .none)
+    let encoded = try JPEGLSEncoder().encode(imageData, configuration: config)
+    let decoded = try JPEGLSDecoder().decode(encoded)
+
+    let decodedPixels = decoded.components[0].pixels
+    let maxError = (0..<64).flatMap { y in (0..<64).map { x in
+        abs(decodedPixels[y][x] - pixels[y][x])
+    }}.max() ?? 0
+
+    print("NEAR=\(near): max pixel error = \(maxError) (limit: \(near))")
+    assert(maxError <= near, "Error exceeds NEAR bound")
+}
+
+try roundTripNearLossless()
 ```
 
 ## Advanced Examples
@@ -572,6 +652,85 @@ func createRGBTestImage(width: Int, height: Int) -> ([[Int]], [[Int]], [[Int]]) 
 }
 
 try compareInterleavingModes()
+```
+
+### Part 2 Extensions: Colour Transforms and Mapping Tables
+
+#### Colour Transforms (HP1 / HP2 / HP3)
+
+Colour space transformations decorrelate RGB components and can improve compression ratios for natural images:
+
+```swift
+import JPEGLS
+
+func encodeWithColourTransform() throws {
+    let width = 256
+    let height = 256
+
+    // Build a simple RGB gradient test image inline
+    let red:   [[Int]] = (0..<height).map { _ in (0..<width).map { x in (x * 255) / width } }
+    let green: [[Int]] = (0..<height).map { y in (0..<width).map { _ in (y * 255) / height } }
+    let blue:  [[Int]] = (0..<height).map { y in (0..<width).map { x in ((x + y) * 255) / (width + height) } }
+
+    let imageData = try MultiComponentImageData.rgb(
+        redPixels: red, greenPixels: green, bluePixels: blue, bitsPerSample: 8
+    )
+
+    let encoder = JPEGLSEncoder()
+    let decoder = JPEGLSDecoder()
+
+    for transform in [JPEGLSColorTransformation.none, .hp1, .hp2, .hp3] {
+        let config = try JPEGLSEncoder.Configuration(
+            near: 0,
+            interleaveMode: .sample,
+            colorTransformation: transform
+        )
+        let encoded = try encoder.encode(imageData, configuration: config)
+        let decoded = try decoder.decode(encoded)
+
+        // Verify round-trip — decoded values must match original exactly for lossless
+        let redDecoded   = decoded.components[0].pixels
+        let greenDecoded = decoded.components[1].pixels
+        let blueDecoded  = decoded.components[2].pixels
+
+        var maxErr = 0
+        for y in 0..<height {
+            for x in 0..<width {
+                maxErr = max(maxErr, abs(redDecoded[y][x] - red[y][x]))
+                maxErr = max(maxErr, abs(greenDecoded[y][x] - green[y][x]))
+                maxErr = max(maxErr, abs(blueDecoded[y][x] - blue[y][x]))
+            }
+        }
+
+        print("\(transform): encoded=\(encoded.count) bytes, maxError=\(maxErr)")
+    }
+}
+
+try encodeWithColourTransform()
+```
+
+#### Mapping Tables (Palette / Indexed Colour)
+
+Mapping tables (LSE type 2) allow pixel indices to be looked up in a palette, enabling efficient encoding of palettised images:
+
+```swift
+import JPEGLS
+
+func exploreMappingTables() throws {
+    // Build a 4-level greyscale palette: index 0→0, 1→85, 2→170, 3→255
+    let palette = try JPEGLSMappingTable(id: 1, entryWidth: 1, entries: [0, 85, 170, 255])
+
+    // Map raw decoded indices to palette values
+    print(palette.map(0))   // 0
+    print(palette.map(1))   // 85
+    print(palette.map(2))   // 170
+    print(palette.map(3))   // 255
+    print(palette.map(99))  // 99 — out-of-range index returned unchanged
+
+    print("Palette: \(palette)")  // JPEGLSMappingTable(id=1, entryWidth=1, entries=4)
+}
+
+try exploreMappingTables()
 ```
 
 ## Performance Optimisation Examples

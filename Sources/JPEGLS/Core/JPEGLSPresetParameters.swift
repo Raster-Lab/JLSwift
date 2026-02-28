@@ -88,6 +88,21 @@ public struct JPEGLSPresetParameters: Sendable, Equatable {
     /// MAXVAL.  When NEAR = 0 (lossless), the standard formulas reduce to the
     /// traditional defaults.
     ///
+    /// ```swift
+    /// // Default parameters for 8-bit lossless
+    /// let p8 = try JPEGLSPresetParameters.defaultParameters(bitsPerSample: 8)
+    /// // p8: T1=3, T2=7, T3=21, RESET=64
+    ///
+    /// // Default parameters for 12-bit near-lossless with NEAR=3
+    /// let p12 = try JPEGLSPresetParameters.defaultParameters(bitsPerSample: 12, near: 3)
+    ///
+    /// // Embed explicit preset parameters in the encoded bitstream
+    /// let config = try JPEGLSEncoder.Configuration(
+    ///     near: 3,
+    ///     presetParameters: try JPEGLSPresetParameters.defaultParameters(bitsPerSample: 8, near: 3)
+    /// )
+    /// ```
+    ///
     /// - Parameters:
     ///   - bitsPerSample: Number of bits per sample (2-16)
     ///   - near: Near-lossless parameter (0 for lossless, default: 0)
