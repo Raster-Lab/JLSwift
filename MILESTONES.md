@@ -757,7 +757,7 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 - [x] Test decoding of CharLS-encoded near-lossless images (error ≤ NEAR verified)
 - [x] Test decoding of CharLS-encoded images with non-default preset parameters (T1=T2=T3=9, RESET=31)
 - [ ] Resolve remaining decoder divergence for 12-bit natural images (byte 551 drift — encoder issue, decoder is correct)
-- [ ] Test decoding of CharLS-encoded images with colour transformations
+- [x] Test decoding of CharLS-encoded images with colour transformations (HP1, HP2, HP3 — 9 lossless + 5 near-lossless tests on 256×256 reference image)
 - [ ] Test decoding of CharLS-encoded sub-sampled images (t8sse0.jls, t8sse3.jls — requires sub-sampling support)
 
 #### Phase 12.2: CharLS Encode Interoperability (JLSwift-encoded → CharLS-decoded) ✅

@@ -596,6 +596,10 @@ JLSwift includes comprehensive conformance testing using reference files from th
   - Color transforms (HP1, HP2, HP3)
   - Medical imaging patterns (CT, MR, CR/DX, US, NM simulations)
   - Edge cases (1×1, boundary values, single-row/column, checkerboard)
+- **Colour Transform Interoperability**: 14 encode → decode tests on 256×256 CharLS reference image
+  - HP1, HP2, HP3 with all interleave modes (none, line, sample) — 9 lossless tests
+  - HP1 (3 modes), HP2, HP3 near-lossless with NEAR=3 — 5 near-lossless tests
+  - Near-lossless error verified in transformed domain per ITU-T T.870
 
 The conformance tests are located in `Tests/JPEGLSTests/CharLSConformanceTests.swift` with reference fixtures in `Tests/JPEGLSTests/TestFixtures/`. These tests ensure compatibility with the JPEG-LS standard (ISO/IEC 14495-1:1999 / ITU-T.87) and provide a foundation for bit-exact comparison with CharLS output.
 
