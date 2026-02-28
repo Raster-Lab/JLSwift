@@ -71,12 +71,11 @@ public func optimalTileSize(
     let rowsInBudget = max(1, budget / max(1, rowSize))
     let tileHeight = min(imageHeight, max(1, rowsInBudget / 4))
     
-    // Tile width: align to cache-line boundaries
+    // Tile width: round up to the nearest cache-line boundary in samples,
+    // then clamp to the actual image width.
     let samplesPerCacheLine = AppleSiliconCacheParameters.cacheLineSize / max(1, bytesPerSample)
-    let tileWidth = min(
-        imageWidth,
-        max(samplesPerCacheLine, (imageWidth / samplesPerCacheLine) * samplesPerCacheLine)
-    )
+    let alignedWidth = ((imageWidth + samplesPerCacheLine - 1) / samplesPerCacheLine) * samplesPerCacheLine
+    let tileWidth = min(imageWidth, alignedWidth)
     
     return (tileWidth, tileHeight)
 }
@@ -229,12 +228,17 @@ public final class UnifiedMemoryBufferPool: @unchecked Sendable {
 ///   - count: Number of elements to prefetch (one cache line covers 8 Int values on ARM64)
 @inline(__always)
 public func prefetchContextArray(_ array: [Int], startIndex: Int, count: Int) {
-    // Swift arrays are contiguous; touching the first element of the range
-    // is sufficient to trigger the hardware stride prefetcher on Apple Silicon.
     let end = min(startIndex + count, array.count)
     guard startIndex < end else { return }
-    // Access the element to guide the hardware prefetcher.
-    _ = array[startIndex]
+    
+    // Touch the first element of every cache line in the range.
+    // On ARM64 one cache line holds 64 / MemoryLayout<Int>.stride = 8 Int values.
+    let stride = AppleSiliconCacheParameters.cacheLineSize / MemoryLayout<Int>.stride
+    var i = startIndex
+    while i < end {
+        _ = array[i]
+        i += stride
+    }
 }
 
 // MARK: - Hardware-Specific Tuning Parameters

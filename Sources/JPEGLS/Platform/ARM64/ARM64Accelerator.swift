@@ -183,19 +183,15 @@ public struct ARM64Accelerator: PlatformAccelerator {
         guard a > 0 else { return 0 }
         
         // Iterative Golomb-Rice k calculation: find smallest k where 2^k * n >= a
-        // The ARM64 CLZ provides an O(1) approximation; we refine with the exact loop.
-        // Initial estimate using CLZ: k ≈ max(0, ceil(log2(a/n)) - 1)
+        // Use CLZ to provide an O(1) starting estimate, then walk upward once.
         let aN = max(1, a / n)
-        // log2 approximation via CLZ: floor(log2(x)) = bit_width - 1 - clz(x)
-        let log2ApproxK = max(0, (UInt64.bitWidth - 1 - UInt64(aN).leadingZeroBitCount))
+        // floor(log2(aN)) via CLZ: bit_width - 1 - leadingZeroBitCount
+        let log2Estimate = max(0, (UInt64.bitWidth - 1 - UInt64(aN).leadingZeroBitCount))
         
-        // Refine: start from CLZ-based estimate and adjust
-        var k = max(0, log2ApproxK - 1)
+        // Start just below the estimate and advance until the condition is met.
+        var k = max(0, log2Estimate > 0 ? log2Estimate - 1 : 0)
         while k < 31 && (n << k) < a {
             k += 1
-        }
-        while k > 0 && (n << (k - 1)) >= a {
-            k -= 1
         }
         
         return k

@@ -356,16 +356,12 @@ public struct AccelerateFrameworkAccelerator: Sendable {
     ) {
         precondition(errors.count == contextIndices.count, "Arrays must have same length")
         
-        let count = errors.count
-        guard count > 0 else { return }
+        guard !errors.isEmpty else { return }
         
-        // Vectorise absolute-value computation over all errors at once
-        let errorsFloat = errors.map { Float($0) }
-        var absErrors = [Float](repeating: 0, count: count)
-        vDSP_vabs(errorsFloat, 1, &absErrors, 1, vDSP_Length(count))
-        
-        for i in 0..<count {
-            aArray[contextIndices[i]] += Int(absErrors[i].rounded())
+        // Compute absolute values directly using Swift integer abs to avoid
+        // Float conversion overhead and floating-point rounding artefacts.
+        for i in 0..<errors.count {
+            aArray[contextIndices[i]] += abs(errors[i])
         }
     }
     
@@ -390,14 +386,12 @@ public struct AccelerateFrameworkAccelerator: Sendable {
         }
     }
     
-    // MARK: - vImage Pixel Buffer Format Conversions
+    // MARK: - Pixel Buffer Format Conversions
     
-    /// Convert a planar pixel buffer to interleaved format using vImage.
+    /// Convert a planar pixel buffer to interleaved format.
     ///
     /// Rearranges pixel data from per-component planar layout
     /// ([component][row × col]) to interleaved layout ([row × col × component]).
-    /// Uses `vImageConvert_PlanarFtoPlanarF` style copy for 8-bit single-component
-    /// and a manual interleave for multi-component images.
     ///
     /// - Parameters:
     ///   - planes: Array of component planes; each plane is a flat `[UInt8]`
@@ -422,23 +416,15 @@ public struct AccelerateFrameworkAccelerator: Sendable {
         
         for p in 0..<componentCount {
             let plane = planes[p]
-            var src = vImage_Buffer(
-                data: UnsafeMutableRawPointer(mutating: plane),
-                height: vImagePixelCount(height),
-                width: vImagePixelCount(width),
-                rowBytes: width
-            )
-            // Write into the stride-p channel of the interleaved buffer
             for i in 0..<pixelCount {
                 interleaved[i * componentCount + p] = plane[i]
             }
-            _ = src  // suppress unused warning
         }
         
         return interleaved
     }
     
-    /// Convert an interleaved pixel buffer to planar format using vImage.
+    /// Convert an interleaved pixel buffer to planar format.
     ///
     /// Rearranges pixel data from interleaved layout ([row × col × component])
     /// to per-component planar layout ([component][row × col]).
