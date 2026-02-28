@@ -3,3 +3,4 @@
 *.xcodeproj/
 *.xcworkspace/
 Package.resolved
+default.profraw

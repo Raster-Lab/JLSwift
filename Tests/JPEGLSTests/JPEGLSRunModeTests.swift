@@ -124,8 +124,8 @@ struct JPEGLSRunModeTests {
         #expect(runLength == 50)
     }
     
-    @Test("Detect run length limited by max run length")
-    func testDetectRunLengthLimitedByMax() throws {
+    @Test("Detect run length scans full line regardless of maxRunLength")
+    func testDetectRunLengthScansFullLine() throws {
         let params = try createDefaultParameters()
         let runMode = try JPEGLSRunMode(
             parameters: params,
@@ -133,7 +133,9 @@ struct JPEGLSRunModeTests {
             maxRunLength: 100
         )
         
-        // 500 identical pixels, but max is 100
+        // 500 identical pixels — detectRunLength scans to the actual end of
+        // the line, allowing encodeRunLength to handle long runs via Golomb
+        // continuation blocks without triggering a false run interruption.
         let pixels = Array(repeating: 75, count: 500)
         let runLength = runMode.detectRunLength(
             pixels: pixels,
@@ -141,9 +143,29 @@ struct JPEGLSRunModeTests {
             runValue: 75
         )
         
-        #expect(runLength == 100)
+        #expect(runLength == 500)
     }
-    
+
+    @Test("Detect run length scans full line wider than 65535 pixels")
+    func testDetectRunLengthWiderThan65535() throws {
+        // Regression test: prior to the fix, detectRunLength capped its scan at
+        // maxRunLength (default 65536). For a flat image with 65538 identical pixels
+        // this caused a false run interruption at column 65536, which in turn produced
+        // a negative mapped-error value (-1) and a Swift Range crash (0..<-1).
+        let params = try createDefaultParameters()
+        let runMode = try JPEGLSRunMode(parameters: params, near: 0)
+
+        let width = 65538
+        let pixels = Array(repeating: 128, count: width)
+        let runLength = runMode.detectRunLength(
+            pixels: pixels,
+            startIndex: 0,
+            runValue: 128
+        )
+
+        #expect(runLength == width)
+    }
+
     @Test("Detect run length starting from middle of buffer")
     func testDetectRunLengthFromMiddle() throws {
         let params = try createDefaultParameters()
