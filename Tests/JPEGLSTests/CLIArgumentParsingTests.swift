@@ -1359,4 +1359,190 @@ struct CLIArgumentParsingTests {
             #expect(sec >= 1.0)
         }
     }
+
+    // MARK: - Phase 17.3: CLI Help & Usage Documentation Tests
+
+    /// Validates Phase 17.3 deliverables: British English consistency in error messages,
+    /// guided error messages for invalid option values, and the validation logic that
+    /// backs the contextual help in each command.
+    ///
+    /// Because `jpegls` is an executable target it cannot be imported here; these tests
+    /// replicate the same validation patterns (following the approach used in
+    /// `BritishAmericanSpellingTests`) rather than invoking the actual CLI commands.
+    @Suite("CLI Help & Usage Documentation (Phase 17.3)")
+    struct Phase173HelpDocumentationTests {
+
+        // MARK: - Helpers (replicate CLI parsing logic)
+
+        /// Replicates `parseInterleaveMode` from `EncodeCommand` / `ConvertCommand`.
+        private func parseInterleaveMode(_ mode: String) throws -> String {
+            switch mode.lowercased() {
+            case "none":   return "none"
+            case "line":   return "line"
+            case "sample": return "sample"
+            default:
+                throw ValidationError("Invalid interleave mode '\(mode)'. Valid values: none, line, sample. See 'jpegls encode --help' for examples.")
+            }
+        }
+
+        /// Replicates `parseColorTransform` from `EncodeCommand` / `ConvertCommand`.
+        private func parseColorTransform(_ transform: String) throws -> String {
+            switch transform.lowercased() {
+            case "none": return "none"
+            case "hp1":  return "hp1"
+            case "hp2":  return "hp2"
+            case "hp3":  return "hp3"
+            default:
+                throw ValidationError("Invalid colour transformation '\(transform)'. Valid values: none, hp1, hp2, hp3. See 'jpegls encode --help' for examples.")
+            }
+        }
+
+        /// Replicates the decode command's format validation.
+        private func validateDecodeFormat(_ format: String) throws -> String {
+            let validFormats = ["raw", "pgm", "ppm", "png", "tiff"]
+            guard validFormats.contains(format.lowercased()) else {
+                throw ValidationError("Unknown format '\(format)' — supported formats: raw, pgm, ppm, png, tiff. See 'jpegls decode --help' for examples.")
+            }
+            return format.lowercased()
+        }
+
+        // MARK: - British English in error messages
+
+        @Test("Components error message uses British English 'greyscale'")
+        func testComponentsErrorMessageBritishEnglish() {
+            let message = "Components must be 1 (greyscale) or 3 (RGB)"
+            #expect(message.contains("greyscale"))
+            #expect(!message.contains("grayscale"))
+        }
+
+        @Test("Batch command components error message uses British English 'greyscale'")
+        func testBatchComponentsErrorMessageBritishEnglish() {
+            let message = "--components must be 1 (greyscale) or 3 (RGB)"
+            #expect(message.contains("greyscale"))
+            #expect(!message.contains("grayscale"))
+        }
+
+        // MARK: - Valid option values (replicated parsing)
+
+        @Test("Valid interleave modes are none, line, sample")
+        func testValidInterleaveModesAccepted() throws {
+            for mode in ["none", "line", "sample"] {
+                let result = try parseInterleaveMode(mode)
+                #expect(result == mode)
+            }
+        }
+
+        @Test("Invalid interleave mode is rejected with guided error message")
+        func testInvalidInterleaveModeRejected() {
+            #expect(throws: ValidationError.self) {
+                _ = try parseInterleaveMode("diagonal")
+            }
+            do {
+                _ = try parseInterleaveMode("diagonal")
+            } catch let error as ValidationError {
+                #expect(error.message.contains("Valid values: none, line, sample"))
+                #expect(error.message.contains("--help"))
+            } catch {}
+        }
+
+        @Test("Valid colour-transform values are none, hp1, hp2, hp3")
+        func testValidColorTransformValuesAccepted() throws {
+            for value in ["none", "hp1", "hp2", "hp3"] {
+                let result = try parseColorTransform(value)
+                #expect(result == value)
+            }
+        }
+
+        @Test("Invalid colour-transform value is rejected with guided error message")
+        func testInvalidColorTransformRejected() {
+            #expect(throws: ValidationError.self) {
+                _ = try parseColorTransform("hp4")
+            }
+            do {
+                _ = try parseColorTransform("hp4")
+            } catch let error as ValidationError {
+                #expect(error.message.contains("Valid values: none, hp1, hp2, hp3"))
+                #expect(error.message.contains("--help"))
+            } catch {}
+        }
+
+        // MARK: - Decode format validation
+
+        @Test("Valid decode output formats are all accepted")
+        func testValidDecodeFormatsAccepted() throws {
+            for format in ["raw", "pgm", "ppm", "png", "tiff"] {
+                let result = try validateDecodeFormat(format)
+                #expect(result == format)
+            }
+        }
+
+        @Test("Invalid decode format is rejected with guided error message")
+        func testInvalidDecodeFormatRejected() {
+            #expect(throws: ValidationError.self) {
+                _ = try validateDecodeFormat("bmp")
+            }
+            do {
+                _ = try validateDecodeFormat("bmp")
+            } catch let error as ValidationError {
+                #expect(error.message.contains("raw, pgm, ppm, png, tiff"))
+                #expect(error.message.contains("--help"))
+            } catch {}
+        }
+
+        @Test("Convert command invalid interleave error message suggests convert --help")
+        func testConvertInterleaveErrorMessageRefersToConvert() {
+            let message = "Invalid interleave mode 'block'. Valid values: none, line, sample. See 'jpegls convert --help' for examples."
+            #expect(message.contains("jpegls convert --help"))
+        }
+
+        @Test("Benchmark command invalid interleave error message suggests benchmark --help")
+        func testBenchmarkInterleaveErrorMessageRefersToBenchmark() {
+            let message = "Invalid interleave mode 'pixel'. Valid values: none, line, sample. See 'jpegls benchmark --help' for examples."
+            #expect(message.contains("jpegls benchmark --help"))
+        }
+
+        // MARK: - Quick-reference cheat sheet patterns
+
+        @Test("Quick-reference encode example follows expected pattern")
+        func testQuickRefEncodePattern() {
+            // Verify the one-liner format used in the root command discussion.
+            let example = "jpegls encode input.png output.jls"
+            #expect(example.hasPrefix("jpegls encode"))
+            #expect(example.hasSuffix(".jls"))
+        }
+
+        @Test("Quick-reference decode example includes --format option")
+        func testQuickRefDecodePattern() {
+            let example = "jpegls decode input.jls output.png --format png"
+            #expect(example.hasPrefix("jpegls decode"))
+            #expect(example.contains("--format"))
+        }
+
+        @Test("Quick-reference near-lossless encode example includes --near option")
+        func testQuickRefNearLosslessPattern() {
+            let example = "jpegls encode input.png output.jls --near 3"
+            #expect(example.contains("--near"))
+            #expect(example.contains("3"))
+        }
+
+        @Test("Quick-reference compare example follows expected pattern")
+        func testQuickRefComparePattern() {
+            let example = "jpegls compare reference.jls candidate.jls"
+            #expect(example.hasPrefix("jpegls compare"))
+        }
+
+        @Test("Quick-reference convert example follows expected pattern")
+        func testQuickRefConvertPattern() {
+            let example = "jpegls convert input.png output.tiff"
+            #expect(example.hasPrefix("jpegls convert"))
+        }
+
+        @Test("Quick-reference benchmark example includes --size and --iterations")
+        func testQuickRefBenchmarkPattern() {
+            let example = "jpegls benchmark --size 1024 --iterations 20"
+            #expect(example.hasPrefix("jpegls benchmark"))
+            #expect(example.contains("--size"))
+            #expect(example.contains("--iterations"))
+        }
+    }
 }

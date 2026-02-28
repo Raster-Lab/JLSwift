@@ -328,7 +328,7 @@ extension JPEGLSCLITool {
             case "line":   return .line
             case "sample": return .sample
             default:
-                throw ValidationError("Invalid interleave mode: \(mode). Must be none, line, or sample")
+                throw ValidationError("Invalid interleave mode '\(mode)'. Valid values: none, line, sample. See 'jpegls convert --help' for examples.")
             }
         }
 
@@ -339,7 +339,7 @@ extension JPEGLSCLITool {
             case "hp2":  return .hp2
             case "hp3":  return .hp3
             default:
-                throw ValidationError("Invalid colour transformation: \(transform). Must be none, hp1, hp2, or hp3")
+                throw ValidationError("Invalid colour transformation '\(transform)'. Valid values: none, hp1, hp2, hp3. See 'jpegls convert --help' for examples.")
             }
         }
 

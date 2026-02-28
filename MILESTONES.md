@@ -1102,12 +1102,27 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 
 #### Phase 17.3: CLI Help & Usage Documentation
 - [x] Update man page (`jpegls.1`) with all new commands and options (compare, PGM/PPM I/O, dual-spelling flags, preset params; removed stale "in development" notes)
-- [ ] Add detailed usage examples for every command and option combination
-- [ ] Add error message guidance (suggest correct flags on misspelling)
-- [ ] Implement contextual help (e.g., `jpegls encode --help` with encode-specific examples)
+- [x] Add detailed usage examples for every command and option combination
+- [x] Add error message guidance (suggest correct flags on misspelling)
+- [x] Implement contextual help (e.g., `jpegls encode --help` with encode-specific examples)
 - [x] Update shell completion scripts (bash, zsh, fish) with new commands and options (compare, --colour-transform, --optimise, --summarise, --no-colour, --t1/t2/t3/reset, pgm/ppm in decode format)
-- [ ] Ensure all help text and error messages use British English consistently
-- [ ] Create quick-reference cheat sheet as part of `--help` output
+- [x] Ensure all help text and error messages use British English consistently
+- [x] Create quick-reference cheat sheet as part of `--help` output
+
+**Implementation Details (Phase 17.3 — contextual help & usage examples):**
+- Added `discussion:` text with usage examples to `encode`, `decode`, `info`, and `verify` command configurations (the remaining commands already had `discussion:`)
+- Each command's `--help` output now shows a contextual examples section covering the most common use cases
+- Root `JPEGLSCLITool` `CommandConfiguration` now includes a comprehensive quick-reference cheat sheet listing the most useful one-liner examples for every subcommand
+
+**Implementation Details (Phase 17.3 — error message guidance):**
+- `parseInterleaveMode` in `EncodeCommand`, `ConvertCommand`, and `BenchmarkCommand` now includes "See 'jpegls <command> --help' for examples." in the error message for invalid values
+- `parseColorTransform` in `EncodeCommand` and `ConvertCommand` likewise directs users to `--help` on invalid colour-transform values
+- Decode's unknown-format error also includes the `--help` reference
+- All invalid-value messages now use the pattern: `Invalid <param> '<value>'. Valid values: …. See 'jpegls <command> --help' for examples.`
+
+**Implementation Details (Phase 17.3 — British English consistency):**
+- `grayscale` → `greyscale` in all help strings, error messages, and source code comments across `EncodeCommand.swift`, `DecodeCommand.swift`, `BatchCommand.swift`
+- API identifiers (`MultiComponentImageData.grayscale`, etc.) are unchanged per project conventions
 
 **Implementation Details (Phase 17.1 — `jpegls compare`):**
 - New `CompareCommand.swift` in the `jpegls` CLI target
@@ -1324,7 +1339,7 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 | **14** | Intel x86-64 Optimisation | SSE/AVX enhancement, memory/cache tuning, separation verification 📋 |
 | **15** | GPU Compute | Metal pipeline enhancement, Vulkan compute support (Linux/Windows), GPU testing 📋 |
 | **16** | Performance Optimisation | Hotspot analysis, algorithmic optimisation, CharLS head-to-head benchmarking 📋 |
-| **17** | CLI Enhancement | PNG/TIFF input for encode ✅, convert command ✅, British & American spelling support ✅, help & usage docs ⏳ |
+| **17** | CLI Enhancement | PNG/TIFF input for encode ✅, convert command ✅, British & American spelling support ✅, help & usage docs ✅ |
 | **18** | Localisation | British English in comments ✅, help text ✅, error messages ✅, documentation ✅ |
 | **19** | Documentation & J2KSwift | Documentation revision ✅, sample code ✅, J2KSwift consistency alignment 📋 |
 | **20** | Final Integration & Release | DICOM independence, full test suite, performance validation, v1.0 release 📋 |
