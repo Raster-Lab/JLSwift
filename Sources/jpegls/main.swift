@@ -21,7 +21,7 @@ struct JPEGLSCLITool: ParsableCommand {
         commandName: "jpegls",
         abstract: "JPEG-LS command-line tool for encoding and decoding",
         version: "0.1.0",
-        subcommands: [Encode.self, Decode.self, Info.self, Verify.self, Batch.self, Compare.self, Convert.self, Completion.self],
+        subcommands: [Encode.self, Decode.self, Info.self, Verify.self, Batch.self, Compare.self, Convert.self, Benchmark.self, Completion.self],
         defaultSubcommand: nil
     )
 }

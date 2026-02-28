@@ -951,7 +951,7 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 - [x] Implement PGM/PPM input format support for the `encode` command (auto-detect dimensions/components)
 - [x] Implement PNG/TIFF input format support for the `encode` command
 - [x] Implement `jpegls convert` command for format-to-format conversion
-- [ ] Implement `jpegls benchmark` command for quick performance measurement
+- [x] Implement `jpegls benchmark` command for quick performance measurement
 - [x] Implement `jpegls compare` command to diff two JPEG-LS files (also supports PGM/PPM reference inputs)
 - [x] Implement `--preset` parameter integration in the encoder (custom T1, T2, T3, RESET)
 - [ ] Implement `--part2` flag for Part 2 extensions encoding
@@ -1058,6 +1058,27 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
   - Auto-detects input format by file extension and magic bytes (same logic as encode/compare)
 - Registered as `Convert.self` in the root `JPEGLSCLITool` subcommands list
 - Added `ConvertCommandTests` suite in `CLIArgumentParsingTests.swift` (13 tests) covering: output format recognition, NEAR range validation, interleave mode validation, colour-transform validation, verbose/quiet mutual exclusivity, PNG/TIFF decoder availability, and JPEG-LS encode from PNG/TIFF round-trip tests
+
+**Implementation Details (Phase 17.1 — `jpegls benchmark`):**
+- New `BenchmarkCommand.swift` in the `jpegls` CLI target
+  - Optional positional argument: `input` (JPEG-LS, PNG, TIFF, PGM, or PPM); omitted to use a synthetic gradient image
+  - `--mode encode|decode|roundtrip` (default: `roundtrip`) — encode only, decode only, or encode then decode
+  - `--size` — width and height of the synthetic test image in pixels (default: 512)
+  - `--bits-per-sample` / `-b` — bit depth for the synthetic image (2–16, default: 8)
+  - `--components` / `-c` — component count for the synthetic image: 1 (greyscale) or 3 (RGB) (default: 1)
+  - `--near` — NEAR parameter for near-lossless encoding (0–255, default: 0)
+  - `--interleave` — interleave mode for encoding: `none`, `line`, `sample` (default: `none`)
+  - `--iterations` — number of measurement iterations (default: 10)
+  - `--warmup` — number of warm-up iterations before measurement (default: 3)
+  - `--json` — output results in JSON format
+  - `--verbose`, `--quiet`, `--no-colour`/`--no-color` global flags
+  - Measures and reports min/max/mean/median encode and decode times plus throughput in Mpixels/s and MB/s
+  - Compression ratio (uncompressed → encoded bytes) reported for encode and roundtrip modes
+  - Synthetic image uses a per-channel smooth gradient with a per-component offset so each RGB channel differs
+  - When input is JPEG-LS (`.jls`), decode phase uses the file directly; encode phase decodes it once to obtain pixels
+  - When input is PNG/TIFF/PGM/PPM, pixels are loaded once; a reference bitstream is pre-encoded for decode-only mode
+- Registered as `Benchmark.self` in the root `JPEGLSCLITool` subcommands list
+- Added `BenchmarkCommandTests` suite in `CLIArgumentParsingTests.swift` (15 tests) covering: mode validation, NEAR/bps/components/size/iterations/warmup range validation, interleave mode acceptance, verbose/quiet and json/quiet mutual exclusivity, synthetic image gradient formula, timing statistics (mean/median/min/max), encode round-trip correctness, JSON output keys, and formatTime output ranges
 
 #### Phase 17.2: British & American Spelling Support ✅
 - [x] Support both `--colour-transform` and `--color-transform` options
