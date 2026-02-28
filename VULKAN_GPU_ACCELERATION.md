@@ -4,7 +4,7 @@
 
 JLSwift includes planned support for GPU acceleration via the Vulkan compute API on Linux and Windows platforms. Vulkan compute shaders provide cross-vendor GPU parallelism for JPEG-LS encoding operations, complementing the Metal GPU support available on Apple platforms.
 
-> **Status**: Planned (Milestone 15.2). Vulkan compute support is not yet implemented. This document describes the planned architecture and usage patterns.
+> **Status**: Planned (Phase 15.2). Vulkan compute support is not yet implemented. This document describes the planned architecture and usage patterns.
 
 ## Design Goals
 
