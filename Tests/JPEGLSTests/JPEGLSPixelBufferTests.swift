@@ -154,9 +154,9 @@ struct JPEGLSPixelBufferTests {
         #expect(neighbors != nil)
         #expect(neighbors?.actual == 20)
         #expect(neighbors?.left == 10)
-        #expect(neighbors?.top == 10)  // Uses left pixel
-        #expect(neighbors?.topLeft == 10)  // Uses left pixel
-        #expect(neighbors?.topRight == 10)  // Uses left pixel
+        #expect(neighbors?.top == 0)       // Virtual row above first row is all 0 per ITU-T.87 §3.2
+        #expect(neighbors?.topLeft == 0)   // Virtual row above first row is all 0 per ITU-T.87 §3.2
+        #expect(neighbors?.topRight == 0)  // Virtual row above first row is all 0 per ITU-T.87 §3.2
     }
     
     @Test("Get neighbors for first column, not first row")
@@ -172,9 +172,9 @@ struct JPEGLSPixelBufferTests {
         
         #expect(neighbors != nil)
         #expect(neighbors?.actual == 40)
-        #expect(neighbors?.left == 10)  // Uses top pixel
+        #expect(neighbors?.left == 10)  // Uses top pixel (Ra=Rb at col=0)
         #expect(neighbors?.top == 10)
-        #expect(neighbors?.topLeft == 10)  // Uses top pixel
+        #expect(neighbors?.topLeft == 0)   // prevRowEdge=0 for row=1 per CharLS edge-pixel buffering
         #expect(neighbors?.topRight == 20)
     }
     
