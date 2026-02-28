@@ -51,6 +51,23 @@ public struct JPEGLSEncoder: Sendable {
         
         /// Initialize encoding configuration
         ///
+        /// ```swift
+        /// // Lossless encoding with sample interleaving and HP1 colour transform
+        /// let config = try JPEGLSEncoder.Configuration(
+        ///     near: 0,
+        ///     interleaveMode: .sample,
+        ///     colorTransformation: .hp1
+        /// )
+        ///
+        /// // Near-lossless encoding with custom preset parameters
+        /// let preset = try JPEGLSPresetParameters.defaultParameters(bitsPerSample: 8, near: 3)
+        /// let nearConfig = try JPEGLSEncoder.Configuration(
+        ///     near: 3,
+        ///     interleaveMode: .line,
+        ///     presetParameters: preset
+        /// )
+        /// ```
+        ///
         /// - Parameters:
         ///   - near: NEAR parameter (0 = lossless, 1-255 = near-lossless)
         ///   - interleaveMode: Interleaving mode for multi-component images
@@ -78,6 +95,22 @@ public struct JPEGLSEncoder: Sendable {
     public init() {}
     
     /// Encode image data to JPEG-LS format
+    ///
+    /// ```swift
+    /// let encoder = JPEGLSEncoder()
+    ///
+    /// // Lossless greyscale encoding
+    /// let imageData = try MultiComponentImageData.grayscale(pixels: pixels, bitsPerSample: 8)
+    /// let config = try JPEGLSEncoder.Configuration(near: 0, interleaveMode: .none)
+    /// let jpegLSData = try encoder.encode(imageData, configuration: config)
+    ///
+    /// // Near-lossless RGB encoding with sample interleaving
+    /// let rgbData = try MultiComponentImageData.rgb(
+    ///     redPixels: red, greenPixels: green, bluePixels: blue, bitsPerSample: 8
+    /// )
+    /// let rgbConfig = try JPEGLSEncoder.Configuration(near: 3, interleaveMode: .sample)
+    /// let rgbJLS = try encoder.encode(rgbData, configuration: rgbConfig)
+    /// ```
     ///
     /// - Parameters:
     ///   - imageData: Multi-component image data to encode
@@ -160,6 +193,17 @@ public struct JPEGLSEncoder: Sendable {
     }
     
     /// Convenience method to encode with individual parameters
+    ///
+    /// ```swift
+    /// let encoder = JPEGLSEncoder()
+    /// let imageData = try MultiComponentImageData.grayscale(pixels: pixels, bitsPerSample: 8)
+    ///
+    /// // Lossless encoding (default)
+    /// let lossless = try encoder.encode(imageData)
+    ///
+    /// // Near-lossless encoding with NEAR=3
+    /// let nearLossless = try encoder.encode(imageData, near: 3)
+    /// ```
     ///
     /// - Parameters:
     ///   - imageData: Multi-component image data to encode

@@ -28,6 +28,23 @@ public struct JPEGLSDecoder: Sendable {
     
     /// Decode JPEG-LS data to pixel data
     ///
+    /// ```swift
+    /// let decoder = JPEGLSDecoder()
+    ///
+    /// // Decode a JPEG-LS file
+    /// let data = try Data(contentsOf: URL(fileURLWithPath: "image.jls"))
+    /// let imageData = try decoder.decode(data)
+    ///
+    /// // Access image properties
+    /// let width  = imageData.frameHeader.width
+    /// let height = imageData.frameHeader.height
+    /// let bps    = imageData.frameHeader.bitsPerSample
+    ///
+    /// // Access pixel values (row-major, one array per component)
+    /// let pixels = imageData.components[0].pixels  // [[Int]]
+    /// let topLeftPixel = pixels[0][0]
+    /// ```
+    ///
     /// - Parameter data: JPEG-LS encoded data
     /// - Returns: Decoded multi-component image data
     /// - Throws: `JPEGLSError` if decoding fails

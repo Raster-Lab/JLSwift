@@ -119,6 +119,20 @@ public struct MultiComponentImageData: Sendable {
     
     /// Create grayscale image data
     ///
+    /// ```swift
+    /// // 8-bit greyscale image
+    /// let pixels: [[Int]] = (0..<256).map { y in
+    ///     (0..<256).map { x in (x + y) % 256 }
+    /// }
+    /// let imageData = try MultiComponentImageData.grayscale(pixels: pixels, bitsPerSample: 8)
+    ///
+    /// // 12-bit greyscale image (e.g., CT scan slice)
+    /// let ctData = try MultiComponentImageData.grayscale(
+    ///     pixels: ctPixels,
+    ///     bitsPerSample: 12
+    /// )
+    /// ```
+    ///
     /// - Parameters:
     ///   - pixels: 2D array of pixel values [row][column]
     ///   - bitsPerSample: Bits per sample (2-16)
@@ -141,6 +155,22 @@ public struct MultiComponentImageData: Sendable {
     }
     
     /// Create RGB image data
+    ///
+    /// ```swift
+    /// // 8-bit RGB image with separate component planes
+    /// let rgbData = try MultiComponentImageData.rgb(
+    ///     redPixels:   redPlane,
+    ///     greenPixels: greenPlane,
+    ///     bluePixels:  bluePlane,
+    ///     bitsPerSample: 8
+    /// )
+    ///
+    /// // 12-bit RGB image
+    /// let rgb12 = try MultiComponentImageData.rgb(
+    ///     redPixels: red12, greenPixels: green12, bluePixels: blue12,
+    ///     bitsPerSample: 12
+    /// )
+    /// ```
     ///
     /// - Parameters:
     ///   - redPixels: Red component pixels [row][column]
