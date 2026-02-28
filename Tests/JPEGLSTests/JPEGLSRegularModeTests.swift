@@ -32,7 +32,7 @@ struct JPEGLSRegularModeTests {
         let params = try createDefaultParameters()
         let regularMode = try JPEGLSRegularMode(parameters: params, near: 0)
         
-        // Should initialize without throwing
+        // Should initialise without throwing
         #expect(regularMode != nil)
     }
     
@@ -41,7 +41,7 @@ struct JPEGLSRegularModeTests {
         let params = try createDefaultParameters()
         let regularMode = try JPEGLSRegularMode(parameters: params, near: 5)
         
-        // Should initialize without throwing
+        // Should initialise without throwing
         #expect(regularMode != nil)
     }
     

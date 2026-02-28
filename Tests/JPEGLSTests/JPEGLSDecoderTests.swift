@@ -498,7 +498,7 @@ struct JPEGLSDecoderTests {
                 return
             }
         }
-        // All columns passed — expected behavior after fixing the run-interruption adjustedLimit bug.
+        // All columns passed — expected behaviour after fixing the run-interruption adjustedLimit bug.
     }
 
     @Test("DIAGNOSTIC: Find failing row in test8g.pgm")

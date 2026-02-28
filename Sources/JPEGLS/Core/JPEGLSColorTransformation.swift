@@ -1,16 +1,16 @@
-/// Color transformation types for JPEG-LS multi-component images
+/// Colour transformation types for JPEG-LS multi-component images
 ///
-/// JPEG-LS supports color space transformations to improve compression of
-/// correlated color components (e.g., RGB images).
+/// JPEG-LS supports colour space transformations to improve compression of
+/// correlated colour components (e.g., RGB images).
 
 import Foundation
 
-/// Color transformation type
+/// Colour transformation type
 ///
 /// Defines the transformation applied to multi-component images before encoding.
-/// The decoder must apply the inverse transformation to recover the original colors.
+/// The decoder must apply the inverse transformation to recover the original colours.
 public enum JPEGLSColorTransformation: UInt8, Sendable, Equatable {
-    /// No color transformation (components encoded independently)
+    /// No colour transformation (components encoded independently)
     case none = 0
     
     /// HP1 transformation: For RGB images
@@ -46,7 +46,7 @@ public enum JPEGLSColorTransformation: UInt8, Sendable, Equatable {
         }
     }
     
-    /// Apply the forward color transformation to a pixel
+    /// Apply the forward colour transformation to a pixel
     ///
     /// Transforms RGB components before encoding. The transformation is lossless
     /// and reversible. When `maxValue` is provided, modular arithmetic is applied
@@ -86,9 +86,9 @@ public enum JPEGLSColorTransformation: UInt8, Sendable, Equatable {
         }
     }
     
-    /// Apply the inverse color transformation to recover original colors
+    /// Apply the inverse colour transformation to recover original colours
     ///
-    /// Transforms encoded components back to original color space during decoding.
+    /// Transforms encoded components back to original colour space during decoding.
     /// When `maxValue` is provided, modular arithmetic is applied so that all output
     /// values remain in [0, maxValue].
     ///
@@ -145,7 +145,7 @@ public enum JPEGLSColorTransformation: UInt8, Sendable, Equatable {
 }
 
 extension JPEGLSColorTransformation: CustomStringConvertible {
-    /// Human-readable name of the color transformation
+    /// Human-readable name of the colour transformation
     public var description: String {
         switch self {
         case .none:

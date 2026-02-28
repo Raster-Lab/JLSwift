@@ -32,7 +32,7 @@ struct JPEGLSRegularModeDecoderTests {
         let params = try createDefaultParameters()
         let decoder = try JPEGLSRegularModeDecoder(parameters: params, near: 0)
         
-        // Should initialize without throwing
+        // Should initialise without throwing
         #expect(decoder != nil)
     }
     
@@ -41,7 +41,7 @@ struct JPEGLSRegularModeDecoderTests {
         let params = try createDefaultParameters()
         let decoder = try JPEGLSRegularModeDecoder(parameters: params, near: 5)
         
-        // Should initialize without throwing
+        // Should initialise without throwing
         #expect(decoder != nil)
     }
     

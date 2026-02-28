@@ -5,8 +5,8 @@
 /// - Line: Components deinterleaved by scan line
 /// - Sample: Components deinterleaved by pixel sample
 ///
-/// Also supports inverse color transformations to recover original
-/// color space after decoding.
+/// Also supports inverse colour transformations to recover original
+/// colour space after decoding.
 
 import Foundation
 
@@ -14,8 +14,8 @@ import Foundation
 ///
 /// Orchestrates decoding of multi-component images with support for
 /// all interleaving modes defined in the JPEG-LS standard.
-/// After decoding, inverse color transformations can be applied
-/// to recover the original color space.
+/// After decoding, inverse colour transformations can be applied
+/// to recover the original colour space.
 public struct JPEGLSMultiComponentDecoder: Sendable {
     /// Frame header defining image parameters
     private let frameHeader: JPEGLSFrameHeader
@@ -44,10 +44,10 @@ public struct JPEGLSMultiComponentDecoder: Sendable {
         // Validate scan header against frame header
         try scanHeader.validate(against: frameHeader)
 
-        // Validate color transformation for component count
+        // Validate colour transformation for component count
         guard colorTransformation.isValid(forComponentCount: frameHeader.componentCount) else {
             throw JPEGLSError.decodingFailed(
-                reason: "Color transformation \(colorTransformation) is invalid for \(frameHeader.componentCount) components"
+                reason: "Colour transformation \(colorTransformation) is invalid for \(frameHeader.componentCount) components"
             )
         }
 
@@ -206,28 +206,28 @@ public struct JPEGLSMultiComponentDecoder: Sendable {
         )
     }
 
-    // MARK: - Color Transformation
+    // MARK: - Colour Transformation
 
-    /// Apply inverse color transformation to decoded component values
+    /// Apply inverse colour transformation to decoded component values
     ///
     /// After decoding, the inverse transformation is applied to recover
-    /// the original color space. This must match the forward transformation
+    /// the original colour space. This must match the forward transformation
     /// used during encoding.
     ///
     /// - Parameter components: Decoded component values (in transformed space)
-    /// - Returns: Component values in original color space
+    /// - Returns: Component values in original colour space
     /// - Throws: `JPEGLSError` if transformation fails
     public func applyInverseColorTransformation(_ components: [Int]) throws -> [Int] {
         return try colorTransformation.transformInverse(components)
     }
 
-    /// Apply inverse color transformation to a full image
+    /// Apply inverse colour transformation to a full image
     ///
-    /// Transforms all pixels from the decoded color space back to the
-    /// original color space. Operates on per-component 2D arrays.
+    /// Transforms all pixels from the decoded colour space back to the
+    /// original colour space. Operates on per-component 2D arrays.
     ///
     /// - Parameter componentPixels: Array of component pixel data, each as [row][column]
-    /// - Returns: Array of component pixel data in original color space
+    /// - Returns: Array of component pixel data in original colour space
     /// - Throws: `JPEGLSError` if transformation fails or dimensions are inconsistent
     public func applyInverseColorTransformationToImage(
         _ componentPixels: [[Int]]
@@ -273,11 +273,11 @@ public struct JPEGLSMultiComponentDecoder: Sendable {
     /// Reconstruct component data from decoded pixel buffer
     ///
     /// Extracts per-component pixel data from the pixel buffer and
-    /// optionally applies inverse color transformation.
+    /// optionally applies inverse colour transformation.
     ///
     /// - Parameters:
     ///   - buffer: Decoded pixel buffer with all component data
-    ///   - applyColorTransform: Whether to apply inverse color transformation (default: true)
+    ///   - applyColorTransform: Whether to apply inverse colour transformation (default: true)
     /// - Returns: Reconstructed component data
     /// - Throws: `JPEGLSError` if reconstruction fails
     public func reconstructComponents(
@@ -296,7 +296,7 @@ public struct JPEGLSMultiComponentDecoder: Sendable {
             componentPixels[componentSpec.id] = pixels
         }
 
-        // Apply inverse color transformation if needed
+        // Apply inverse colour transformation if needed
         if applyColorTransform && colorTransformation != .none
             && frameHeader.componentCount == 3
         {
@@ -361,7 +361,7 @@ public struct DecodedScanStatistics: Sendable, Equatable {
 /// Reconstructed component data after decoding
 ///
 /// Contains per-component pixel data after decoding and optional
-/// inverse color transformation.
+/// inverse colour transformation.
 public struct ReconstructedComponents: Sendable {
     /// Per-component pixel data indexed by component ID
     /// Each component is stored as [row][column]
@@ -373,7 +373,7 @@ public struct ReconstructedComponents: Sendable {
     /// Image height
     public let height: Int
 
-    /// Color transformation that was applied inversely
+    /// Colour transformation that was applied inversely
     public let colorTransformation: JPEGLSColorTransformation
 
     /// Initialize reconstructed components

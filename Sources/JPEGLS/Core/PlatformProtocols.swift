@@ -71,7 +71,7 @@ public struct ScalarAccelerator: PlatformAccelerator {
     /// Initialize a scalar accelerator
     public init() {}
     
-    /// Compute gradients for JPEG-LS context modeling
+    /// Compute gradients for JPEG-LS context modelling
     ///
     /// Calculates the three gradients used in context determination:
     /// - d1 = b - c (horizontal gradient)

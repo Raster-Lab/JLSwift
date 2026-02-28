@@ -160,7 +160,7 @@ public struct ARM64Accelerator: PlatformAccelerator {
         t3: Int
     ) -> Int {
         // Quantization using signed comparisons per ITU-T.87
-        // The compiler will optimize these to NEON comparison instructions
+        // The compiler will optimise these to NEON comparison instructions
         
         if gradient <= -t3 {
             return -4

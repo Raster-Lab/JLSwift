@@ -81,7 +81,7 @@ extension JPEGLSCLITool {
             // Parse interleave mode
             let interleaveMode = try parseInterleaveMode(interleave)
             
-            // Parse color transformation
+            // Parse colour transformation
             let colorTransformValue = try parseColorTransform(colorTransform)
             
             // Read input file
@@ -157,7 +157,7 @@ extension JPEGLSCLITool {
                 print("Components: \(resolvedComponents)")
                 print("NEAR: \(near) (\(near == 0 ? "lossless" : "near-lossless"))")
                 print("Interleave mode: \(interleave)")
-                print("Color transformation: \(colorTransform)")
+                print("Colour transformation: \(colorTransform)")
                 if let t1 = t1, let t2 = t2, let t3 = t3, let reset = reset {
                     print("Custom preset: T1=\(t1), T2=\(t2), T3=\(t3), RESET=\(reset)")
                 }
@@ -325,7 +325,7 @@ extension JPEGLSCLITool {
             case "hp2":  return .hp2
             case "hp3":  return .hp3
             default:
-                throw ValidationError("Invalid color transformation: \(transform). Must be none, hp1, hp2, or hp3")
+                throw ValidationError("Invalid colour transformation: \(transform). Must be none, hp1, hp2, or hp3")
             }
         }
         

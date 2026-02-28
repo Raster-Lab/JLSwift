@@ -6,7 +6,7 @@
 ///
 /// - Parameter range validation (width, height, bits-per-sample, NEAR, etc.)
 /// - Mutual exclusivity of flags (verbose/quiet, json/quiet)
-/// - Valid option values (interleave modes, color transforms, shell types)
+/// - Valid option values (interleave modes, colour transforms, shell types)
 /// - Edge cases and boundary conditions
 ///
 /// The tests use boolean logic and value checking to verify the same patterns that ArgumentParser
@@ -108,7 +108,7 @@ struct CLIArgumentParsingTests {
             #expect(!["none", "line", "sample"].contains(invalidMode))
         }
         
-        @Test("Encode command validates color transform options")
+        @Test("Encode command validates colour transform options")
         func testEncodeColorTransform() throws {
             let validTransforms = ["none", "hp1", "hp2", "hp3"]
             let invalidTransform = "invalid"

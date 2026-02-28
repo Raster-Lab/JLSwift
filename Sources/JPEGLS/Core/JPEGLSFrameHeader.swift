@@ -1,6 +1,6 @@
 /// Interleave mode for multi-component JPEG-LS images
 ///
-/// Defines how multiple color components are arranged in the encoded bitstream.
+/// Defines how multiple colour components are arranged in the encoded bitstream.
 
 import Foundation
 

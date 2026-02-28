@@ -44,7 +44,7 @@ struct JPEGLSMultiComponentDecoderTests {
         #expect(decoder != nil)
     }
 
-    @Test("Initialize decoder with color transformation")
+    @Test("Initialise decoder with colour transformation")
     func initializeWithColorTransformation() throws {
         let frameHeader = try JPEGLSFrameHeader.rgb(
             bitsPerSample: 8,
@@ -81,7 +81,7 @@ struct JPEGLSMultiComponentDecoderTests {
         }
     }
 
-    @Test("Reject invalid color transformation for component count")
+    @Test("Reject invalid colour transformation for component count")
     func rejectInvalidColorTransformationForComponentCount() throws {
         let frameHeader = try JPEGLSFrameHeader.grayscale(
             bitsPerSample: 8,
@@ -438,7 +438,7 @@ struct JPEGLSMultiComponentDecoderTests {
 
     // MARK: - Color Transformation Inverse Tests
 
-    @Test("Apply inverse color transformation - none")
+    @Test("Apply inverse colour transformation - none")
     func applyInverseNone() throws {
         let frameHeader = try JPEGLSFrameHeader.rgb(
             bitsPerSample: 8,
@@ -458,7 +458,7 @@ struct JPEGLSMultiComponentDecoderTests {
         #expect(result == original)
     }
 
-    @Test("Apply inverse color transformation - HP1")
+    @Test("Apply inverse colour transformation - HP1")
     func applyInverseHP1() throws {
         let frameHeader = try JPEGLSFrameHeader.rgb(
             bitsPerSample: 8,
@@ -480,7 +480,7 @@ struct JPEGLSMultiComponentDecoderTests {
         #expect(recovered == [100, 150, 200])
     }
 
-    @Test("Apply inverse color transformation - HP2")
+    @Test("Apply inverse colour transformation - HP2")
     func applyInverseHP2() throws {
         let frameHeader = try JPEGLSFrameHeader.rgb(
             bitsPerSample: 8,
@@ -502,7 +502,7 @@ struct JPEGLSMultiComponentDecoderTests {
         #expect(recovered == original)
     }
 
-    @Test("Apply inverse color transformation - HP3")
+    @Test("Apply inverse colour transformation - HP3")
     func applyInverseHP3() throws {
         let frameHeader = try JPEGLSFrameHeader.rgb(
             bitsPerSample: 8,
@@ -524,7 +524,7 @@ struct JPEGLSMultiComponentDecoderTests {
         #expect(recovered == original)
     }
 
-    @Test("Apply inverse color transformation to image - none")
+    @Test("Apply inverse colour transformation to image - none")
     func applyInverseToImageNone() throws {
         let frameHeader = try JPEGLSFrameHeader.rgb(
             bitsPerSample: 8,
@@ -549,7 +549,7 @@ struct JPEGLSMultiComponentDecoderTests {
         #expect(result == componentPixels)
     }
 
-    @Test("Apply inverse color transformation to image - HP1")
+    @Test("Apply inverse colour transformation to image - HP1")
     func applyInverseToImageHP1() throws {
         let frameHeader = try JPEGLSFrameHeader.rgb(
             bitsPerSample: 8,
@@ -580,7 +580,7 @@ struct JPEGLSMultiComponentDecoderTests {
         #expect(result[2] == [200, 160])  // B recovered
     }
 
-    @Test("Apply inverse color transformation to image rejects mismatched component count")
+    @Test("Apply inverse colour transformation to image rejects mismatched component count")
     func applyInverseToImageRejectsWrongComponentCount() throws {
         let frameHeader = try JPEGLSFrameHeader.rgb(
             bitsPerSample: 8,
@@ -606,7 +606,7 @@ struct JPEGLSMultiComponentDecoderTests {
         }
     }
 
-    @Test("Apply inverse color transformation to image rejects inconsistent pixel counts")
+    @Test("Apply inverse colour transformation to image rejects inconsistent pixel counts")
     func applyInverseToImageRejectsInconsistentPixelCounts() throws {
         let frameHeader = try JPEGLSFrameHeader.rgb(
             bitsPerSample: 8,
@@ -665,7 +665,7 @@ struct JPEGLSMultiComponentDecoderTests {
         #expect(reconstructed.getPixel(componentId: 1, row: 1, column: 1) == 40)
     }
 
-    @Test("Reconstruct RGB components without color transform")
+    @Test("Reconstruct RGB components without colour transform")
     func reconstructRGBComponentsNoTransform() throws {
         let red = [[100, 200], [50, 150]]
         let green = [[110, 210], [60, 160]]
@@ -695,7 +695,7 @@ struct JPEGLSMultiComponentDecoderTests {
         #expect(reconstructed.getPixels(componentId: 3) == blue)
     }
 
-    @Test("Reconstruct RGB components with HP1 color transform")
+    @Test("Reconstruct RGB components with HP1 colour transform")
     func reconstructRGBComponentsWithHP1() throws {
         // Original RGB values
         let originalR = [[100, 200], [50, 150]]
@@ -751,7 +751,7 @@ struct JPEGLSMultiComponentDecoderTests {
         let buffer = JPEGLSPixelBuffer(imageData: imageData)
         let scanHeader = try JPEGLSScanHeader.rgbLossless()
 
-        // Skip color transform to test raw reconstruction
+        // Skip colour transform to test raw reconstruction
         let decoder = try JPEGLSMultiComponentDecoder(
             frameHeader: frameHeader,
             scanHeader: scanHeader,
@@ -769,7 +769,7 @@ struct JPEGLSMultiComponentDecoderTests {
         #expect(reconstructed.getPixels(componentId: 3) == shiftedB)
     }
 
-    @Test("Reconstruct components without applying color transform")
+    @Test("Reconstruct components without applying colour transform")
     func reconstructComponentsWithoutTransform() throws {
         let red = [[100, 200], [50, 150]]
         let green = [[110, 210], [60, 160]]
@@ -962,7 +962,7 @@ struct JPEGLSMultiComponentDecoderTests {
         #expect(statistics.pixelsDecoded == size * size)
     }
 
-    @Test("Decode with all HP color transformations")
+    @Test("Decode with all HP colour transformations")
     func decodeWithAllColorTransformations() throws {
         let red = [[100, 200], [50, 150]]
         let green = [[110, 210], [60, 160]]
@@ -993,7 +993,7 @@ struct JPEGLSMultiComponentDecoderTests {
         }
     }
 
-    @Test("Default color transformation is none")
+    @Test("Default colour transformation is none")
     func defaultColorTransformationIsNone() throws {
         let frameHeader = try JPEGLSFrameHeader.rgb(
             bitsPerSample: 8,
@@ -1049,7 +1049,7 @@ struct JPEGLSMultiComponentDecoderTests {
         #expect(statistics.pixelsDecoded == 4)
     }
 
-    @Test("Reconstruct components preserves color transformation info")
+    @Test("Reconstruct components preserves colour transformation info")
     func reconstructComponentsPreservesTransformInfo() throws {
         let pixels = [[10, 20], [30, 40]]
 
@@ -1072,7 +1072,7 @@ struct JPEGLSMultiComponentDecoderTests {
         #expect(reconstructed.colorTransformation == .none)
     }
 
-    @Test("Reconstruct RGB components with HP1 color transform applied")
+    @Test("Reconstruct RGB components with HP1 colour transform applied")
     func reconstructRGBComponentsWithHP1Applied() throws {
         // Simulate decoded data in HP1 transformed space
         // HP1 forward: R' = R - G, G' = G, B' = B - G
