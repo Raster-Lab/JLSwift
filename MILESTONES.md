@@ -1301,6 +1301,8 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 - [ ] Align test organisation and naming conventions with J2KSwift
 - [ ] Document any intentional deviations from J2KSwift with rationale
 
+**Note (Phase 19.3):** Deferred — J2KSwift is not yet publicly available for review. All Phase 19.3 items will be addressed once J2KSwift is accessible.
+
 ### Milestone 20: DICOM Independence & Final Integration 📋
 **Target**: DICOM-aware but independently usable library; hardware-accelerated, 100% Swift native reference implementation  
 **Status**: Not Started
@@ -1315,6 +1317,7 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 - [ ] Document the DICOM-aware/DICOM-independent architecture
 
 #### Phase 20.2: Full Test Suite & Coverage
+- [x] Fix encoder crash for images wider than 65 535 pixels (`detectRunLength` false-run-interruption bug)
 - [ ] Ensure all unit tests pass across all milestones (10–20)
 - [ ] Achieve >95% test coverage across all modules including new Part 2 code
 - [ ] Verify all CharLS interoperability tests pass in both directions
@@ -1322,6 +1325,18 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 - [ ] Verify all performance regression tests pass with no regressions
 - [ ] Run fuzz testing on the decoder for robustness (if infrastructure is available)
 - [ ] Run the complete test suite on both ARM64 and x86-64 platforms
+
+**Implementation Details (Phase 20.2 — encoder crash fix):**
+- `JPEGLSRunMode.detectRunLength` previously limited its pixel scan to `maxRunLength` (default 65 536).
+  For images wider than 65 536 pixels this produced an artificially short run, causing the encoder to
+  emit a false run-interruption sample at the truncation boundary.  Because the interruption pixel had
+  the same value as the run, the prediction error was zero; with `RItype = 1` the mapped error
+  formula yielded −1, and the Swift `Range` expression `0..<(-1)` crashed with a fatal error.
+- Fix: removed the `maxRunLength` cap inside `detectRunLength` so the scan always extends to the
+  actual end of the scan line.  `encodeRunLength` already handles arbitrarily long runs through
+  Golomb-Rice continuation blocks, so no bitstream change is required.
+- Updated `testDetectRunLengthLimitedByMax` in `JPEGLSRunModeTests` to reflect the corrected
+  behaviour (full-line scan regardless of `maxRunLength`).
 
 #### Phase 20.3: Final Performance Validation
 - [ ] Confirm JLSwift meets or exceeds CharLS performance in encoding speed

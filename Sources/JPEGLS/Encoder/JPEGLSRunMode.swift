@@ -74,8 +74,14 @@ public struct JPEGLSRunMode: Sendable {
     /// Scans the pixel buffer to count consecutive pixels that match
     /// the run value (Ra == Rb). The scan terminates when:
     /// - A different pixel value is encountered (run interruption)
-    /// - The maximum run length is reached
     /// - The end of the scan line is reached
+    ///
+    /// The scan always extends to the actual end of the line so that
+    /// `encodeRunLength` can handle arbitrarily long runs via Golomb
+    /// continuation blocks. Limiting the scan to fewer pixels would cause
+    /// a false run interruption at the truncation boundary, which in turn
+    /// triggers a zero-error run interruption sample and a crash for
+    /// images wider than 65 535 pixels.
     ///
     /// - Parameters:
     ///   - pixels: Array of pixel values to scan
@@ -88,7 +94,7 @@ public struct JPEGLSRunMode: Sendable {
         runValue: Int
     ) -> Int {
         var runLength = 0
-        let limit = min(pixels.count, startIndex + maxRunLength)
+        let limit = pixels.count
         
         // Scan ahead to count matching pixels.
         // For near-lossless (NEAR > 0) a pixel is part of the run when
