@@ -945,7 +945,7 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 **Status**: In Progress
 
 #### Phase 17.1: Missing Functionality ⏳
-- [ ] Implement PNG output format support for the `decode` command
+- [x] Implement PNG output format support for the `decode` command
 - [ ] Implement TIFF output format support for the `decode` command
 - [x] Implement PGM/PPM output format support for the `decode` command
 - [x] Implement PGM/PPM input format support for the `encode` command (auto-detect dimensions/components)
@@ -957,6 +957,31 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 - [ ] Implement `--part2` flag for Part 2 extensions encoding
 - [ ] Implement progress bars for long-running operations (large files, batch processing)
 - [x] Implement `--version` flag displaying library and tool version information (provided by ArgumentParser via `version:` in `CommandConfiguration`)
+
+**Implementation Details (PNG output for `decode`):**
+- Created `PNGSupport.swift` in the `JPEGLS` library target (accessible to both the library and the CLI)
+  - `PNGSupport.encode(componentPixels:width:height:maxVal:)` produces a valid PNG file from `[component][row][column]` pixel data
+  - Supports 8-bit (maxVal ≤ 255) and 16-bit (maxVal ≤ 65535) samples; supports greyscale (1 component, PNG colour type 0) and RGB (3 components, PNG colour type 2)
+  - Implements a standard PNG file: signature + IHDR + IDAT + IEND chunks
+  - IDAT data is a valid zlib stream using uncompressed (stored) DEFLATE blocks — no compression library required; compatible with all conforming PNG decoders
+  - CRC-32 (IEEE 802.3 polynomial 0xEDB88320) computed over each chunk type+data field
+  - Adler-32 checksum (RFC 1950) appended at the end of the zlib stream
+  - `PNGEncoderError` enum: `invalidDimensions`, `unsupportedComponentCount`, `invalidMaxVal`
+- Updated `decode` command:
+  - `--format png` now produces a valid PNG file instead of throwing "not yet implemented"
+  - `--format` help text updated to list supported formats: `raw`, `pgm`, `ppm`, `png` (TIFF remains "not yet implemented")
+  - Error messages updated to British English style
+- Updated `JPEGLSPNMRoundTripTests.swift`: decode format validation test updated to include `png` as a supported format (and move `tiff` to the unsupported list)
+- Created `JPEGLSPNGOutputTests.swift` with 19 unit tests:
+  - PNG file signature verification
+  - IHDR chunk structure (width, height, bit depth, colour type) for 8-bit greyscale, 8-bit RGB, 16-bit greyscale, and 256×256 images
+  - PNG chunk order (IHDR, IDAT, IEND)
+  - IEND chunk empty data field
+  - Error handling: zero dimensions, unsupported component count, invalid maxVal
+  - CRC-32 known-value test (IEND chunk = 0xAE426082)
+  - Adler-32 tests (empty data = 1; single byte 0x01 = 0x00020002)
+  - IDAT pixel content verification: 8-bit greyscale, 16-bit greyscale big-endian, 8-bit RGB interleaving
+  - JPEG-LS round-trip (encode → decode → PNG) with pixel-exact verification for greyscale and RGB
 
 **Implementation Details (PGM/PPM I/O):**
 - Created `PNMSupport.swift` utility module in the `jpegls` CLI target

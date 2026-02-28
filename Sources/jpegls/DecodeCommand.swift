@@ -14,7 +14,7 @@ extension JPEGLSCLITool {
         @Argument(help: "Output file path for raw pixel data")
         var output: String
         
-        @Option(name: .long, help: "Output format: raw, pgm, ppm, png, tiff (default: raw)")
+        @Option(name: .long, help: "Output format: raw, pgm, ppm, png (default: raw)")
         var format: String = "raw"
         
         @Flag(name: .long, help: "Enable verbose output")
@@ -110,11 +110,27 @@ extension JPEGLSCLITool {
                     print("Decoded \(imageData.frameHeader.width)x\(imageData.frameHeader.height) image to \(output) as \(fmtName) (\(pnmData.count) bytes)")
                 }
                 
-            case "png", "tiff":
-                throw ValidationError("Format '\(format)' not yet implemented - use 'raw', 'pgm', or 'ppm' format")
+            case "png":
+                // Write PNG file using the pure-Swift PNG encoder.
+                let componentPixels: [[[Int]]] = imageData.components.map { $0.pixels }
+                let maxVal = (1 << imageData.frameHeader.bitsPerSample) - 1
+                let pngData = try PNGSupport.encode(
+                    componentPixels: componentPixels,
+                    width: imageData.frameHeader.width,
+                    height: imageData.frameHeader.height,
+                    maxVal: maxVal
+                )
+                try pngData.write(to: URL(fileURLWithPath: output))
+
+                if !quiet {
+                    print("Decoded \(imageData.frameHeader.width)x\(imageData.frameHeader.height) image to \(output) as PNG (\(pngData.count) bytes)")
+                }
+                
+            case "tiff":
+                throw ValidationError("Format 'tiff' is not yet implemented — use 'raw', 'pgm', 'ppm', or 'png'")
                 
             default:
-                throw ValidationError("Unknown format '\(format)' - supported formats: raw, pgm, ppm, png, tiff")
+                throw ValidationError("Unknown format '\(format)' — supported formats: raw, pgm, ppm, png")
             }
         }
     }
