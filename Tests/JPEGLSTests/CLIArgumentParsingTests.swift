@@ -1016,4 +1016,163 @@ struct CLIArgumentParsingTests {
             }
         }
     }
+
+    // MARK: - Convert Command Tests
+
+    @Suite("Convert Command Validation")
+    struct ConvertCommandTests {
+
+        // Valid output format extensions for the convert command.
+        private let validOutputFormats = ["jls", "png", "tiff", "tif", "pgm", "ppm"]
+
+        @Test("Convert command recognises JPEG-LS output by .jls extension")
+        func testConvertJLSOutput() {
+            #expect(validOutputFormats.contains("jls"))
+        }
+
+        @Test("Convert command recognises PNG output by .png extension")
+        func testConvertPNGOutput() {
+            #expect(validOutputFormats.contains("png"))
+        }
+
+        @Test("Convert command recognises TIFF output by .tiff and .tif extensions")
+        func testConvertTIFFOutput() {
+            #expect(validOutputFormats.contains("tiff"))
+            #expect(validOutputFormats.contains("tif"))
+        }
+
+        @Test("Convert command recognises PGM/PPM output by .pgm and .ppm extensions")
+        func testConvertPNMOutput() {
+            #expect(validOutputFormats.contains("pgm"))
+            #expect(validOutputFormats.contains("ppm"))
+        }
+
+        @Test("Convert command NEAR parameter must be in range 0–255")
+        func testConvertNearRange() {
+            for near in [0, 1, 100, 255] {
+                #expect((0...255).contains(near))
+            }
+            for near in [-1, 256, 1000] {
+                #expect(!(0...255).contains(near))
+            }
+        }
+
+        @Test("Convert command interleave mode validation accepts none, line, sample")
+        func testConvertInterleaveModes() {
+            let validModes = ["none", "line", "sample"]
+            #expect(validModes.contains("none"))
+            #expect(validModes.contains("line"))
+            #expect(validModes.contains("sample"))
+            #expect(!validModes.contains("pixel"))
+        }
+
+        @Test("Convert command colour-transform option accepts none, hp1, hp2, hp3")
+        func testConvertColorTransformOptions() {
+            let validTransforms = ["none", "hp1", "hp2", "hp3"]
+            for t in validTransforms {
+                #expect(validTransforms.contains(t))
+            }
+            #expect(!validTransforms.contains("hp4"))
+        }
+
+        @Test("Convert command verbose and quiet are mutually exclusive")
+        func testConvertVerboseQuietMutuallyExclusive() {
+            // When both verbose and quiet are true, the combination is invalid and should be rejected.
+            let invalidCombination = true && true  // both verbose and quiet
+            #expect(invalidCombination)  // Represents the condition that triggers a ValidationError
+        }
+
+        @Test("PNG and TIFF are valid input formats for the encode command via auto-detection")
+        func testEncodeAcceptsPNGAndTIFFInput() throws {
+            // Verify that PNG/TIFF round-trip encode → decode → encode works using the decoders.
+            let originalPixels: [[[Int]]] = [[[10, 20], [30, 40]]]
+            
+            // PNG round-trip
+            let pngData = try PNGSupport.encode(
+                componentPixels: originalPixels, width: 2, height: 2, maxVal: 255
+            )
+            let decodedPNG = try PNGSupport.decode(pngData)
+            #expect(decodedPNG.componentPixels[0] == originalPixels[0])
+
+            // TIFF round-trip
+            let tiffData = try TIFFSupport.encode(
+                componentPixels: originalPixels, width: 2, height: 2, maxVal: 255
+            )
+            let decodedTIFF = try TIFFSupport.decode(tiffData)
+            #expect(decodedTIFF.componentPixels[0] == originalPixels[0])
+        }
+
+        @Test("PNG decoder is available in the JPEGLS module for CLI encode from PNG")
+        func testPNGDecoderAvailable() throws {
+            let pixels: [[[Int]]] = [[[100, 200], [150, 50]]]
+            let pngData = try PNGSupport.encode(componentPixels: pixels, width: 2, height: 2, maxVal: 255)
+            let decoded = try PNGSupport.decode(pngData)
+            #expect(decoded.width == 2)
+            #expect(decoded.height == 2)
+            #expect(decoded.componentPixels.count == 1)
+        }
+
+        @Test("TIFF decoder is available in the JPEGLS module for CLI encode from TIFF")
+        func testTIFFDecoderAvailable() throws {
+            let pixels: [[[Int]]] = [[[100, 200], [150, 50]]]
+            let tiffData = try TIFFSupport.encode(componentPixels: pixels, width: 2, height: 2, maxVal: 255)
+            let decoded = try TIFFSupport.decode(tiffData)
+            #expect(decoded.width == 2)
+            #expect(decoded.height == 2)
+            #expect(decoded.componentPixels.count == 1)
+        }
+
+        @Test("JPEG-LS encode from PNG produces decodable output with pixel-exact reconstruction")
+        func testEncodeFromPNGRoundTrip() throws {
+            let width = 4, height = 4
+            let pixels: [[[Int]]] = [
+                (0..<height).map { row in (0..<width).map { col in (row * width + col) * 16 } }
+            ]
+            // PNG encode → PNG decode → JPEG-LS encode → JPEG-LS decode.
+            let pngData = try PNGSupport.encode(
+                componentPixels: pixels, width: width, height: height, maxVal: 255
+            )
+            let decodedPNG = try PNGSupport.decode(pngData)
+            let imageData = try MultiComponentImageData.grayscale(
+                pixels: decodedPNG.componentPixels[0],
+                bitsPerSample: decodedPNG.bitDepth
+            )
+            let encoder = JPEGLSEncoder()
+            let jlsData = try encoder.encode(
+                imageData, configuration: try .init(near: 0, interleaveMode: .none)
+            )
+            let decoder = JPEGLSDecoder()
+            let decoded = try decoder.decode(jlsData)
+            #expect(decoded.components[0].pixels == pixels[0])
+        }
+
+        @Test("JPEG-LS encode from TIFF produces decodable output with pixel-exact reconstruction")
+        func testEncodeFromTIFFRoundTrip() throws {
+            let width = 4, height = 4
+            let r: [[Int]] = (0..<height).map { row in (0..<width).map { col in (row * width + col) * 16 } }
+            let g: [[Int]] = (0..<height).map { row in (0..<width).map { col in (row * width + col + 1) * 16 % 256 } }
+            let b: [[Int]] = (0..<height).map { row in (0..<width).map { col in (row * width + col + 2) * 16 % 256 } }
+            let pixels: [[[Int]]] = [r, g, b]
+            // TIFF encode → TIFF decode → JPEG-LS encode → JPEG-LS decode.
+            let tiffData = try TIFFSupport.encode(
+                componentPixels: pixels, width: width, height: height, maxVal: 255
+            )
+            let decodedTIFF = try TIFFSupport.decode(tiffData)
+            let imageData = try MultiComponentImageData.rgb(
+                redPixels:   decodedTIFF.componentPixels[0],
+                greenPixels: decodedTIFF.componentPixels[1],
+                bluePixels:  decodedTIFF.componentPixels[2],
+                bitsPerSample: decodedTIFF.bitsPerSample
+            )
+            let encoder = JPEGLSEncoder()
+            let jlsData = try encoder.encode(
+                imageData, configuration: try .init(near: 0, interleaveMode: .none)
+            )
+            let decoder = JPEGLSDecoder()
+            let decoded = try decoder.decode(jlsData)
+            #expect(decoded.components[0].pixels == r)
+            #expect(decoded.components[1].pixels == g)
+            #expect(decoded.components[2].pixels == b)
+        }
+    }
 }

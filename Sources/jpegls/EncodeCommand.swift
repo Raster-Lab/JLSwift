@@ -8,7 +8,7 @@ extension JPEGLSCLITool {
             abstract: "Encode image to JPEG-LS format"
         )
         
-        @Argument(help: "Input image file path (raw pixel data, PGM, or PPM)")
+        @Argument(help: "Input image file path (raw pixel data, PGM, PPM, PNG, or TIFF)")
         var input: String
         
         @Argument(help: "Output JPEG-LS file path")
@@ -112,13 +112,47 @@ extension JPEGLSCLITool {
                     componentPixels: pnm.componentPixels,
                     bitsPerSample: resolvedBitsPerSample
                 )
+            } else if isPNGFile(path: input, data: inputData) {
+                // PNG input: decode using PNGSupport.
+                let png = try PNGSupport.decode(inputData)
+                
+                resolvedWidth             = png.width
+                resolvedHeight            = png.height
+                resolvedComponents        = png.componentPixels.count
+                resolvedBitsPerSample     = bitsPerSample ?? png.bitDepth
+                
+                guard (2...16).contains(resolvedBitsPerSample) else {
+                    throw ValidationError("Bits per sample must be between 2 and 16")
+                }
+                
+                imageData = try buildMultiComponentImageData(
+                    componentPixels: png.componentPixels,
+                    bitsPerSample: resolvedBitsPerSample
+                )
+            } else if isTIFFFile(path: input, data: inputData) {
+                // TIFF input: decode using TIFFSupport.
+                let tiff = try TIFFSupport.decode(inputData)
+                
+                resolvedWidth             = tiff.width
+                resolvedHeight            = tiff.height
+                resolvedComponents        = tiff.componentPixels.count
+                resolvedBitsPerSample     = bitsPerSample ?? tiff.bitsPerSample
+                
+                guard (2...16).contains(resolvedBitsPerSample) else {
+                    throw ValidationError("Bits per sample must be between 2 and 16")
+                }
+                
+                imageData = try buildMultiComponentImageData(
+                    componentPixels: tiff.componentPixels,
+                    bitsPerSample: resolvedBitsPerSample
+                )
             } else {
                 // Raw input: require --width and --height; use defaults for the rest.
                 guard let w = width else {
-                    throw ValidationError("--width is required for raw input (omit for PGM/PPM files)")
+                    throw ValidationError("--width is required for raw input (omit for PGM/PPM/PNG/TIFF files)")
                 }
                 guard let h = height else {
-                    throw ValidationError("--height is required for raw input (omit for PGM/PPM files)")
+                    throw ValidationError("--height is required for raw input (omit for PGM/PPM/PNG/TIFF files)")
                 }
                 
                 resolvedWidth      = w
@@ -239,6 +273,34 @@ extension JPEGLSCLITool {
             if data.count >= 2 {
                 let magic = data.prefix(2)
                 return (magic[0] == UInt8(ascii: "P") && (magic[1] == UInt8(ascii: "5") || magic[1] == UInt8(ascii: "6")))
+            }
+            return false
+        }
+        
+        /// Returns `true` if the file at `path` is a PNG image.
+        private func isPNGFile(path: String, data: Data) -> Bool {
+            let ext = (path as NSString).pathExtension.lowercased()
+            if ext == "png" { return true }
+            // PNG signature: 137 80 78 71 13 10 26 10
+            let sig: [UInt8] = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]
+            return data.count >= 8 && Array(data.prefix(8)) == sig
+        }
+        
+        /// Returns `true` if the file at `path` is a TIFF image.
+        private func isTIFFFile(path: String, data: Data) -> Bool {
+            let ext = (path as NSString).pathExtension.lowercased()
+            if ext == "tiff" || ext == "tif" { return true }
+            // TIFF byte-order marks: 'II' (little-endian) or 'MM' (big-endian).
+            if data.count >= 4 {
+                let isLE = data[0] == 0x49 && data[1] == 0x49
+                let isBE = data[0] == 0x4D && data[1] == 0x4D
+                if isLE || isBE {
+                    // Also check magic number 42.
+                    let magic = isLE
+                        ? (UInt16(data[2]) | UInt16(data[3]) << 8)
+                        : (UInt16(data[2]) << 8 | UInt16(data[3]))
+                    return magic == 42
+                }
             }
             return false
         }

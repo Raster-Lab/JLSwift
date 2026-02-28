@@ -1,11 +1,15 @@
 // PNGSupport.swift
-// Minimal pure-Swift PNG encoder for writing greyscale and RGB images.
+// Minimal pure-Swift PNG encoder and decoder for greyscale and RGB images.
 //
-// Supports 8-bit and 16-bit samples for both greyscale (1 component) and RGB
+// Encoder: supports 8-bit and 16-bit samples for both greyscale (1 component) and RGB
 // (3 components) images. Pixel data in the IDAT stream is wrapped in a valid
 // zlib stream using uncompressed (stored) DEFLATE blocks, making the output
 // compatible with all standard PNG decoders without requiring a compression
 // library.
+//
+// Decoder: supports 8-bit and 16-bit greyscale and RGB PNG files using uncompressed
+// (stored) DEFLATE blocks and filter type 0 (None). This covers all PNG files
+// produced by the encoder above; compressed PNGs from other tools are not supported.
 
 import Foundation
 
@@ -218,5 +222,253 @@ private extension Data {
         var crcInput = typeBytes
         crcInput.append(chunkData)
         pngAppend32(PNGSupport.crc32(crcInput))
+    }
+}
+
+// MARK: - PNG Decoder Errors
+
+/// Errors produced by the PNG decoder.
+public enum PNGDecoderError: Error, CustomStringConvertible, Equatable {
+    /// The file does not begin with the standard 8-byte PNG signature.
+    case invalidSignature
+    /// No IHDR chunk was found.
+    case missingIHDR
+    /// Bit depth is not 8 or 16.
+    case unsupportedBitDepth(UInt8)
+    /// Colour type is not 0 (greyscale) or 2 (RGB).
+    case unsupportedColorType(UInt8)
+    /// Interlaced PNG files are not supported.
+    case interlacedNotSupported
+    /// No IDAT chunk was found.
+    case missingIDAT
+    /// The zlib header is malformed.
+    case invalidZlibStream
+    /// A DEFLATE block type other than 00 (stored) was encountered.
+    case unsupportedDEFLATEBlockType(UInt8)
+    /// A scanline filter type other than 0 (None) was encountered.
+    case unsupportedFilterType(UInt8)
+    /// The pixel data is shorter than expected.
+    case truncatedData
+
+    public var description: String {
+        switch self {
+        case .invalidSignature:
+            return "PNG decoder: file does not begin with the PNG signature"
+        case .missingIHDR:
+            return "PNG decoder: no IHDR chunk found"
+        case .unsupportedBitDepth(let d):
+            return "PNG decoder: unsupported bit depth \(d) — only 8 and 16 are supported"
+        case .unsupportedColorType(let t):
+            return "PNG decoder: unsupported colour type \(t) — only 0 (greyscale) and 2 (RGB) are supported"
+        case .interlacedNotSupported:
+            return "PNG decoder: interlaced PNG files are not supported"
+        case .missingIDAT:
+            return "PNG decoder: no IDAT chunk found"
+        case .invalidZlibStream:
+            return "PNG decoder: invalid zlib stream header"
+        case .unsupportedDEFLATEBlockType(let t):
+            return "PNG decoder: unsupported DEFLATE block type \(t) — only stored (type 0) is supported; " +
+                   "use uncompressed PNG output from this tool or convert with an external tool"
+        case .unsupportedFilterType(let f):
+            return "PNG decoder: unsupported scanline filter type \(f) — only type 0 (None) is supported"
+        case .truncatedData:
+            return "PNG decoder: pixel data is shorter than expected"
+        }
+    }
+}
+
+// MARK: - PNG Decoder
+
+/// A decoded PNG image.
+public struct PNGImage: Sendable {
+    /// Image width in pixels.
+    public let width: Int
+    /// Image height in pixels.
+    public let height: Int
+    /// Bit depth per sample (8 or 16).
+    public let bitDepth: Int
+    /// Pixel data organised as `[component][row][column]`.
+    /// Component count is 1 for greyscale or 3 for RGB.
+    public let componentPixels: [[[Int]]]
+
+    /// Maximum sample value (255 for 8-bit, 65535 for 16-bit).
+    public var maxVal: Int { (1 << bitDepth) - 1 }
+}
+
+extension PNGSupport {
+
+    // MARK: - Public Decode API
+
+    /// Decode a PNG file into component pixel arrays.
+    ///
+    /// Only uncompressed (stored-DEFLATE, BTYPE=00) PNG files with filter type 0 (None)
+    /// are supported. This covers all PNG files produced by `PNGSupport.encode(...)`.
+    ///
+    /// - Parameter data: Raw PNG file bytes.
+    /// - Returns: A `PNGImage` containing dimensions, bit depth, and pixel data.
+    /// - Throws: `PNGDecoderError` if the file is invalid or uses unsupported features.
+    ///
+    /// **Usage example:**
+    /// ```swift
+    /// let pixels: [[[Int]]] = [[[10, 20], [30, 40]]]
+    /// let pngData = try PNGSupport.encode(componentPixels: pixels, width: 2, height: 2, maxVal: 255)
+    /// let image = try PNGSupport.decode(pngData)
+    /// // image.componentPixels[0][0][0] == 10
+    /// ```
+    public static func decode(_ data: Data) throws -> PNGImage {
+        // Verify PNG signature (8 bytes).
+        let signature: [UInt8] = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]
+        guard data.count >= 8, Array(data.prefix(8)) == signature else {
+            throw PNGDecoderError.invalidSignature
+        }
+
+        // Parse chunks.
+        var offset = 8
+        var width  = 0
+        var height = 0
+        var bitDepth:  UInt8 = 0
+        var colorType: UInt8 = 0
+        var foundIHDR = false
+        var idatData  = Data()
+
+        while offset + 12 <= data.count {
+            let chunkLength = Int(readBE32(data, at: offset));   offset += 4
+            let typeBytes   = data[offset ..< offset + 4];       offset += 4
+            let chunkType   = String(bytes: typeBytes, encoding: .ascii) ?? ""
+            let chunkEnd    = offset + chunkLength
+
+            switch chunkType {
+            case "IHDR":
+                guard chunkLength == 13 else { throw PNGDecoderError.missingIHDR }
+                width      = Int(readBE32(data, at: offset))
+                height     = Int(readBE32(data, at: offset + 4))
+                bitDepth   = data[offset + 8]
+                colorType  = data[offset + 9]
+                let interlace = data[offset + 12]
+                foundIHDR = true
+                guard bitDepth == 8 || bitDepth == 16 else {
+                    throw PNGDecoderError.unsupportedBitDepth(bitDepth)
+                }
+                guard colorType == 0 || colorType == 2 else {
+                    throw PNGDecoderError.unsupportedColorType(colorType)
+                }
+                guard interlace == 0 else {
+                    throw PNGDecoderError.interlacedNotSupported
+                }
+            case "IDAT":
+                if chunkEnd <= data.count {
+                    idatData.append(data[offset ..< chunkEnd])
+                }
+            case "IEND":
+                break
+            default:
+                break  // Ignore ancillary and unknown chunks.
+            }
+
+            offset = chunkEnd + 4  // Skip chunk data + 4-byte CRC.
+        }
+
+        guard foundIHDR else { throw PNGDecoderError.missingIHDR }
+        guard !idatData.isEmpty else { throw PNGDecoderError.missingIDAT }
+
+        // Decompress the concatenated IDAT data (zlib stream with stored DEFLATE blocks).
+        let scanlines = try inflateStored(idatData)
+
+        // Reconstruct pixels from filtered scanlines.
+        let numComponents = colorType == 2 ? 3 : 1
+        let bytesPerSample = bitDepth == 16 ? 2 : 1
+        let rowStride = 1 + width * numComponents * bytesPerSample
+
+        guard scanlines.count >= height * rowStride else {
+            throw PNGDecoderError.truncatedData
+        }
+
+        var componentPixels = Array(
+            repeating: Array(repeating: Array(repeating: 0, count: width), count: height),
+            count: numComponents
+        )
+
+        for row in 0..<height {
+            let rowStart = row * rowStride
+            let filterType = scanlines[rowStart]
+            guard filterType == 0 else {
+                throw PNGDecoderError.unsupportedFilterType(filterType)
+            }
+            let pixelStart = rowStart + 1
+
+            for col in 0..<width {
+                for comp in 0..<numComponents {
+                    let byteOffset = pixelStart + (col * numComponents + comp) * bytesPerSample
+                    if bytesPerSample == 2 {
+                        let hi = Int(scanlines[byteOffset])
+                        let lo = Int(scanlines[byteOffset + 1])
+                        componentPixels[comp][row][col] = (hi << 8) | lo
+                    } else {
+                        componentPixels[comp][row][col] = Int(scanlines[byteOffset])
+                    }
+                }
+            }
+        }
+
+        return PNGImage(
+            width: width,
+            height: height,
+            bitDepth: Int(bitDepth),
+            componentPixels: componentPixels
+        )
+    }
+
+    // MARK: - Internal Decode Helpers
+
+    /// Decompress a zlib stream that uses only stored (BTYPE=00) DEFLATE blocks.
+    static func inflateStored(_ data: Data) throws -> Data {
+        guard data.count >= 2 else { throw PNGDecoderError.invalidZlibStream }
+
+        // Validate zlib CMF/FLG header: (CMF * 256 + FLG) % 31 must be 0.
+        let cmf = UInt32(data[0])
+        let flg = UInt32(data[1])
+        guard (cmf * 256 + flg) % 31 == 0 else {
+            throw PNGDecoderError.invalidZlibStream
+        }
+        // Bit 5 of FLG is the FDICT flag; a preset dictionary is not supported here
+        // but we do not strictly need to reject it for stored blocks.
+
+        var pos    = 2
+        var output = Data()
+        var done   = false
+
+        while !done {
+            guard pos < data.count else { break }
+            let header = data[pos]; pos += 1
+            let bfinal = (header & 0x01) != 0
+            let btype  = (header >> 1) & 0x03
+
+            switch btype {
+            case 0x00:  // Stored block
+                guard pos + 4 <= data.count else { throw PNGDecoderError.truncatedData }
+                let len  = UInt16(data[pos]) | (UInt16(data[pos + 1]) << 8)
+                let nlen = UInt16(data[pos + 2]) | (UInt16(data[pos + 3]) << 8)
+                pos += 4
+                guard nlen == ~len else { throw PNGDecoderError.invalidZlibStream }
+                let blockLen = Int(len)
+                guard pos + blockLen <= data.count else { throw PNGDecoderError.truncatedData }
+                output.append(data[pos ..< pos + blockLen])
+                pos += blockLen
+            default:
+                throw PNGDecoderError.unsupportedDEFLATEBlockType(btype)
+            }
+
+            if bfinal { done = true }
+        }
+
+        return output
+    }
+
+    /// Read a big-endian 32-bit unsigned integer from `data` at `offset`.
+    private static func readBE32(_ data: Data, at offset: Int) -> UInt32 {
+        (UInt32(data[offset])     << 24)
+            | (UInt32(data[offset + 1]) << 16)
+            | (UInt32(data[offset + 2]) <<  8)
+            |  UInt32(data[offset + 3])
     }
 }

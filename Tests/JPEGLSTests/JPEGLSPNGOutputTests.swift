@@ -354,6 +354,241 @@ struct JPEGLSPNGOutputTests {
         #expect(supportedFormats.contains("tiff"))
     }
 
+    // MARK: - PNG Decoder Tests
+
+    @Test("PNG decoder round-trip: 8-bit greyscale encode → decode preserves pixel values")
+    func testPNGDecodeGreyscale8bit() throws {
+        let pixels: [[[Int]]] = [[[10, 20], [30, 40]]]
+        let pngData = try PNGSupport.encode(componentPixels: pixels, width: 2, height: 2, maxVal: 255)
+        let decoded = try PNGSupport.decode(pngData)
+        #expect(decoded.width == 2)
+        #expect(decoded.height == 2)
+        #expect(decoded.bitDepth == 8)
+        #expect(decoded.componentPixels.count == 1)
+        #expect(decoded.componentPixels[0][0][0] == 10)
+        #expect(decoded.componentPixels[0][0][1] == 20)
+        #expect(decoded.componentPixels[0][1][0] == 30)
+        #expect(decoded.componentPixels[0][1][1] == 40)
+    }
+
+    @Test("PNG decoder round-trip: 16-bit greyscale encode → decode preserves pixel values")
+    func testPNGDecodeGreyscale16bit() throws {
+        let pixels: [[[Int]]] = [[[0x0F00, 0x1234], [0xABCD, 0xFFFF]]]
+        let pngData = try PNGSupport.encode(componentPixels: pixels, width: 2, height: 2, maxVal: 65535)
+        let decoded = try PNGSupport.decode(pngData)
+        #expect(decoded.bitDepth == 16)
+        #expect(decoded.componentPixels[0][0][0] == 0x0F00)
+        #expect(decoded.componentPixels[0][0][1] == 0x1234)
+        #expect(decoded.componentPixels[0][1][0] == 0xABCD)
+        #expect(decoded.componentPixels[0][1][1] == 0xFFFF)
+    }
+
+    @Test("PNG decoder round-trip: 8-bit RGB encode → decode preserves all three channels")
+    func testPNGDecodeRGB8bit() throws {
+        let r: [[Int]] = [[255, 0], [128, 64]]
+        let g: [[Int]] = [[0, 200], [64, 100]]
+        let b: [[Int]] = [[50, 100], [200, 255]]
+        let pixels: [[[Int]]] = [r, g, b]
+        let pngData = try PNGSupport.encode(componentPixels: pixels, width: 2, height: 2, maxVal: 255)
+        let decoded = try PNGSupport.decode(pngData)
+        #expect(decoded.componentPixels.count == 3)
+        #expect(decoded.componentPixels[0] == r)
+        #expect(decoded.componentPixels[1] == g)
+        #expect(decoded.componentPixels[2] == b)
+    }
+
+    @Test("PNG decoder rejects data with invalid PNG signature")
+    func testPNGDecodeInvalidSignature() throws {
+        var bad = Data(repeating: 0, count: 20)
+        bad[0] = 0x89; bad[1] = 0x50  // incomplete signature
+        #expect(throws: PNGDecoderError.invalidSignature) {
+            try PNGSupport.decode(bad)
+        }
+    }
+
+    @Test("PNG decoder rejects data that is too short to contain a signature")
+    func testPNGDecodeTooShort() {
+        let tinyData = Data([0x89, 0x50, 0x4E])
+        #expect(throws: PNGDecoderError.invalidSignature) {
+            try PNGSupport.decode(tinyData)
+        }
+    }
+
+    @Test("PNG decoder reports missingIHDR when no IHDR chunk is present")
+    func testPNGDecodeMissingIHDR() {
+        // Valid PNG signature + IEND chunk only (no IHDR).
+        var data = Data([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A])
+        // IEND: length=0, type="IEND", no data, CRC
+        data.append(contentsOf: [0, 0, 0, 0, 0x49, 0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82])
+        #expect(throws: PNGDecoderError.missingIHDR) {
+            try PNGSupport.decode(data)
+        }
+    }
+
+    @Test("PNG decoder reports missingIDAT when no IDAT chunk is present")
+    func testPNGDecodeMissingIDAT() throws {
+        // Build a valid PNG with IHDR but no IDAT chunk.
+        let r: [[Int]] = [[0]]
+        let pixels: [[[Int]]] = [r]
+        var pngData = try PNGSupport.encode(componentPixels: pixels, width: 1, height: 1, maxVal: 255)
+
+        // Strip out the IDAT chunk by removing all bytes after IHDR.
+        // Keep: 8-byte sig + 25-byte IHDR chunk (4+4+13+4) = 33 bytes, then add IEND.
+        pngData = pngData.prefix(33)
+        pngData.append(contentsOf: [0, 0, 0, 0, 0x49, 0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82])
+
+        #expect(throws: PNGDecoderError.missingIDAT) {
+            try PNGSupport.decode(pngData)
+        }
+    }
+
+    @Test("PNG decoder reports unsupportedBitDepth for non-8/16 bit depth")
+    func testPNGDecodeUnsupportedBitDepth() throws {
+        // Craft an IHDR with bit depth = 4.
+        let pngData = makePNGWithIHDR(width: 1, height: 1, bitDepth: 4, colorType: 0, interlace: 0)
+        #expect(throws: PNGDecoderError.unsupportedBitDepth(4)) {
+            try PNGSupport.decode(pngData)
+        }
+    }
+
+    @Test("PNG decoder reports unsupportedColorType for palette colour type")
+    func testPNGDecodeUnsupportedColorType() throws {
+        let pngData = makePNGWithIHDR(width: 1, height: 1, bitDepth: 8, colorType: 3, interlace: 0)
+        #expect(throws: PNGDecoderError.unsupportedColorType(3)) {
+            try PNGSupport.decode(pngData)
+        }
+    }
+
+    @Test("PNG decoder reports interlacedNotSupported for interlaced PNG")
+    func testPNGDecodeInterlaced() throws {
+        let pngData = makePNGWithIHDR(width: 1, height: 1, bitDepth: 8, colorType: 0, interlace: 1)
+        #expect(throws: PNGDecoderError.interlacedNotSupported) {
+            try PNGSupport.decode(pngData)
+        }
+    }
+
+    @Test("PNG decoder reports unsupportedDEFLATEBlockType for Huffman-compressed IDAT")
+    func testPNGDecodeHuffmanDEFLATE() throws {
+        // Build a PNG with a fake IDAT containing a fixed-Huffman DEFLATE block (BTYPE=01).
+        let ihdrData = makeIHDRData(width: 1, height: 1, bitDepth: 8, colorType: 0, interlace: 0)
+        // zlib header + fixed-Huffman block header byte (BFINAL=1, BTYPE=01 → 0x03)
+        let badIDAT = Data([0x78, 0x01, 0x03])
+
+        var data = Data([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A])
+        appendChunk(named: "IHDR", body: ihdrData, to: &data)
+        appendChunk(named: "IDAT", body: badIDAT, to: &data)
+        appendChunk(named: "IEND", body: Data(), to: &data)
+
+        #expect(throws: PNGDecoderError.unsupportedDEFLATEBlockType(1)) {
+            try PNGSupport.decode(data)
+        }
+    }
+
+    @Test("PNG decoder reports unsupportedFilterType for non-zero filter byte")
+    func testPNGDecodeNonNoneFilter() throws {
+        // Encode a 1×1 greyscale image and then corrupt the scanline filter byte to 1.
+        let pixels: [[[Int]]] = [[[100]]]
+        var pngData = try PNGSupport.encode(componentPixels: pixels, width: 1, height: 1, maxVal: 255)
+
+        // The filter byte is the first byte after the zlib + DEFLATE block headers.
+        // Locate the IDAT chunk body and patch the filter byte inside the stored block.
+        // IDAT body layout (for 1×1 8-bit greyscale from PNGSupport.encode):
+        //   [0x78, 0x01]  — zlib header
+        //   [0x01]        — BFINAL=1, BTYPE=0 (stored), last block
+        //   [0x02, 0x00]  — LEN = 2
+        //   [0xFD, 0xFF]  — NLEN = ~LEN
+        //   [filter_byte, pixel] — payload (2 bytes: filter=0, pixel=100)
+        //   [adler32 high, ...]  — 4-byte Adler-32
+
+        // Find IDAT chunk offset in the PNG file.
+        var offset = 8
+        while offset + 12 <= pngData.count {
+            let length = (Int(pngData[offset]) << 24) | (Int(pngData[offset + 1]) << 16) |
+                         (Int(pngData[offset + 2]) << 8) | Int(pngData[offset + 3])
+            let typeStart = offset + 4
+            if let type = String(bytes: pngData[typeStart..<typeStart + 4], encoding: .ascii), type == "IDAT" {
+                // Data starts at typeStart + 4 = offset + 8.
+                let dataStart = offset + 8
+                // Filter byte is at: zlib(2) + stored-header(5) + 0 = dataStart + 7
+                let filterByteIdx = dataStart + 2 + 5  // after CMF/FLG and DEFLATE stored block header
+                if filterByteIdx < dataStart + length {
+                    pngData[filterByteIdx] = 1  // Sub filter
+                }
+                break
+            }
+            offset += 12 + length
+        }
+
+        #expect(throws: PNGDecoderError.unsupportedFilterType(1)) {
+            try PNGSupport.decode(pngData)
+        }
+    }
+
+    @Test("PNG decoder maxVal property returns 255 for 8-bit and 65535 for 16-bit images")
+    func testPNGImageMaxVal() throws {
+        let pixels8: [[[Int]]] = [[[100]]]
+        let png8 = try PNGSupport.encode(componentPixels: pixels8, width: 1, height: 1, maxVal: 255)
+        let decoded8 = try PNGSupport.decode(png8)
+        #expect(decoded8.maxVal == 255)
+
+        let pixels16: [[[Int]]] = [[[1000]]]
+        let png16 = try PNGSupport.encode(componentPixels: pixels16, width: 1, height: 1, maxVal: 65535)
+        let decoded16 = try PNGSupport.decode(png16)
+        #expect(decoded16.maxVal == 65535)
+    }
+
+    // MARK: - Decoder test helpers
+
+    /// Build a minimal PNG file containing only an IHDR chunk (no IDAT) with the given parameters.
+    private func makePNGWithIHDR(
+        width: UInt32,
+        height: UInt32,
+        bitDepth: UInt8,
+        colorType: UInt8,
+        interlace: UInt8
+    ) -> Data {
+        let ihdr = makeIHDRData(width: width, height: height,
+                                bitDepth: bitDepth, colorType: colorType, interlace: interlace)
+        var data = Data([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A])
+        appendChunk(named: "IHDR", body: ihdr, to: &data)
+        // No IDAT — decoder should hit the appropriate IHDR validation first.
+        appendChunk(named: "IEND", body: Data(), to: &data)
+        return data
+    }
+
+    private func makeIHDRData(
+        width: UInt32,
+        height: UInt32,
+        bitDepth: UInt8,
+        colorType: UInt8,
+        interlace: UInt8
+    ) -> Data {
+        var d = Data(capacity: 13)
+        for shift in [24, 16, 8, 0] { d.append(UInt8((width  >> shift) & 0xFF)) }
+        for shift in [24, 16, 8, 0] { d.append(UInt8((height >> shift) & 0xFF)) }
+        d.append(bitDepth)
+        d.append(colorType)
+        d.append(0)  // compression method
+        d.append(0)  // filter method
+        d.append(interlace)
+        return d
+    }
+
+    private func appendChunk(named type: String, body: Data, to data: inout Data) {
+        // Length (4 bytes BE)
+        let len = UInt32(body.count)
+        for shift in [24, 16, 8, 0] { data.append(UInt8((len >> shift) & 0xFF)) }
+        // Type (4 bytes ASCII)
+        let typeBytes = Data(type.utf8)
+        data.append(typeBytes)
+        data.append(body)
+        // CRC over type + body
+        var crcInput = typeBytes
+        crcInput.append(body)
+        let crc = PNGSupport.crc32(crcInput)
+        for shift in [24, 16, 8, 0] { data.append(UInt8((crc >> shift) & 0xFF)) }
+    }
+
     // MARK: - Helpers
 
     /// Decompress a zlib "stored" stream and return the raw payload.
