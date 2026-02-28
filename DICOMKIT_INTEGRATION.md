@@ -122,40 +122,20 @@ func encodeDICOMPixelData(
     bitsAllocated: Int,
     bitsStored: Int,
     transferSyntaxUID: String
-) throws -> EncodedScanStatistics {
+) throws -> Data {
     // Determine NEAR parameter from transfer syntax
     let near = JPEGLSTransferSyntax.nearParameter(for: transferSyntaxUID)
-
-    // Create frame header from DICOM image attributes
-    let frameHeader = try JPEGLSFrameHeader.grayscale(
-        bitsPerSample: bitsStored,
-        width: columns,
-        height: rows
-    )
-
-    // Create scan header with appropriate encoding mode
-    let scanHeader = try JPEGLSScanHeader(
-        componentCount: 1,
-        components: [JPEGLSScanHeader.ComponentSelector(id: 1)],
-        near: near,
-        interleaveMode: .none,
-        pointTransform: 0
-    )
 
     // Build pixel buffer from DICOM pixel data
     let imageData = try MultiComponentImageData.grayscale(
         pixels: pixelData,
         bitsPerSample: bitsStored
     )
-    let buffer = JPEGLSPixelBuffer(imageData: imageData)
 
-    // Create encoder and encode
-    let encoder = try JPEGLSMultiComponentEncoder(
-        frameHeader: frameHeader,
-        scanHeader: scanHeader
-    )
-
-    return try encoder.encodeScan(buffer: buffer)
+    // Encode using high-level API
+    let encoder = JPEGLSEncoder()
+    let config = try JPEGLSEncoder.Configuration(near: near)
+    return try encoder.encode(imageData, configuration: config)
 }
 ```
 
@@ -289,23 +269,12 @@ func encodeMultiFrameDICOM(
     columns: Int,
     bitsStored: Int,
     near: Int = 0
-) throws -> [EncodedScanStatistics] {
-    var results: [EncodedScanStatistics] = []
+) throws -> [Data] {
+    var results: [Data] = []
     results.reserveCapacity(frames.count)
 
-    let frameHeader = try JPEGLSFrameHeader.grayscale(
-        bitsPerSample: bitsStored,
-        width: columns,
-        height: rows
-    )
-
-    let scanHeader = try JPEGLSScanHeader(
-        componentCount: 1,
-        components: [JPEGLSScanHeader.ComponentSelector(id: 1)],
-        near: near,
-        interleaveMode: .none,
-        pointTransform: 0
-    )
+    let encoder = JPEGLSEncoder()
+    let config = try JPEGLSEncoder.Configuration(near: near)
 
     // Encode each frame independently
     for frame in frames {
@@ -313,14 +282,8 @@ func encodeMultiFrameDICOM(
             pixels: frame,
             bitsPerSample: bitsStored
         )
-        let buffer = JPEGLSPixelBuffer(imageData: imageData)
-
-        let encoder = try JPEGLSMultiComponentEncoder(
-            frameHeader: frameHeader,
-            scanHeader: scanHeader
-        )
-        let stats = try encoder.encodeScan(buffer: buffer)
-        results.append(stats)
+        let jpegLSData = try encoder.encode(imageData, configuration: config)
+        results.append(jpegLSData)
     }
 
     return results
@@ -347,36 +310,17 @@ func encodeColorDICOM(
     bitsStored: Int,
     interleaveMode: JPEGLSInterleaveMode = .line,
     colorTransform: JPEGLSColorTransformation = .hp1
-) throws -> EncodedScanStatistics {
-    let frameHeader = try JPEGLSFrameHeader.rgb(
-        bitsPerSample: bitsStored,
-        width: columns,
-        height: rows
-    )
-
-    let components = (1...3).map { JPEGLSScanHeader.ComponentSelector(id: UInt8($0)) }
-    let scanHeader = try JPEGLSScanHeader(
-        componentCount: 3,
-        components: components,
-        near: 0,
-        interleaveMode: interleaveMode,
-        pointTransform: 0
-    )
-
+) throws -> Data {
     let imageData = try MultiComponentImageData.rgb(
-        red: redChannel,
-        green: greenChannel,
-        blue: blueChannel,
+        redPixels: redChannel,
+        greenPixels: greenChannel,
+        bluePixels: blueChannel,
         bitsPerSample: bitsStored
     )
-    let buffer = JPEGLSPixelBuffer(imageData: imageData)
 
-    let encoder = try JPEGLSMultiComponentEncoder(
-        frameHeader: frameHeader,
-        scanHeader: scanHeader
-    )
-
-    return try encoder.encodeScan(buffer: buffer)
+    let encoder = JPEGLSEncoder()
+    let config = try JPEGLSEncoder.Configuration(near: 0, interleaveMode: interleaveMode)
+    return try encoder.encode(imageData, configuration: config)
 }
 ```
 
@@ -402,37 +346,19 @@ func encodeNearLossless(
     columns: Int,
     bitsStored: Int,
     near: Int
-) throws -> EncodedScanStatistics {
+) throws -> Data {
     guard near >= 0 && near <= 255 else {
         throw JPEGLSError.invalidNearParameter(near: near)
     }
-
-    let frameHeader = try JPEGLSFrameHeader.grayscale(
-        bitsPerSample: bitsStored,
-        width: columns,
-        height: rows
-    )
-
-    let scanHeader = try JPEGLSScanHeader(
-        componentCount: 1,
-        components: [JPEGLSScanHeader.ComponentSelector(id: 1)],
-        near: near,
-        interleaveMode: .none,
-        pointTransform: 0
-    )
 
     let imageData = try MultiComponentImageData.grayscale(
         pixels: pixelData,
         bitsPerSample: bitsStored
     )
-    let buffer = JPEGLSPixelBuffer(imageData: imageData)
 
-    let encoder = try JPEGLSMultiComponentEncoder(
-        frameHeader: frameHeader,
-        scanHeader: scanHeader
-    )
-
-    return try encoder.encodeScan(buffer: buffer)
+    let encoder = JPEGLSEncoder()
+    let config = try JPEGLSEncoder.Configuration(near: near)
+    return try encoder.encode(imageData, configuration: config)
 }
 ```
 
@@ -488,7 +414,7 @@ func encodeCTImage(
     columns: Int,
     bitsStored: Int,
     pixelRepresentation: Int  // 0 = unsigned, 1 = signed
-) throws -> EncodedScanStatistics {
+) throws -> Data {
     var adjustedPixels = pixelData
 
     // Shift signed values to unsigned range for JPEG-LS
@@ -499,32 +425,13 @@ func encodeCTImage(
         }
     }
 
-    let frameHeader = try JPEGLSFrameHeader.grayscale(
-        bitsPerSample: bitsStored,
-        width: columns,
-        height: rows
-    )
-
-    let scanHeader = try JPEGLSScanHeader(
-        componentCount: 1,
-        components: [JPEGLSScanHeader.ComponentSelector(id: 1)],
-        near: 0,  // CT always lossless for diagnostic use
-        interleaveMode: .none,
-        pointTransform: 0
-    )
-
     let imageData = try MultiComponentImageData.grayscale(
         pixels: adjustedPixels,
         bitsPerSample: bitsStored
     )
-    let buffer = JPEGLSPixelBuffer(imageData: imageData)
 
-    let encoder = try JPEGLSMultiComponentEncoder(
-        frameHeader: frameHeader,
-        scanHeader: scanHeader
-    )
-
-    return try encoder.encodeScan(buffer: buffer)
+    let encoder = JPEGLSEncoder()
+    return try encoder.encode(imageData)  // CT always lossless for diagnostic use
 }
 ```
 
@@ -545,35 +452,17 @@ func encodeMRImage(
     columns: Int,
     bitsStored: Int,
     lossless: Bool = true
-) throws -> EncodedScanStatistics {
+) throws -> Data {
     let near = lossless ? 0 : 2  // NEAR=2 provides good compression with minimal quality loss
-
-    let frameHeader = try JPEGLSFrameHeader.grayscale(
-        bitsPerSample: bitsStored,
-        width: columns,
-        height: rows
-    )
-
-    let scanHeader = try JPEGLSScanHeader(
-        componentCount: 1,
-        components: [JPEGLSScanHeader.ComponentSelector(id: 1)],
-        near: near,
-        interleaveMode: .none,
-        pointTransform: 0
-    )
 
     let imageData = try MultiComponentImageData.grayscale(
         pixels: pixelData,
         bitsPerSample: bitsStored
     )
-    let buffer = JPEGLSPixelBuffer(imageData: imageData)
 
-    let encoder = try JPEGLSMultiComponentEncoder(
-        frameHeader: frameHeader,
-        scanHeader: scanHeader
-    )
-
-    return try encoder.encodeScan(buffer: buffer)
+    let encoder = JPEGLSEncoder()
+    let config = try JPEGLSEncoder.Configuration(near: near)
+    return try encoder.encode(imageData, configuration: config)
 }
 ```
 
@@ -593,33 +482,14 @@ func encodeCRImage(
     rows: Int,
     columns: Int,
     bitsStored: Int
-) throws -> EncodedScanStatistics {
-    let frameHeader = try JPEGLSFrameHeader.grayscale(
-        bitsPerSample: bitsStored,
-        width: columns,
-        height: rows
-    )
-
-    let scanHeader = try JPEGLSScanHeader(
-        componentCount: 1,
-        components: [JPEGLSScanHeader.ComponentSelector(id: 1)],
-        near: 0,  // Lossless for radiography
-        interleaveMode: .none,
-        pointTransform: 0
-    )
-
+) throws -> Data {
     let imageData = try MultiComponentImageData.grayscale(
         pixels: pixelData,
         bitsPerSample: bitsStored
     )
-    let buffer = JPEGLSPixelBuffer(imageData: imageData)
 
-    let encoder = try JPEGLSMultiComponentEncoder(
-        frameHeader: frameHeader,
-        scanHeader: scanHeader
-    )
-
-    return try encoder.encodeScan(buffer: buffer)
+    let encoder = JPEGLSEncoder()
+    return try encoder.encode(imageData)  // Lossless for radiography
 }
 ```
 
@@ -640,68 +510,29 @@ func encodeUSImage(
     columns: Int,
     samplesPerPixel: Int,
     near: Int = 0
-) throws -> EncodedScanStatistics {
+) throws -> Data {
+    let encoder = JPEGLSEncoder()
+    let config = try JPEGLSEncoder.Configuration(near: near)
+
     if samplesPerPixel == 1 {
         // Grayscale B-mode
-        let frameHeader = try JPEGLSFrameHeader.grayscale(
-            bitsPerSample: 8,
-            width: columns,
-            height: rows
-        )
-
-        let scanHeader = try JPEGLSScanHeader(
-            componentCount: 1,
-            components: [JPEGLSScanHeader.ComponentSelector(id: 1)],
-            near: near,
-            interleaveMode: .none,
-            pointTransform: 0
-        )
-
         let imageData = try MultiComponentImageData.grayscale(
             pixels: pixelData,
             bitsPerSample: 8
         )
-        let buffer = JPEGLSPixelBuffer(imageData: imageData)
-
-        let encoder = try JPEGLSMultiComponentEncoder(
-            frameHeader: frameHeader,
-            scanHeader: scanHeader
-        )
-
-        return try encoder.encodeScan(buffer: buffer)
+        return try encoder.encode(imageData, configuration: config)
     } else {
-        // Color Doppler — requires separate R, G, B channels
-        let frameHeader = try JPEGLSFrameHeader.rgb(
-            bitsPerSample: 8,
-            width: columns,
-            height: rows
-        )
-
-        let components = (1...3).map { JPEGLSScanHeader.ComponentSelector(id: UInt8($0)) }
-        let scanHeader = try JPEGLSScanHeader(
-            componentCount: 3,
-            components: components,
-            near: near,
-            interleaveMode: .sample,
-            pointTransform: 0
-        )
-
-        // For color images, split interleaved pixel data into separate channels
+        // Colour Doppler — requires separate R, G, B channels
+        // For colour images, split interleaved pixel data into separate channels
         // or use MultiComponentImageData.rgb() with separate R, G, B arrays
         let imageData = try MultiComponentImageData.rgb(
-            red: pixelData,
-            green: pixelData,
-            blue: pixelData,
+            redPixels: pixelData,
+            greenPixels: pixelData,
+            bluePixels: pixelData,
             bitsPerSample: 8
         )
-        let buffer = JPEGLSPixelBuffer(imageData: imageData)
-
-        let encoder = try JPEGLSMultiComponentEncoder(
-            frameHeader: frameHeader,
-            scanHeader: scanHeader
-        )
-
-        return try encoder.encodeScan(buffer: buffer)
+        let colorConfig = try JPEGLSEncoder.Configuration(near: near, interleaveMode: .sample)
+        return try encoder.encode(imageData, configuration: colorConfig)
     }
 }
 ```
@@ -739,58 +570,26 @@ struct JPEGLSCodecProvider {
         bitsStored: Int,
         samplesPerPixel: Int,
         transferSyntax: String
-    ) throws -> EncodedScanStatistics {
+    ) throws -> Data {
         let near = JPEGLSTransferSyntax.nearParameter(for: transferSyntax)
+        let encoder = JPEGLSEncoder()
+        let config = try JPEGLSEncoder.Configuration(near: near)
 
         if samplesPerPixel == 1 {
-            let frameHeader = try JPEGLSFrameHeader.grayscale(
-                bitsPerSample: bitsStored,
-                width: columns,
-                height: rows
-            )
-            let scanHeader = try JPEGLSScanHeader(
-                componentCount: 1,
-                components: [JPEGLSScanHeader.ComponentSelector(id: 1)],
-                near: near,
-                interleaveMode: .none,
-                pointTransform: 0
-            )
             let imageData = try MultiComponentImageData.grayscale(
                 pixels: pixelData,
                 bitsPerSample: bitsStored
             )
-            let buffer = JPEGLSPixelBuffer(imageData: imageData)
-            let encoder = try JPEGLSMultiComponentEncoder(
-                frameHeader: frameHeader,
-                scanHeader: scanHeader
-            )
-            return try encoder.encodeScan(buffer: buffer)
+            return try encoder.encode(imageData, configuration: config)
         } else {
-            let frameHeader = try JPEGLSFrameHeader.rgb(
-                bitsPerSample: bitsStored,
-                width: columns,
-                height: rows
-            )
-            let components = (1...3).map { JPEGLSScanHeader.ComponentSelector(id: UInt8($0)) }
-            let scanHeader = try JPEGLSScanHeader(
-                componentCount: 3,
-                components: components,
-                near: near,
-                interleaveMode: .line,
-                pointTransform: 0
-            )
             let imageData = try MultiComponentImageData.rgb(
-                red: pixelData,
-                green: pixelData,
-                blue: pixelData,
+                redPixels: pixelData,
+                greenPixels: pixelData,
+                bluePixels: pixelData,
                 bitsPerSample: bitsStored
             )
-            let buffer = JPEGLSPixelBuffer(imageData: imageData)
-            let encoder = try JPEGLSMultiComponentEncoder(
-                frameHeader: frameHeader,
-                scanHeader: scanHeader
-            )
-            return try encoder.encodeScan(buffer: buffer)
+            let colorConfig = try JPEGLSEncoder.Configuration(near: near, interleaveMode: .line)
+            return try encoder.encode(imageData, configuration: colorConfig)
         }
     }
 
@@ -864,7 +663,7 @@ struct DICOMTranscoder {
         bitsStored: Int,
         samplesPerPixel: Int,
         targetTransferSyntax: String
-    ) throws -> EncodedScanStatistics {
+    ) throws -> Data {
         return try JPEGLSCodecProvider.encode(
             pixelData: pixelData,
             rows: rows,
@@ -886,7 +685,7 @@ struct DICOMTranscoder {
     static func transcodeBetweenJPEGLS(
         compressedData: Data,
         targetTransferSyntax: String
-    ) throws -> EncodedScanStatistics {
+    ) throws -> Data {
         // First decode
         let decoded = try transcodeFromJPEGLS(compressedData: compressedData)
 
@@ -924,44 +723,19 @@ func processDICOMSeries(
     rows: Int,
     columns: Int,
     bitsStored: Int
-) throws -> [EncodedScanStatistics] {
-    // Use the shared buffer pool for efficient memory reuse
-    let pool = sharedBufferPool
-
-    var results: [EncodedScanStatistics] = []
+) throws -> [Data] {
+    var results: [Data] = []
     results.reserveCapacity(images.count)
 
+    let encoder = JPEGLSEncoder()
+
     for imagePixels in images {
-        // Acquire reusable buffers
-        let contextBuffer = pool.acquire(type: .contextArrays, size: 365)
-        defer { pool.release(contextBuffer, type: .contextArrays) }
-
-        let frameHeader = try JPEGLSFrameHeader.grayscale(
-            bitsPerSample: bitsStored,
-            width: columns,
-            height: rows
-        )
-        let scanHeader = try JPEGLSScanHeader(
-            componentCount: 1,
-            components: [JPEGLSScanHeader.ComponentSelector(id: 1)],
-            near: 0,
-            interleaveMode: .none,
-            pointTransform: 0
-        )
-
         let imageData = try MultiComponentImageData.grayscale(
             pixels: imagePixels,
             bitsPerSample: bitsStored
         )
-        let buffer = JPEGLSPixelBuffer(imageData: imageData)
-
-        let encoder = try JPEGLSMultiComponentEncoder(
-            frameHeader: frameHeader,
-            scanHeader: scanHeader
-        )
-
-        let stats = try encoder.encodeScan(buffer: buffer)
-        results.append(stats)
+        let jpegLSData = try encoder.encode(imageData)
+        results.append(jpegLSData)
     }
 
     return results
@@ -1010,20 +784,16 @@ import JPEGLS
 
 /// Memory-efficient DICOM processing strategies
 ///
-/// 1. Use buffer pooling for repeated operations
+/// 1. Buffer pooling is handled internally by the encoder
 /// 2. Process frames sequentially to limit peak memory
 /// 3. Use tile-based processing for large single images
-/// 4. Release buffers promptly with defer blocks
+/// 4. Release image data promptly after encoding
 func processWithMemoryEfficiency(
     pixelData: [[Int]],
     rows: Int,
     columns: Int,
     bitsStored: Int
-) throws -> EncodedScanStatistics {
-    // Acquire pooled buffer for context arrays
-    let contextBuffer = sharedBufferPool.acquire(type: .contextArrays, size: 365)
-    defer { sharedBufferPool.release(contextBuffer, type: .contextArrays) }
-
+) throws -> Data {
     // Use cache-friendly buffer for better CPU performance
     let cacheBuffer = JPEGLSCacheFriendlyBuffer(
         width: columns,
@@ -1038,32 +808,13 @@ func processWithMemoryEfficiency(
         }
     }
 
-    let frameHeader = try JPEGLSFrameHeader.grayscale(
-        bitsPerSample: bitsStored,
-        width: columns,
-        height: rows
-    )
-
-    let scanHeader = try JPEGLSScanHeader(
-        componentCount: 1,
-        components: [JPEGLSScanHeader.ComponentSelector(id: 1)],
-        near: 0,
-        interleaveMode: .none,
-        pointTransform: 0
-    )
-
     let imageData = try MultiComponentImageData.grayscale(
         pixels: pixelData,
         bitsPerSample: bitsStored
     )
-    let buffer = JPEGLSPixelBuffer(imageData: imageData)
 
-    let encoder = try JPEGLSMultiComponentEncoder(
-        frameHeader: frameHeader,
-        scanHeader: scanHeader
-    )
-
-    return try encoder.encodeScan(buffer: buffer)
+    let encoder = JPEGLSEncoder()
+    return try encoder.encode(imageData)
 }
 ```
 
@@ -1080,35 +831,16 @@ func handleDICOMEncoding(
     rows: Int,
     columns: Int,
     bitsStored: Int
-) -> Result<EncodedScanStatistics, Error> {
+) -> Result<Data, Error> {
     do {
-        let frameHeader = try JPEGLSFrameHeader.grayscale(
-            bitsPerSample: bitsStored,
-            width: columns,
-            height: rows
-        )
-
-        let scanHeader = try JPEGLSScanHeader(
-            componentCount: 1,
-            components: [JPEGLSScanHeader.ComponentSelector(id: 1)],
-            near: 0,
-            interleaveMode: .none,
-            pointTransform: 0
-        )
-
         let imageData = try MultiComponentImageData.grayscale(
             pixels: pixelData,
             bitsPerSample: bitsStored
         )
-        let buffer = JPEGLSPixelBuffer(imageData: imageData)
 
-        let encoder = try JPEGLSMultiComponentEncoder(
-            frameHeader: frameHeader,
-            scanHeader: scanHeader
-        )
-
-        let stats = try encoder.encodeScan(buffer: buffer)
-        return .success(stats)
+        let encoder = JPEGLSEncoder()
+        let jpegLSData = try encoder.encode(imageData)
+        return .success(jpegLSData)
     } catch let error as JPEGLSError {
         // Handle specific JPEG-LS errors
         switch error {
@@ -1164,32 +896,14 @@ struct DICOMIntegrationTests {
         }
 
         // Encode
-        let frameHeader = try JPEGLSFrameHeader.grayscale(
-            bitsPerSample: bitsStored,
-            width: columns,
-            height: rows
-        )
-        let scanHeader = try JPEGLSScanHeader(
-            componentCount: 1,
-            components: [JPEGLSScanHeader.ComponentSelector(id: 1)],
-            near: 0,
-            interleaveMode: .none,
-            pointTransform: 0
-        )
-
         let imageData = try MultiComponentImageData.grayscale(
             pixels: pixels,
             bitsPerSample: bitsStored
         )
-        let buffer = JPEGLSPixelBuffer(imageData: imageData)
 
-        let encoder = try JPEGLSMultiComponentEncoder(
-            frameHeader: frameHeader,
-            scanHeader: scanHeader
-        )
-
-        let stats = try encoder.encodeScan(buffer: buffer)
-        #expect(stats.pixelsEncoded == rows * columns)
+        let encoder = JPEGLSEncoder()
+        let jpegLSData = try encoder.encode(imageData)
+        #expect(jpegLSData.count > 0)
     }
 
     @Test("Transfer syntax mapping returns correct NEAR parameter")
@@ -1223,7 +937,7 @@ struct DICOMIntegrationTests {
             }
         }
 
-        let stats = try encodeCTImage(
+        let jpegLSData = try encodeCTImage(
             pixelData: pixels,
             rows: rows,
             columns: columns,
@@ -1231,7 +945,7 @@ struct DICOMIntegrationTests {
             pixelRepresentation: 0
         )
 
-        #expect(stats.pixelsEncoded == rows * columns)
+        #expect(jpegLSData.count > 0)
     }
 }
 ```
