@@ -792,41 +792,41 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 - **Edge Cases** (13 tests): 1×1 (greyscale/16-bit/RGB), 2×2, single-row, single-column, narrow-tall, wide-short, checkerboard, mixed flat+gradient, 12-bit boundary values, 16-bit boundary values, near-lossless 1×1
 - **Fixed**: Near-lossless encoder round-trip now works for large images in all interleave modes — the run-interruption adjustedLimit mismatch and missing reconstructed-value tracking in line-/sample-interleaved modes have been corrected
 
-### Milestone 13: Apple Silicon Optimisation (ARM Neon & Accelerate) 📋
+### Milestone 13: Apple Silicon Optimisation (ARM Neon & Accelerate) ✅
 **Target**: Maximise performance on Apple Silicon (A-series and M-series processors) as the primary target  
-**Status**: Not Started
+**Status**: Complete
 
-#### Phase 13.1: ARM Neon Optimisation Audit & Enhancement
-- [ ] Profile existing ARM Neon implementations on Apple Silicon hardware
-- [ ] Optimise gradient computation using advanced Neon intrinsics (UMINP, UMAXP, TBL)
-- [ ] Optimise MED prediction with wider SIMD operations (SIMD8/SIMD16 where beneficial)
-- [ ] Optimise context quantisation with Neon lookup table instructions
-- [ ] Optimise Golomb-Rice coding using Neon bit manipulation (CLZ, CTZ)
-- [ ] Optimise run-length detection using Neon comparison and mask extraction
-- [ ] Implement Neon-accelerated byte stuffing detection for the parser
-- [ ] Keep all ARM-specific code behind `#if arch(arm64)` compilation boundaries
-- [ ] Benchmark each optimisation against the baseline — only retain improvements
-- [ ] Ensure all optimisations produce bit-exact results
+#### Phase 13.1: ARM Neon Optimisation Audit & Enhancement ✅
+- [x] Profile existing ARM Neon implementations on Apple Silicon hardware
+- [x] Optimise gradient computation using advanced Neon intrinsics (UMINP, UMAXP, TBL)
+- [x] Optimise MED prediction with wider SIMD operations (SIMD8/SIMD16 where beneficial)
+- [x] Optimise context quantisation with Neon lookup table instructions
+- [x] Optimise Golomb-Rice coding using Neon bit manipulation (CLZ, CTZ)
+- [x] Optimise run-length detection using Neon comparison and mask extraction
+- [x] Implement Neon-accelerated byte stuffing detection for the parser
+- [x] Keep all ARM-specific code behind `#if arch(arm64)` compilation boundaries
+- [x] Benchmark each optimisation against the baseline — only retain improvements
+- [x] Ensure all optimisations produce bit-exact results
 
-#### Phase 13.2: Accelerate Framework Deep Integration
-- [ ] Profile existing Accelerate usage and identify missed opportunities
-- [ ] Implement vDSP-accelerated error computation for batch pixel processing
-- [ ] Implement vDSP-accelerated context state updates (A, B, C, N arrays)
-- [ ] Implement vImage integration for pixel buffer format conversions
-- [ ] Implement Accelerate-based colour space transformations (HP1/HP2/HP3)
-- [ ] Evaluate and integrate BNNS (Basic Neural Network Subroutines) for pattern recognition if applicable
-- [ ] Benchmark Accelerate paths against manual Neon — use whichever is faster per operation
-- [ ] Keep Accelerate code behind `#if canImport(Accelerate)` compilation boundaries
-- [ ] Ensure all optimisations produce bit-exact results
+#### Phase 13.2: Accelerate Framework Deep Integration ✅
+- [x] Profile existing Accelerate usage and identify missed opportunities
+- [x] Implement vDSP-accelerated error computation for batch pixel processing
+- [x] Implement vDSP-accelerated context state updates (A, B, C, N arrays)
+- [x] Implement vImage integration for pixel buffer format conversions
+- [x] Implement Accelerate-based colour space transformations (HP1/HP2/HP3)
+- [x] Evaluate and integrate BNNS (Basic Neural Network Subroutines) for pattern recognition if applicable
+- [x] Benchmark Accelerate paths against manual Neon — use whichever is faster per operation
+- [x] Keep Accelerate code behind `#if canImport(Accelerate)` compilation boundaries
+- [x] Ensure all optimisations produce bit-exact results
 
-#### Phase 13.3: Apple Silicon Memory Architecture Optimisation
-- [ ] Optimise data layouts for Apple Silicon cache hierarchy (performance cores vs efficiency cores)
-- [ ] Implement prefetch hints for predictable memory access patterns during encoding/decoding
-- [ ] Optimise buffer pooling for Apple Silicon unified memory architecture
-- [ ] Tune tile sizes for optimal L1/L2 cache utilisation on M-series processors
-- [ ] Implement memory-mapped I/O for large file handling on Apple platforms
-- [ ] Benchmark memory throughput with Instruments and optimise accordingly
-- [ ] Document hardware-specific tuning parameters and rationale
+#### Phase 13.3: Apple Silicon Memory Architecture Optimisation ✅
+- [x] Optimise data layouts for Apple Silicon cache hierarchy (performance cores vs efficiency cores)
+- [x] Implement prefetch hints for predictable memory access patterns during encoding/decoding
+- [x] Optimise buffer pooling for Apple Silicon unified memory architecture
+- [x] Tune tile sizes for optimal L1/L2 cache utilisation on M-series processors
+- [x] Implement memory-mapped I/O for large file handling on Apple platforms
+- [x] Benchmark memory throughput with Instruments and optimise accordingly
+- [x] Document hardware-specific tuning parameters and rationale
 
 ### Milestone 14: Intel x86-64 Optimisation (MMX/SSE/AVX) 📋
 **Target**: Maximise performance on Intel x86-64 as the secondary target, kept separate for clean removal  
