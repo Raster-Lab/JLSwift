@@ -75,70 +75,41 @@ class JPEGLSImageLoader {
         // Load file data
         let data = try Data(contentsOf: url)
         
-        // Parse JPEG-LS structure
-        let parser = JPEGLSParser(data: data)
-        let parseResult = try parser.parse()
-        
-        // Create decoder
-        let decoder = try JPEGLSMultiComponentDecoder(
-            frameHeader: parseResult.frameHeader,
-            scanHeader: parseResult.scanHeaders[0],
-            colorTransformation: .none
-        )
-        
-        // Create pixel buffer from parsed data
-        // Note: Full bitstream decoding integration is pending
-        let imageData = try MultiComponentImageData.grayscale(
-            pixels: [[0]], // Placeholder
-            bitsPerSample: Int(parseResult.frameHeader.bitsPerSample)
-        )
-        let buffer = JPEGLSPixelBuffer(imageData: imageData)
-        
-        // Decode the scan
-        _ = try decoder.decodeScan(buffer: buffer)
-        
-        // Reconstruct components
-        let reconstructed = try decoder.reconstructComponents(from: buffer)
+        // Decode using the high-level decoder
+        let decoder = JPEGLSDecoder()
+        let imageData = try decoder.decode(data)
         
         // Convert to CGImage
-        return try convertToCGImage(
-            reconstructed: reconstructed,
-            frameHeader: parseResult.frameHeader
-        )
+        return try convertToCGImage(imageData: imageData)
     }
     
-    /// Convert reconstructed components to CGImage
+    /// Convert decoded image data to CGImage
     private static func convertToCGImage(
-        reconstructed: ReconstructedComponents,
-        frameHeader: JPEGLSFrameHeader
+        imageData: MultiComponentImageData
     ) throws -> CGImage {
-        let width = reconstructed.width
-        let height = reconstructed.height
-        let bitsPerSample = Int(frameHeader.bitsPerSample)
-        let componentCount = Int(frameHeader.componentCount)
+        let width = imageData.frameHeader.width
+        let height = imageData.frameHeader.height
+        let bitsPerSample = imageData.frameHeader.bitsPerSample
+        let componentCount = imageData.frameHeader.componentCount
         
         if componentCount == 1 {
             return try createGrayscaleCGImage(
-                pixels: reconstructed.getPixels(componentId: 1)!,
+                pixels: imageData.components[0].pixels,
                 width: width,
                 height: height,
                 bitsPerSample: bitsPerSample
             )
         } else if componentCount == 3 {
-            let red = reconstructed.getPixels(componentId: 1)!
-            let green = reconstructed.getPixels(componentId: 2)!
-            let blue = reconstructed.getPixels(componentId: 3)!
-            
             return try createRGBCGImage(
-                red: red,
-                green: green,
-                blue: blue,
+                red: imageData.components[0].pixels,
+                green: imageData.components[1].pixels,
+                blue: imageData.components[2].pixels,
                 width: width,
                 height: height,
                 bitsPerSample: bitsPerSample
             )
         } else {
-            throw JPEGLSError.invalidComponentCount
+            throw JPEGLSError.invalidComponentCount(count: componentCount)
         }
     }
     

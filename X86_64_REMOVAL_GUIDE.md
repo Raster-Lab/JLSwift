@@ -21,7 +21,6 @@ The following files contain x86-64-specific code and should be removed entirely:
 1. **`Sources/JPEGLS/Platform/x86_64/X86_64Accelerator.swift`**
    - Primary x86-64 SIMD accelerator implementation
    - Contains SSE/AVX-optimised gradient computation, MED prediction, and quantisation
-   - 78 lines of code (100% coverage)
    - **Action**: Delete entire file and directory
 
 ### Files to Modify

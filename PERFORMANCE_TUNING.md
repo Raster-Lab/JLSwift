@@ -218,25 +218,20 @@ let rows = cacheFriendlyBuffer.getRows(componentId: 1, rowStart: 0, rowEnd: 10)
 Choose interleaving based on image type:
 
 ```swift
-// Grayscale: Always use .none
-let grayscaleScan = try JPEGLSScanHeader(
-    componentCount: 1,
-    components: [JPEGLSScanHeader.ComponentSelector(id: 1)],
+// Greyscale: Always use .none
+let greyscaleConfig = try JPEGLSEncoder.Configuration(
     near: 0,
     interleaveMode: .none  // Required for single component
 )
 
 // RGB: Use .sample for best performance
-let rgbScan = try JPEGLSScanHeader.rgbLossless()  // Defaults to .sample
+let rgbConfig = try JPEGLSEncoder.Configuration(
+    near: 0,
+    interleaveMode: .sample  // Best cache locality
+)
 
 // Alternative: Line-interleaved (slightly slower)
-let lineInterleavedScan = try JPEGLSScanHeader(
-    componentCount: 3,
-    components: [
-        JPEGLSScanHeader.ComponentSelector(id: 1),
-        JPEGLSScanHeader.ComponentSelector(id: 2),
-        JPEGLSScanHeader.ComponentSelector(id: 3)
-    ],
+let lineConfig = try JPEGLSEncoder.Configuration(
     near: 0,
     interleaveMode: .line
 )
@@ -253,15 +248,11 @@ Near-lossless encoding can be slightly faster:
 
 ```swift
 // Lossless (NEAR=0)
-let lossless = try JPEGLSScanHeader.grayscaleLossless()
+let losslessData = try JPEGLSEncoder().encode(imageData)
 
 // Near-lossless (NEAR=3)
-let nearLossless = try JPEGLSScanHeader(
-    componentCount: 1,
-    components: [JPEGLSScanHeader.ComponentSelector(id: 1)],
-    near: 3,  // Allows ±3 error
-    interleaveMode: .none
-)
+let config = try JPEGLSEncoder.Configuration(near: 3)  // Allows ±3 error
+let nearLosslessData = try JPEGLSEncoder().encode(imageData, configuration: config)
 ```
 
 **Performance Impact:**
@@ -362,22 +353,17 @@ import Foundation
 // Measure encoding time
 let startTime = Date()
 
-let encoder = try JPEGLSMultiComponentEncoder(
-    frameHeader: imageData.frameHeader,
-    scanHeader: scanHeader
-)
-
-let buffer = JPEGLSPixelBuffer(imageData: imageData)
-let statistics = try encoder.encodeScan(buffer: buffer)
+let encoder = JPEGLSEncoder()
+let jpegLSData = try encoder.encode(imageData)
 
 let elapsed = Date().timeIntervalSince(startTime)
 
 // Calculate throughput
-let pixels = statistics.pixelsEncoded
-let throughputPixels = Double(pixels) / elapsed / 1_000_000.0  // Mpixels/s
-let throughputBytes = Double(pixels) / elapsed / 1_000_000.0   // MB/s
+let pixelCount = imageData.frameHeader.width * imageData.frameHeader.height
+let throughputPixels = Double(pixelCount) / elapsed / 1_000_000.0  // Mpixels/s
+let throughputBytes = Double(pixelCount) / elapsed / 1_000_000.0   // MB/s
 
-print("Encoded \(pixels) pixels in \(elapsed) seconds")
+print("Encoded \(pixelCount) pixels in \(elapsed) seconds")
 print("Throughput: \(throughputPixels) Mpixels/s, \(throughputBytes) MB/s")
 ```
 
@@ -439,20 +425,16 @@ import JPEGLS
 import Foundation
 
 // Process images concurrently
-await withTaskGroup(of: EncodedScanStatistics.self) { group in
+await withTaskGroup(of: Data.self) { group in
     for imageData in imageBatch {
         group.addTask {
-            let encoder = try JPEGLSMultiComponentEncoder(
-                frameHeader: imageData.frameHeader,
-                scanHeader: scanHeader
-            )
-            let buffer = JPEGLSPixelBuffer(imageData: imageData)
-            return try encoder.encodeScan(buffer: buffer)
+            let encoder = JPEGLSEncoder()
+            return try encoder.encode(imageData)
         }
     }
     
-    for await stats in group {
-        print("Encoded \(stats.pixelsEncoded) pixels")
+    for await encoded in group {
+        print("Encoded \(encoded.count) bytes")
     }
 }
 ```

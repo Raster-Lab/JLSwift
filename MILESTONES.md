@@ -1096,22 +1096,37 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 - Shell completion descriptions in `CompletionCommand.swift` verified — already use British English consistently
 - Added British English requirement to Contributing section of README.md
 
-### Milestone 19: Documentation Revision & J2KSwift Consistency 📋
+### Milestone 19: Documentation Revision & J2KSwift Consistency ⏳
 **Target**: Comprehensive, consistent documentation with examples, sample code, and J2KSwift alignment  
-**Status**: Not Started
+**Status**: In Progress
 
-#### Phase 19.1: Library Usage Documentation Revision
-- [ ] Revise GETTING_STARTED.md to reflect all refactoring changes
-- [ ] Revise USAGE_EXAMPLES.md with updated APIs and new features
-- [ ] Revise PERFORMANCE_TUNING.md with new optimisation details and benchmarks
-- [ ] Revise METAL_GPU_ACCELERATION.md with enhanced Metal pipeline details
-- [ ] Create VULKAN_GPU_ACCELERATION.md documenting Vulkan compute support
-- [ ] Revise TROUBLESHOOTING.md with new issues and solutions
-- [ ] Revise DICOMKIT_INTEGRATION.md with any API changes
-- [ ] Revise SWIFTUI_EXAMPLES.md with updated code samples
-- [ ] Revise APPKIT_EXAMPLES.md with updated code samples
-- [ ] Revise SERVER_SIDE_EXAMPLES.md with updated code samples
-- [ ] Revise X86_64_REMOVAL_GUIDE.md with updated file listings
+#### Phase 19.1: Library Usage Documentation Revision ✅
+- [x] Revise GETTING_STARTED.md to reflect all refactoring changes
+- [x] Revise USAGE_EXAMPLES.md with updated APIs and new features
+- [x] Revise PERFORMANCE_TUNING.md with new optimisation details and benchmarks
+- [x] Revise METAL_GPU_ACCELERATION.md with enhanced Metal pipeline details
+- [x] Create VULKAN_GPU_ACCELERATION.md documenting Vulkan compute support
+- [x] Revise TROUBLESHOOTING.md with new issues and solutions
+- [x] Revise DICOMKIT_INTEGRATION.md with any API changes
+- [x] Revise SWIFTUI_EXAMPLES.md with updated code samples
+- [x] Revise APPKIT_EXAMPLES.md with updated code samples
+- [x] Revise SERVER_SIDE_EXAMPLES.md with updated code samples
+- [x] Revise X86_64_REMOVAL_GUIDE.md with updated file listings
+
+**Implementation Details (Phase 19.1):**
+- Updated all documentation files to use the high-level `JPEGLSEncoder`/`JPEGLSDecoder` public API instead of the lower-level `JPEGLSMultiComponentEncoder`/`JPEGLSScanHeader`/`JPEGLSPixelBuffer` components
+- Key API corrections across all files:
+  - `JPEGLSEncoder().encode(imageData)` replaces `JPEGLSMultiComponentEncoder` + scan header + pixel buffer pattern
+  - `JPEGLSDecoder().decode(data)` replaces `JPEGLSParser` + `JPEGLSMultiComponentDecoder` + placeholder decode pattern
+  - `JPEGLSEncoder.Configuration(near:interleaveMode:presetParameters:)` replaces `JPEGLSScanHeader` construction
+  - `MultiComponentImageData.rgb(redPixels:greenPixels:bluePixels:)` parameter labels corrected
+  - `JPEGLSPresetParameters(maxValue:threshold1:threshold2:threshold3:reset:)` labels corrected
+  - `JPEGLSError.invalidNearParameter` corrected from non-existent `invalidNearValue`
+  - Removed references to non-existent `EncodedScanStatistics.regularModeCount`/`runModeCount` properties
+  - Removed "Coming Soon" / "requires bitstream integration" stale notes — encode/decode is fully implemented
+  - Removed `sharedBufferPool` usage from examples (buffer pooling is now internal)
+  - Created `VULKAN_GPU_ACCELERATION.md` documenting planned Vulkan compute support for Linux/Windows
+  - Updated SwiftUI/AppKit image loader examples to use `JPEGLSDecoder` and `MultiComponentImageData.components[i].pixels` instead of placeholder decode + `ReconstructedComponents`
 
 #### Phase 19.2: Sample Code & Examples
 - [ ] Ensure every public API has at least one working code example in documentation

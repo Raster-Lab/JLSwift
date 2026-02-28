@@ -131,31 +131,16 @@ func routes(_ app: Application) throws {
             bitsPerSample: metadata.bitsPerSample
         )
         
-        // Create scan header with NEAR parameter
-        let near = metadata.near ?? 0
-        let scanHeader = try JPEGLSScanHeader(
-            componentCount: 1,
-            componentIDs: [1],
-            interleaveMode: .none,
-            near: near,
-            pointTransform: 0
-        )
-        
         // Encode
-        let encoder = try JPEGLSMultiComponentEncoder(
-            frameHeader: imageData.frameHeader,
-            scanHeader: scanHeader
-        )
-        
-        let buffer = JPEGLSPixelBuffer(imageData: imageData)
-        let statistics = try encoder.encodeScan(buffer: buffer)
+        let near = metadata.near ?? 0
+        let encoder = JPEGLSEncoder()
+        let config = try JPEGLSEncoder.Configuration(near: near)
+        let jpegLSData = try encoder.encode(imageData, configuration: config)
         
         // Return encoded data with statistics
         let response = Response(status: .ok)
         response.headers.contentType = .init(type: "image", subType: "x-jls")
-        response.headers.add(name: "X-Pixels-Encoded", value: "\(statistics.pixelsEncoded)")
-        response.headers.add(name: "X-Regular-Mode-Count", value: "\(statistics.regularModeCount)")
-        response.headers.add(name: "X-Run-Mode-Count", value: "\(statistics.runModeCount)")
+        response.headers.add(name: "X-Bytes-Encoded", value: "\(jpegLSData.count)")
         
         // Note: Full bitstream writing pending integration
         response.body = .init(string: "Encoding successful")
@@ -169,24 +154,16 @@ func routes(_ app: Application) throws {
             throw Abort(.badRequest, reason: "Missing JPEG-LS data")
         }
         
-        // Parse JPEG-LS file
-        let parser = JPEGLSParser(data: Data(buffer: jlsData))
-        let parseResult = try parser.parse()
-        
-        // Create decoder
-        let decoder = try JPEGLSMultiComponentDecoder(
-            frameHeader: parseResult.frameHeader,
-            scanHeader: parseResult.scanHeaders[0],
-            colorTransformation: .none
-        )
+        // Decode JPEG-LS file
+        let decoder = JPEGLSDecoder()
+        let imageData = try decoder.decode(Data(buffer: jlsData))
         
         // Return file information
         let info = [
-            "width": parseResult.frameHeader.width,
-            "height": parseResult.frameHeader.height,
-            "bitsPerSample": parseResult.frameHeader.bitsPerSample,
-            "componentCount": parseResult.frameHeader.componentCount,
-            "near": parseResult.scanHeaders[0].near
+            "width": imageData.frameHeader.width,
+            "height": imageData.frameHeader.height,
+            "bitsPerSample": imageData.frameHeader.bitsPerSample,
+            "componentCount": imageData.frameHeader.componentCount
         ]
         
         return try await info.encodeResponse(for: req)
@@ -302,15 +279,8 @@ func configureMedicalImageRoutes(_ app: Application) throws {
         )
         
         // Use lossless compression for medical images
-        let scanHeader = try JPEGLSScanHeader.grayscaleLossless()
-        
-        let encoder = try JPEGLSMultiComponentEncoder(
-            frameHeader: image.frameHeader,
-            scanHeader: scanHeader
-        )
-        
-        let buffer = JPEGLSPixelBuffer(imageData: image)
-        let statistics = try encoder.encodeScan(buffer: buffer)
+        let encoder = JPEGLSEncoder()
+        let jpegLSData = try encoder.encode(image)
         
         // Store to disk (example path)
         let filename = "\(metadata.studyID)_\(metadata.seriesID).jls"
@@ -321,7 +291,7 @@ func configureMedicalImageRoutes(_ app: Application) throws {
             "patient_id": .string(metadata.patientID),
             "study_id": .string(metadata.studyID),
             "modality": .string(metadata.modality),
-            "pixels_encoded": .string("\(statistics.pixelsEncoded)"),
+            "bytes_encoded": .string("\(jpegLSData.count)"),
             "filename": .string(filename)
         ])
         
@@ -453,18 +423,10 @@ func configureStreamingRoutes(_ app: Application) throws {
             "tile_size": .string("\(tileConfig.tileWidth)x\(tileConfig.tileHeight)")
         ])
         
-        // Stream processing using buffer pool
-        let bufferPool = JPEGLSBufferPool.shared
+        // Stream processing
         var totalPixelsEncoded = 0
         
         for (index, tile) in tiles.enumerated() {
-            // Acquire buffer from pool
-            let contextBuffer = bufferPool.acquire(
-                type: .contextArrays,
-                size: 365 * MemoryLayout<JPEGLSContextModel.ContextState>.stride
-            )
-            defer { bufferPool.release(contextBuffer, type: .contextArrays) }
-            
             req.logger.debug("Processing tile \(index + 1)/\(tiles.count)")
             
             // Process tile (simplified - actual implementation would read from stream)
@@ -599,21 +561,9 @@ func processImageAsync(_ imageReq: BatchProcessRequest.ImageRequest, logger: Log
         )
         
         let near = imageReq.near ?? 0
-        let scanHeader = try JPEGLSScanHeader(
-            componentCount: 1,
-            componentIDs: [1],
-            interleaveMode: .none,
-            near: near,
-            pointTransform: 0
-        )
-        
-        let encoder = try JPEGLSMultiComponentEncoder(
-            frameHeader: imageData.frameHeader,
-            scanHeader: scanHeader
-        )
-        
-        let buffer = JPEGLSPixelBuffer(imageData: imageData)
-        let statistics = try encoder.encodeScan(buffer: buffer)
+        let encoder = JPEGLSEncoder()
+        let config = try JPEGLSEncoder.Configuration(near: near)
+        let jpegLSData = try encoder.encode(imageData, configuration: config)
         
         let processingTime = Date().timeIntervalSince(startTime) * 1000
         
@@ -621,7 +571,7 @@ func processImageAsync(_ imageReq: BatchProcessRequest.ImageRequest, logger: Log
             id: imageReq.id,
             success: true,
             error: nil,
-            pixelsEncoded: statistics.pixelsEncoded,
+            pixelsEncoded: imageReq.width * imageReq.height,
             processingTimeMs: processingTime
         )
         
@@ -869,7 +819,6 @@ import JPEGLS
 
 actor JPEGLSProcessor {
     private let eventLoop: EventLoop
-    private let bufferPool = JPEGLSBufferPool.shared
     
     init(eventLoop: EventLoop) {
         self.eventLoop = eventLoop
@@ -1268,30 +1217,16 @@ final class WorkerPool {
     }
     
     private func performEncode(_ request: EncodeRequest) throws -> EncodeResult {
-        // Use buffer pooling for better memory management
-        let bufferPool = JPEGLSBufferPool.shared
-        let contextBuffer = bufferPool.acquire(
-            type: .contextArrays,
-            size: 365 * MemoryLayout<JPEGLSContextModel.ContextState>.stride
-        )
-        defer { bufferPool.release(contextBuffer, type: .contextArrays) }
-        
         // Perform encoding
         let imageData = try MultiComponentImageData.grayscale(
             pixels: request.pixels,
             bitsPerSample: request.bitsPerSample
         )
         
-        let scanHeader = try JPEGLSScanHeader.grayscaleLossless()
-        let encoder = try JPEGLSMultiComponentEncoder(
-            frameHeader: imageData.frameHeader,
-            scanHeader: scanHeader
-        )
+        let encoder = JPEGLSEncoder()
+        let jpegLSData = try encoder.encode(imageData)
         
-        let buffer = JPEGLSPixelBuffer(imageData: imageData)
-        let statistics = try encoder.encodeScan(buffer: buffer)
-        
-        return EncodeResult(statistics: statistics)
+        return EncodeResult(jpegLSData: jpegLSData)
     }
 }
 
@@ -1301,7 +1236,7 @@ struct EncodeRequest {
 }
 
 struct EncodeResult {
-    let statistics: JPEGLSMultiComponentEncoder.Statistics
+    let jpegLSData: Data
 }
 ```
 
@@ -1317,7 +1252,6 @@ func configureStreamingProcessing(_ app: Application) {
     
     app.on(.POST, "api", "stream", "process", body: .stream) { req async throws -> Response in
         let tileConfig = TileConfiguration(tileWidth: 512, tileHeight: 512, overlap: 4)
-        let bufferPool = JPEGLSBufferPool.shared
         
         var bytesProcessed: Int64 = 0
         var tilesProcessed = 0
