@@ -201,19 +201,37 @@ struct EdgeCasesTests {
     
     // MARK: - Bitstream Writer Edge Cases
     
-    @Test("Bitstream writer marker stuffing for 0xFF")
-    func testBitstreamWriterMarkerStuffing() throws {
+    @Test("Bitstream writer writeByte writes raw bytes without stuffing")
+    func testBitstreamWriterRawByteNoStuffing() throws {
         let writer = JPEGLSBitstreamWriter()
+        // writeByte is for header/marker data — no byte stuffing applied
         writer.writeByte(0xFF)
         writer.writeByte(0x42)
         writer.flush()
-        
+
         let data = try writer.getData()
-        // 0xFF should be stuffed as 0xFF 0x00
+        #expect(data.count == 2)
+        #expect(data[0] == 0xFF)
+        #expect(data[1] == 0x42)
+    }
+
+    @Test("Bitstream writer bit-level stuffing for 0xFF in scan data")
+    func testBitstreamWriterBitLevelStuffing() throws {
+        let writer = JPEGLSBitstreamWriter()
+        // writeBits implements bit-level stuffing per ISO 14495-1 §9.1:
+        // after a 0xFF byte, a zero stuff bit is inserted at the next bit position.
+        writer.writeBits(0xFF, count: 8)
+        writer.writeBits(0x42, count: 8)
+        writer.flush()
+
+        let data = try writer.getData()
+        // 0xFF is emitted, then bit 0 is forced to 0 (stuff bit).
+        // 0x42 = 0b01000010; with the stuff bit as MSB, the next byte is 0b00100001 = 0x21.
+        // The remaining 1 bit (LSB of 0x42 = 0) is flushed as 0x00.
         #expect(data.count == 3)
         #expect(data[0] == 0xFF)
-        #expect(data[1] == 0x00)
-        #expect(data[2] == 0x42)
+        #expect(data[1] == 0x21) // stuff bit (0) + top 7 bits of 0x42
+        #expect(data[2] == 0x00) // flush: remaining 1 bit (0) padded to a full byte
     }
     
     @Test("Bitstream writer with zero bits")
