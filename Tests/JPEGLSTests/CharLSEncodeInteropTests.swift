@@ -440,7 +440,10 @@ struct CharLSEncodeInteropTests {
                 let decT = try ct.transformForward(decRGB, maxValue: maxVal)
 
                 for c in 0..<testCase.components {
-                    // Account for modular wrap-around when computing distance
+                    // Colour-transformed values use modular arithmetic in [0, maxVal].
+                    // Near-lossless quantisation may push a value past the boundary
+                    // (e.g. 2 → 254 mod 256), so the true distance is the shorter
+                    // path around the modular ring — min(|d|, modulus−|d|).
                     let modulus = maxVal + 1
                     let rawDiff = abs(origT[c] - decT[c])
                     let diff = min(rawDiff, modulus - rawDiff)
