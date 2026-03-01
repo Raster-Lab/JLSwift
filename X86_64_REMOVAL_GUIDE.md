@@ -20,7 +20,13 @@ The following files contain x86-64-specific code and should be removed entirely:
 
 1. **`Sources/JPEGLS/Platform/x86_64/X86_64Accelerator.swift`**
    - Primary x86-64 SIMD accelerator implementation
-   - Contains SSE/AVX-optimised gradient computation, MED prediction, and quantisation
+   - Contains SSE/AVX-optimised gradient computation, MED prediction, quantisation,
+     Golomb-Rice parameter computation, run-length detection, and byte stuffing scanning
+   - **Action**: Delete entire file
+
+2. **`Sources/JPEGLS/Platform/x86_64/IntelMemoryOptimizer.swift`**
+   - Intel cache-hierarchy parameters, tile-size tuning, cache-aligned buffer allocation,
+     `IntelBufferPool`, prefetch hints, memory-mapped I/O helpers, and tuning parameters
    - **Action**: Delete entire file and directory
 
 ### Files to Modify
@@ -104,6 +110,14 @@ public func selectPlatformAccelerator() -> any PlatformAccelerator {
 ```
 
 **Example After**: Delete the entire `#elseif arch(x86_64)` branch
+
+#### 4. `Tests/JPEGLSTests/X86_64AcceleratorPhase14Tests.swift`
+
+**Action**: Delete entire file. Contains Phase 14.1 tests for Golomb-Rice, run-length, and byte stuffing on x86-64.
+
+#### 5. `Tests/JPEGLSTests/IntelMemoryOptimizerTests.swift`
+
+**Action**: Delete entire file. Contains Phase 14.2 tests for Intel cache parameters, tile sizing, buffer pooling, and memory-mapped I/O.
 
 ### Documentation Files to Update
 
@@ -406,6 +420,6 @@ Once removal is complete, consider:
 
 ---
 
-**Version**: 1.0  
-**Last Updated**: 2026-02-15  
+**Version**: 2.0  
+**Last Updated**: 2026-03-01  
 **Status**: Ready for use when x86-64 deprecation is scheduled
