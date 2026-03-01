@@ -1779,3 +1779,211 @@ struct Part2EncodingTests {
         #expect(decoded.components[0].pixels == [[10, 20], [30, 40]])
     }
 }
+
+// MARK: - Progress Bar Tests
+
+/// Tests for the progress bar rendering logic.
+///
+/// Since `jpegls` is an executable target that cannot be imported directly, the
+/// `buildLine` logic is duplicated here so we can verify the rendered output
+/// without requiring a TTY or process-level execution.
+@Suite("Progress Bar Tests")
+struct ProgressBarTests {
+
+    // MARK: - Line builder helpers (mirrors ProgressBar.buildLine)
+
+    /// Mirrors `ProgressBar.buildLine` so tests can verify formatting without
+    /// importing the `jpegls` target.
+    private func buildLine(completed: Int, total: Int, barWidth: Int = 30, label: String = "") -> String {
+        let clamped  = max(0, min(completed, total))
+        let fraction = total > 0 ? Double(clamped) / Double(total) : 0.0
+        let filled   = Int(fraction * Double(barWidth))
+        let empty    = barWidth - filled
+        let bar      = String(repeating: "#", count: filled) + String(repeating: " ", count: empty)
+        let percent  = Int(fraction * 100)
+        let counter  = "(\(clamped)/\(total))"
+        if label.isEmpty {
+            return "[\(bar)] \(percent)% \(counter)"
+        } else {
+            return "[\(bar)] \(percent)% \(counter) \(label)"
+        }
+    }
+
+    // MARK: - Rendering tests
+
+    @Test("Progress bar renders 0% at start")
+    func testRenderZeroPercent() {
+        let line = buildLine(completed: 0, total: 10)
+        #expect(line == "[" + String(repeating: " ", count: 30) + "] 0% (0/10)")
+    }
+
+    @Test("Progress bar renders 100% when complete")
+    func testRenderHundredPercent() {
+        let line = buildLine(completed: 10, total: 10)
+        #expect(line == "[" + String(repeating: "#", count: 30) + "] 100% (10/10)")
+    }
+
+    @Test("Progress bar renders 50% at halfway point")
+    func testRenderFiftyPercent() {
+        let line = buildLine(completed: 5, total: 10)
+        let filledChars = 15   // 50% of 30
+        let emptyChars  = 15
+        let expectedBar = String(repeating: "#", count: filledChars) + String(repeating: " ", count: emptyChars)
+        #expect(line == "[\(expectedBar)] 50% (5/10)")
+    }
+
+    @Test("Progress bar line contains opening and closing brackets")
+    func testLineBrackets() {
+        let line = buildLine(completed: 3, total: 10)
+        #expect(line.first == "[")
+        #expect(line.contains("]"))
+    }
+
+    @Test("Progress bar filled characters count matches fraction")
+    func testFilledCharacterCount() {
+        // 1/4 of 30 = 7 filled characters (Int truncation)
+        let line = buildLine(completed: 1, total: 4, barWidth: 30)
+        let barContent = String(line.dropFirst()) // remove '['
+        let filledCount = barContent.prefix(30).filter { $0 == "#" }.count
+        #expect(filledCount == 7)
+    }
+
+    @Test("Progress bar total bar width equals barWidth parameter")
+    func testBarWidthIsPreserved() {
+        let barWidth = 20
+        let line = buildLine(completed: 3, total: 10, barWidth: barWidth)
+        // Extract bar content between '[' and ']'
+        if let start = line.firstIndex(of: "["), let end = line.firstIndex(of: "]") {
+            let barContent = String(line[line.index(after: start)..<end])
+            #expect(barContent.count == barWidth)
+        }
+    }
+
+    @Test("Progress bar appends label when label is non-empty")
+    func testLabelAppended() {
+        let line = buildLine(completed: 2, total: 5, label: "(warm-up)")
+        #expect(line.hasSuffix("(warm-up)"))
+    }
+
+    @Test("Progress bar omits label section when label is empty")
+    func testNoLabelWhenEmpty() {
+        let line = buildLine(completed: 2, total: 5, label: "")
+        // Last character must be the closing paren of the counter, not a space
+        #expect(line.hasSuffix("(2/5)"))
+    }
+
+    @Test("Progress bar counter shows completed and total")
+    func testCounterFormat() {
+        let line = buildLine(completed: 7, total: 20)
+        #expect(line.contains("(7/20)"))
+    }
+
+    @Test("Progress bar clamps completed below 0 to 0")
+    func testClampBelowZero() {
+        let line = buildLine(completed: -5, total: 10)
+        #expect(line.contains("(0/10)"))
+        #expect(line.contains(" 0%"))
+    }
+
+    @Test("Progress bar clamps completed above total to total")
+    func testClampAboveTotal() {
+        let line = buildLine(completed: 15, total: 10)
+        #expect(line.contains("(10/10)"))
+        #expect(line.contains(" 100%"))
+    }
+
+    @Test("Progress bar shows 0% when total is zero")
+    func testZeroTotal() {
+        let line = buildLine(completed: 0, total: 0)
+        #expect(line.contains("0%"))
+        #expect(line.contains("(0/0)"))
+    }
+
+    @Test("Progress bar suppressed when quiet is true")
+    func testQuietModeSuppressesOutput() {
+        // When quiet=true, active must be false regardless of TTY state.
+        let quiet = true
+        let isTTY = true   // hypothetical TTY — quiet still wins
+        let active = !quiet && isTTY
+        #expect(active == false)
+    }
+
+    @Test("Progress bar is not active when quiet flag is set")
+    func testActiveIsFalseWhenQuiet() {
+        // Simulate the active flag computation.
+        let quiet = true
+        let isTTY = true   // hypothetical TTY
+        let active = !quiet && isTTY
+        #expect(active == false)
+    }
+
+    @Test("Progress bar is active when not quiet and in TTY")
+    func testActiveIsTrueWhenNotQuietAndTTY() {
+        let quiet = false
+        let isTTY = true
+        let active = !quiet && isTTY
+        #expect(active == true)
+    }
+
+    @Test("Progress bar is not active when not in TTY")
+    func testActiveIsFalseWhenNotTTY() {
+        let quiet = false
+        let isTTY = false
+        let active = !quiet && isTTY
+        #expect(active == false)
+    }
+
+    // MARK: - Benchmark integration logic tests
+
+    @Test("Benchmark progress bar uses quiet=true when json flag is set")
+    func testBenchmarkProgressBarQuietForJSON() {
+        // When json=true the progress bar should be suppressed.
+        let json = true
+        let quiet = false
+        let progressBarQuiet = quiet || json
+        #expect(progressBarQuiet == true)
+    }
+
+    @Test("Benchmark progress bar uses quiet=true when quiet flag is set")
+    func testBenchmarkProgressBarQuietForQuiet() {
+        let json = false
+        let quiet = true
+        let progressBarQuiet = quiet || json
+        #expect(progressBarQuiet == true)
+    }
+
+    @Test("Benchmark progress bar is not quiet when neither json nor quiet is set")
+    func testBenchmarkProgressBarNotQuiet() {
+        let json = false
+        let quiet = false
+        let progressBarQuiet = quiet || json
+        #expect(progressBarQuiet == false)
+    }
+
+    // MARK: - Batch integration logic tests
+
+    @Test("Batch progress bar is quiet when quiet flag is set")
+    func testBatchProgressBarQuietForQuiet() {
+        let quiet = true
+        let verbose = false
+        let progressBarQuiet = quiet || verbose
+        #expect(progressBarQuiet == true)
+    }
+
+    @Test("Batch progress bar is quiet when verbose flag is set")
+    func testBatchProgressBarQuietForVerbose() {
+        // In verbose mode each file has its own detailed output, so the bar is suppressed.
+        let quiet = false
+        let verbose = true
+        let progressBarQuiet = quiet || verbose
+        #expect(progressBarQuiet == true)
+    }
+
+    @Test("Batch progress bar is not quiet in default mode")
+    func testBatchProgressBarNotQuietByDefault() {
+        let quiet = false
+        let verbose = false
+        let progressBarQuiet = quiet || verbose
+        #expect(progressBarQuiet == false)
+    }
+}

@@ -213,6 +213,9 @@ extension JPEGLSCLITool {
 
             let measureIterations = warmup + iterations
 
+            // Show iteration progress when not suppressed by --quiet or --json.
+            let progressBar = ProgressBar(total: measureIterations, quiet: quiet || json)
+
             for i in 0..<measureIterations {
                 let isMeasured = i >= warmup
 
@@ -251,7 +254,9 @@ extension JPEGLSCLITool {
                         decodeTimings.append(elapsed)
                     }
                 }
+                progressBar.update(completed: i + 1, label: isMeasured ? "" : "(warm-up)")
             }
+            progressBar.finish()
 
             // --- Compute statistics ---
             let pixelCount       = imageWidth * imageHeight * imageComponents

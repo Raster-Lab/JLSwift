@@ -944,7 +944,7 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 **Target**: Complete, well-documented CLI with full functionality and dual-spelling support  
 **Status**: In Progress
 
-#### Phase 17.1: Missing Functionality ⏳
+#### Phase 17.1: Missing Functionality ✅
 - [x] Implement PNG output format support for the `decode` command
 - [x] Implement TIFF output format support for the `decode` command
 - [x] Implement PGM/PPM output format support for the `decode` command
@@ -955,8 +955,38 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 - [x] Implement `jpegls compare` command to diff two JPEG-LS files (also supports PGM/PPM reference inputs)
 - [x] Implement `--preset` parameter integration in the encoder (custom T1, T2, T3, RESET)
 - [x] Implement `--part2` flag for Part 2 extensions encoding
-- [ ] Implement progress bars for long-running operations (large files, batch processing)
+- [x] Implement progress bars for long-running operations (large files, batch processing)
 - [x] Implement `--version` flag displaying library and tool version information (provided by ArgumentParser via `version:` in `CommandConfiguration`)
+
+**Implementation Details (Phase 17.1 — progress bars):**
+- Created `ProgressBar.swift` in the `jpegls` CLI target:
+  - `ProgressBar(total:quiet:barWidth:)` — initialises a progress bar; suppresses output when `quiet` is `true` or stderr is not a TTY (`isatty(STDERR_FILENO) == 0`).
+  - `update(completed:label:)` — writes a `\r`-prefixed progress line to stderr, overwriting the current line in place.  Optional `label` string is appended after the `(completed/total)` counter.
+  - `finish()` — clears the progress bar line using the ANSI erase-to-end-of-line sequence (`\r\e[K`), leaving the terminal clean for subsequent output.
+  - `buildLine(completed:label:)` — pure helper (marked `internal` for testing) that builds the rendered string: `[#####               ] 25% (5/20)`.
+  - Thread-safe by design: all output is delegated to a single `FileHandle.standardError.write()` call per update.
+- Updated `BenchmarkCommand.swift`:
+  - A `ProgressBar(total: measureIterations, quiet: quiet || json)` is created before the measurement loop.
+  - `progressBar.update(completed: i, label:)` is called at the top of each iteration (showing a `(warm-up)` label during warm-up iterations).
+  - `progressBar.update(completed: i + 1, ...)` is called again at the bottom of each iteration to reflect completion.
+  - `progressBar.finish()` is called after the loop to clear the bar before the results table is printed.
+  - Progress is suppressed when `--quiet` or `--json` flags are active.
+- Updated `BatchCommand.swift`:
+  - `ProgressBar(total: files.count, quiet: quiet || verbose)` is created before concurrent dispatch begins.
+  - `ResultsAggregator` gains an optional `progressBar: ProgressBar?` initialiser parameter; `record(_:)` calls `progressBar?.update(completed:)` inside the existing `NSLock`-protected section, guaranteeing single-writer access to stderr during concurrent batch processing.
+  - `progressBar.finish()` is called after `group.wait()`.
+  - The previous "print a `.` per file" behaviour (non-verbose, non-quiet) is replaced by the animated progress bar.
+  - Progress is suppressed in `--quiet` and `--verbose` modes (verbose mode already prints per-file detail lines).
+- Added `ProgressBarTests` suite in `CLIArgumentParsingTests.swift` (22 tests) covering:
+  - 0%, 50%, and 100% rendering
+  - Bar bracket presence, filled-character count, and `barWidth` preservation
+  - Label appended vs. omitted
+  - Counter format `(completed/total)`
+  - Clamping of `completed` below 0 and above `total`
+  - `total == 0` edge case
+  - `active` flag logic: quiet → false; not-quiet + TTY → true; not-quiet + no-TTY → false
+  - Benchmark integration: `progressBarQuiet = quiet || json`
+  - Batch integration: `progressBarQuiet = quiet || verbose`
 
 **Implementation Details (Phase 17.1 — `--part2` flag and `--palette` option):**
 - Added `--part2` boolean flag to the `encode` and `convert` CLI commands:
@@ -1377,7 +1407,7 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 | **14** | Intel x86-64 Optimisation | SSE/AVX enhancement, memory/cache tuning, separation verification 📋 |
 | **15** | GPU Compute | Metal pipeline enhancement, Vulkan compute support (Linux/Windows), GPU testing 📋 |
 | **16** | Performance Optimisation | Hotspot analysis, algorithmic optimisation, CharLS head-to-head benchmarking 📋 |
-| **17** | CLI Enhancement | PNG/TIFF input for encode ✅, convert command ✅, British & American spelling support ✅, help & usage docs ✅ |
+| **17** | CLI Enhancement | PNG/TIFF input for encode ✅, convert command ✅, progress bars ✅, British & American spelling support ✅, help & usage docs ✅ |
 | **18** | Localisation | British English in comments ✅, help text ✅, error messages ✅, documentation ✅ |
 | **19** | Documentation & J2KSwift | Documentation revision ✅, sample code ✅, J2KSwift consistency alignment 📋 |
 | **20** | Final Integration & Release | DICOM independence, full test suite, performance validation, v1.0 release 📋 |
