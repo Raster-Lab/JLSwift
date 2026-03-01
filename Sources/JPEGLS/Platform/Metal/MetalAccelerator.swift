@@ -21,8 +21,9 @@ import Metal
 
 /// Metal GPU-accelerated implementation for JPEG-LS operations.
 ///
-/// Provides GPU-accelerated batch gradient computation, prediction, and
-/// context operations optimized for large images on Apple platforms with Metal support.
+/// Provides GPU-accelerated batch gradient computation, prediction, colour space
+/// transformation, and context operations optimised for large images on Apple
+/// platforms with Metal support.
 ///
 /// The implementation uses Metal compute shaders to process multiple pixels
 /// in parallel on the GPU, significantly improving performance for large images
@@ -41,6 +42,27 @@ public final class MetalAccelerator: @unchecked Sendable {
     
     /// The compute pipeline state for MED prediction.
     private let predictionPipelineState: MTLComputePipelineState
+    
+    /// The compute pipeline state for gradient quantisation.
+    private let quantizeGradientsPipelineState: MTLComputePipelineState
+    
+    /// The compute pipeline state for HP1 forward colour transform.
+    private let colourTransformHP1ForwardPipelineState: MTLComputePipelineState
+    
+    /// The compute pipeline state for HP1 inverse colour transform.
+    private let colourTransformHP1InversePipelineState: MTLComputePipelineState
+    
+    /// The compute pipeline state for HP2 forward colour transform.
+    private let colourTransformHP2ForwardPipelineState: MTLComputePipelineState
+    
+    /// The compute pipeline state for HP2 inverse colour transform.
+    private let colourTransformHP2InversePipelineState: MTLComputePipelineState
+    
+    /// The compute pipeline state for HP3 forward colour transform.
+    private let colourTransformHP3ForwardPipelineState: MTLComputePipelineState
+    
+    /// The compute pipeline state for HP3 inverse colour transform.
+    private let colourTransformHP3InversePipelineState: MTLComputePipelineState
     
     /// Minimum number of pixels to use GPU (below this, use CPU fallback).
     /// This threshold is determined empirically based on GPU overhead vs. benefit.
@@ -66,24 +88,109 @@ public final class MetalAccelerator: @unchecked Sendable {
         self.device = device
         self.commandQueue = queue
         
-        // Create compute pipeline states for shaders
+        // Create compute pipeline states for all shaders
         do {
             let library = try device.makeDefaultLibrary(bundle: .module)
             
-            guard let gradientFunction = library.makeFunction(name: "compute_gradients") else {
-                throw MetalAcceleratorError.shaderFunctionNotFound("compute_gradients")
-            }
+            self.gradientPipelineState = try Self.makePipelineState(
+                library: library, device: device, functionName: "compute_gradients")
+            self.predictionPipelineState = try Self.makePipelineState(
+                library: library, device: device, functionName: "compute_med_prediction")
+            self.quantizeGradientsPipelineState = try Self.makePipelineState(
+                library: library, device: device, functionName: "compute_quantize_gradients")
+            self.colourTransformHP1ForwardPipelineState = try Self.makePipelineState(
+                library: library, device: device, functionName: "compute_colour_transform_hp1_forward")
+            self.colourTransformHP1InversePipelineState = try Self.makePipelineState(
+                library: library, device: device, functionName: "compute_colour_transform_hp1_inverse")
+            self.colourTransformHP2ForwardPipelineState = try Self.makePipelineState(
+                library: library, device: device, functionName: "compute_colour_transform_hp2_forward")
+            self.colourTransformHP2InversePipelineState = try Self.makePipelineState(
+                library: library, device: device, functionName: "compute_colour_transform_hp2_inverse")
+            self.colourTransformHP3ForwardPipelineState = try Self.makePipelineState(
+                library: library, device: device, functionName: "compute_colour_transform_hp3_forward")
+            self.colourTransformHP3InversePipelineState = try Self.makePipelineState(
+                library: library, device: device, functionName: "compute_colour_transform_hp3_inverse")
             
-            guard let predictionFunction = library.makeFunction(name: "compute_med_prediction") else {
-                throw MetalAcceleratorError.shaderFunctionNotFound("compute_med_prediction")
-            }
-            
-            self.gradientPipelineState = try device.makeComputePipelineState(function: gradientFunction)
-            self.predictionPipelineState = try device.makeComputePipelineState(function: predictionFunction)
-            
+        } catch let e as MetalAcceleratorError {
+            throw e
         } catch {
             throw MetalAcceleratorError.pipelineCreationFailed(error)
         }
+    }
+    
+    // MARK: - Private Helpers
+    
+    /// Create a compute pipeline state for the named shader function.
+    private static func makePipelineState(
+        library: MTLLibrary,
+        device: MTLDevice,
+        functionName: String
+    ) throws -> MTLComputePipelineState {
+        guard let function = library.makeFunction(name: functionName) else {
+            throw MetalAcceleratorError.shaderFunctionNotFound(functionName)
+        }
+        return try device.makeComputePipelineState(function: function)
+    }
+    
+    /// Execute a 1-D compute dispatch and wait for completion.
+    ///
+    /// - Parameters:
+    ///   - pipelineState: The compute pipeline state to use.
+    ///   - count: Number of elements (threads) to dispatch.
+    ///   - configure: Closure that sets buffers/bytes on the encoder before dispatch.
+    /// - Throws: `MetalAcceleratorError` if the command buffer fails.
+    private func dispatch1D(
+        pipelineState: MTLComputePipelineState,
+        count: Int,
+        configure: (MTLComputeCommandEncoder) -> Void
+    ) throws {
+        guard let commandBuffer = commandQueue.makeCommandBuffer(),
+              let encoder = commandBuffer.makeComputeCommandEncoder() else {
+            throw MetalAcceleratorError.commandBufferCreationFailed
+        }
+        
+        encoder.setComputePipelineState(pipelineState)
+        configure(encoder)
+        
+        let threadGroupWidth = min(pipelineState.maxTotalThreadsPerThreadgroup, count)
+        let threadGroupSize  = MTLSize(width: threadGroupWidth, height: 1, depth: 1)
+        let threadGroups     = MTLSize(
+            width: (count + threadGroupWidth - 1) / threadGroupWidth,
+            height: 1, depth: 1)
+        
+        encoder.dispatchThreadgroups(threadGroups, threadsPerThreadgroup: threadGroupSize)
+        encoder.endEncoding()
+        
+        commandBuffer.commit()
+        commandBuffer.waitUntilCompleted()
+        
+        if commandBuffer.status == .error {
+            throw MetalAcceleratorError.commandBufferExecutionFailed
+        }
+    }
+    
+    /// Create a read-only Metal buffer from a Swift array.
+    private func makeReadBuffer<T>(_ array: [T]) throws -> MTLBuffer {
+        let size = array.count * MemoryLayout<T>.stride
+        guard let buf = device.makeBuffer(bytes: array, length: size, options: .storageModeShared) else {
+            throw MetalAcceleratorError.bufferCreationFailed
+        }
+        return buf
+    }
+    
+    /// Create a write-only Metal buffer of the given element count.
+    private func makeWriteBuffer<T>(count: Int, type: T.Type) throws -> MTLBuffer {
+        let size = count * MemoryLayout<T>.stride
+        guard let buf = device.makeBuffer(length: size, options: .storageModeShared) else {
+            throw MetalAcceleratorError.bufferCreationFailed
+        }
+        return buf
+    }
+    
+    /// Read the contents of a Metal buffer as a Swift array.
+    private func readBuffer<T>(_ buffer: MTLBuffer, count: Int, type: T.Type) -> [T] {
+        let pointer = buffer.contents().bindMemory(to: T.self, capacity: count)
+        return Array(UnsafeBufferPointer(start: pointer, count: count))
     }
     
     // MARK: - Batch Gradient Computation
@@ -123,69 +230,29 @@ public final class MetalAccelerator: @unchecked Sendable {
             return computeGradientsBatchCPU(a: a, b: b, c: c)
         }
         
-        // Create Metal buffers for input and output data
-        let bufferSize = count * MemoryLayout<Int32>.stride
-        
-        guard let aBuffer = device.makeBuffer(bytes: a, length: bufferSize, options: .storageModeShared),
-              let bBuffer = device.makeBuffer(bytes: b, length: bufferSize, options: .storageModeShared),
-              let cBuffer = device.makeBuffer(bytes: c, length: bufferSize, options: .storageModeShared),
-              let d1Buffer = device.makeBuffer(length: bufferSize, options: .storageModeShared),
-              let d2Buffer = device.makeBuffer(length: bufferSize, options: .storageModeShared),
-              let d3Buffer = device.makeBuffer(length: bufferSize, options: .storageModeShared) else {
-            throw MetalAcceleratorError.bufferCreationFailed
-        }
-        
-        // Create command buffer and encoder
-        guard let commandBuffer = commandQueue.makeCommandBuffer(),
-              let encoder = commandBuffer.makeComputeCommandEncoder() else {
-            throw MetalAcceleratorError.commandBufferCreationFailed
-        }
-        
-        encoder.setComputePipelineState(gradientPipelineState)
-        encoder.setBuffer(aBuffer, offset: 0, index: 0)
-        encoder.setBuffer(bBuffer, offset: 0, index: 1)
-        encoder.setBuffer(cBuffer, offset: 0, index: 2)
-        encoder.setBuffer(d1Buffer, offset: 0, index: 3)
-        encoder.setBuffer(d2Buffer, offset: 0, index: 4)
-        encoder.setBuffer(d3Buffer, offset: 0, index: 5)
+        let aBuffer  = try makeReadBuffer(a)
+        let bBuffer  = try makeReadBuffer(b)
+        let cBuffer  = try makeReadBuffer(c)
+        let d1Buffer = try makeWriteBuffer(count: count, type: Int32.self)
+        let d2Buffer = try makeWriteBuffer(count: count, type: Int32.self)
+        let d3Buffer = try makeWriteBuffer(count: count, type: Int32.self)
         
         var elementCount = UInt32(count)
-        encoder.setBytes(&elementCount, length: MemoryLayout<UInt32>.size, index: 6)
-        
-        // Calculate thread group sizes
-        let threadGroupSize = MTLSize(
-            width: min(gradientPipelineState.maxTotalThreadsPerThreadgroup, count),
-            height: 1,
-            depth: 1
-        )
-        let threadGroups = MTLSize(
-            width: (count + threadGroupSize.width - 1) / threadGroupSize.width,
-            height: 1,
-            depth: 1
-        )
-        
-        encoder.dispatchThreadgroups(threadGroups, threadsPerThreadgroup: threadGroupSize)
-        encoder.endEncoding()
-        
-        // Execute and wait for completion
-        commandBuffer.commit()
-        commandBuffer.waitUntilCompleted()
-        
-        // Check for errors
-        if commandBuffer.status == .error {
-            throw MetalAcceleratorError.commandBufferExecutionFailed
+        try dispatch1D(pipelineState: gradientPipelineState, count: count) { encoder in
+            encoder.setBuffer(aBuffer,  offset: 0, index: 0)
+            encoder.setBuffer(bBuffer,  offset: 0, index: 1)
+            encoder.setBuffer(cBuffer,  offset: 0, index: 2)
+            encoder.setBuffer(d1Buffer, offset: 0, index: 3)
+            encoder.setBuffer(d2Buffer, offset: 0, index: 4)
+            encoder.setBuffer(d3Buffer, offset: 0, index: 5)
+            encoder.setBytes(&elementCount, length: MemoryLayout<UInt32>.size, index: 6)
         }
         
-        // Read results from GPU buffers
-        let d1Pointer = d1Buffer.contents().bindMemory(to: Int32.self, capacity: count)
-        let d2Pointer = d2Buffer.contents().bindMemory(to: Int32.self, capacity: count)
-        let d3Pointer = d3Buffer.contents().bindMemory(to: Int32.self, capacity: count)
-        
-        let d1 = Array(UnsafeBufferPointer(start: d1Pointer, count: count))
-        let d2 = Array(UnsafeBufferPointer(start: d2Pointer, count: count))
-        let d3 = Array(UnsafeBufferPointer(start: d3Pointer, count: count))
-        
-        return (d1, d2, d3)
+        return (
+            readBuffer(d1Buffer, count: count, type: Int32.self),
+            readBuffer(d2Buffer, count: count, type: Int32.self),
+            readBuffer(d3Buffer, count: count, type: Int32.self)
+        )
     }
     
     // MARK: - Batch MED Prediction
@@ -220,58 +287,199 @@ public final class MetalAccelerator: @unchecked Sendable {
             return computeMEDPredictionBatchCPU(a: a, b: b, c: c)
         }
         
-        // Create Metal buffers
-        let bufferSize = count * MemoryLayout<Int32>.stride
-        
-        guard let aBuffer = device.makeBuffer(bytes: a, length: bufferSize, options: .storageModeShared),
-              let bBuffer = device.makeBuffer(bytes: b, length: bufferSize, options: .storageModeShared),
-              let cBuffer = device.makeBuffer(bytes: c, length: bufferSize, options: .storageModeShared),
-              let predBuffer = device.makeBuffer(length: bufferSize, options: .storageModeShared) else {
-            throw MetalAcceleratorError.bufferCreationFailed
-        }
-        
-        // Create command buffer and encoder
-        guard let commandBuffer = commandQueue.makeCommandBuffer(),
-              let encoder = commandBuffer.makeComputeCommandEncoder() else {
-            throw MetalAcceleratorError.commandBufferCreationFailed
-        }
-        
-        encoder.setComputePipelineState(predictionPipelineState)
-        encoder.setBuffer(aBuffer, offset: 0, index: 0)
-        encoder.setBuffer(bBuffer, offset: 0, index: 1)
-        encoder.setBuffer(cBuffer, offset: 0, index: 2)
-        encoder.setBuffer(predBuffer, offset: 0, index: 3)
+        let aBuffer    = try makeReadBuffer(a)
+        let bBuffer    = try makeReadBuffer(b)
+        let cBuffer    = try makeReadBuffer(c)
+        let predBuffer = try makeWriteBuffer(count: count, type: Int32.self)
         
         var elementCount = UInt32(count)
-        encoder.setBytes(&elementCount, length: MemoryLayout<UInt32>.size, index: 4)
-        
-        // Calculate thread group sizes
-        let threadGroupSize = MTLSize(
-            width: min(predictionPipelineState.maxTotalThreadsPerThreadgroup, count),
-            height: 1,
-            depth: 1
-        )
-        let threadGroups = MTLSize(
-            width: (count + threadGroupSize.width - 1) / threadGroupSize.width,
-            height: 1,
-            depth: 1
-        )
-        
-        encoder.dispatchThreadgroups(threadGroups, threadsPerThreadgroup: threadGroupSize)
-        encoder.endEncoding()
-        
-        // Execute and wait for completion
-        commandBuffer.commit()
-        commandBuffer.waitUntilCompleted()
-        
-        // Check for errors
-        if commandBuffer.status == .error {
-            throw MetalAcceleratorError.commandBufferExecutionFailed
+        try dispatch1D(pipelineState: predictionPipelineState, count: count) { encoder in
+            encoder.setBuffer(aBuffer,    offset: 0, index: 0)
+            encoder.setBuffer(bBuffer,    offset: 0, index: 1)
+            encoder.setBuffer(cBuffer,    offset: 0, index: 2)
+            encoder.setBuffer(predBuffer, offset: 0, index: 3)
+            encoder.setBytes(&elementCount, length: MemoryLayout<UInt32>.size, index: 4)
         }
         
-        // Read results
-        let predPointer = predBuffer.contents().bindMemory(to: Int32.self, capacity: count)
-        return Array(UnsafeBufferPointer(start: predPointer, count: count))
+        return readBuffer(predBuffer, count: count, type: Int32.self)
+    }
+    
+    // MARK: - Batch Gradient Quantisation
+    
+    /// Quantise a batch of gradients to context indices using Metal GPU.
+    ///
+    /// Maps each gradient to a context index in the range [-4, 4] using the
+    /// JPEG-LS threshold parameters T1, T2, T3. Falls back to CPU for small batches.
+    ///
+    /// - Parameters:
+    ///   - d1: First gradient array (horizontal)
+    ///   - d2: Second gradient array (vertical)
+    ///   - d3: Third gradient array (diagonal)
+    ///   - t1: Quantisation threshold 1
+    ///   - t2: Quantisation threshold 2
+    ///   - t3: Quantisation threshold 3
+    /// - Returns: A tuple of three arrays containing the quantised gradients (q1, q2, q3)
+    /// - Throws: `MetalAcceleratorError` if GPU operations fail
+    /// - Precondition: All gradient arrays must have the same length
+    public func quantizeGradientsBatch(
+        d1: [Int32], d2: [Int32], d3: [Int32],
+        t1: Int32, t2: Int32, t3: Int32
+    ) throws -> (q1: [Int32], q2: [Int32], q3: [Int32]) {
+        precondition(d1.count == d2.count && d2.count == d3.count, "Arrays must have same length")
+        
+        let count = d1.count
+        guard count > 0 else {
+            return ([], [], [])
+        }
+        
+        if count < Self.gpuThreshold {
+            return quantizeGradientsBatchCPU(d1: d1, d2: d2, d3: d3, t1: t1, t2: t2, t3: t3)
+        }
+        
+        let d1Buffer = try makeReadBuffer(d1)
+        let d2Buffer = try makeReadBuffer(d2)
+        let d3Buffer = try makeReadBuffer(d3)
+        let q1Buffer = try makeWriteBuffer(count: count, type: Int32.self)
+        let q2Buffer = try makeWriteBuffer(count: count, type: Int32.self)
+        let q3Buffer = try makeWriteBuffer(count: count, type: Int32.self)
+        
+        var elementCount = UInt32(count)
+        var t1v = t1, t2v = t2, t3v = t3
+        try dispatch1D(pipelineState: quantizeGradientsPipelineState, count: count) { encoder in
+            encoder.setBuffer(d1Buffer, offset: 0, index: 0)
+            encoder.setBuffer(d2Buffer, offset: 0, index: 1)
+            encoder.setBuffer(d3Buffer, offset: 0, index: 2)
+            encoder.setBuffer(q1Buffer, offset: 0, index: 3)
+            encoder.setBuffer(q2Buffer, offset: 0, index: 4)
+            encoder.setBuffer(q3Buffer, offset: 0, index: 5)
+            encoder.setBytes(&elementCount, length: MemoryLayout<UInt32>.size, index: 6)
+            encoder.setBytes(&t1v, length: MemoryLayout<Int32>.size, index: 7)
+            encoder.setBytes(&t2v, length: MemoryLayout<Int32>.size, index: 8)
+            encoder.setBytes(&t3v, length: MemoryLayout<Int32>.size, index: 9)
+        }
+        
+        return (
+            readBuffer(q1Buffer, count: count, type: Int32.self),
+            readBuffer(q2Buffer, count: count, type: Int32.self),
+            readBuffer(q3Buffer, count: count, type: Int32.self)
+        )
+    }
+    
+    // MARK: - Batch Colour Space Transformation
+    
+    /// Apply a colour space transformation to a batch of RGB pixels using Metal GPU.
+    ///
+    /// Dispatches the appropriate HP forward transform (HP1, HP2, or HP3) to the GPU.
+    /// Falls back to CPU for small batches or when the transform is `.none`.
+    ///
+    /// - Parameters:
+    ///   - transform: The colour transformation to apply
+    ///   - r: Red component array
+    ///   - g: Green component array
+    ///   - b: Blue component array
+    /// - Returns: Transformed (r′, g′, b′) components as `Int32` arrays
+    /// - Throws: `MetalAcceleratorError` if GPU operations fail
+    /// - Precondition: All arrays must have the same length
+    public func applyColourTransformForwardBatch(
+        transform: JPEGLSColorTransformation,
+        r: [Int32], g: [Int32], b: [Int32]
+    ) throws -> (r: [Int32], g: [Int32], b: [Int32]) {
+        precondition(r.count == g.count && g.count == b.count, "Arrays must have same length")
+        
+        let count = r.count
+        guard count > 0 else { return ([], [], []) }
+        
+        if transform == .none {
+            return (r, g, b)
+        }
+        
+        if count < Self.gpuThreshold {
+            return applyColourTransformCPU(transform: transform, r: r, g: g, b: b, forward: true)
+        }
+        
+        let pipelineState: MTLComputePipelineState
+        switch transform {
+        case .hp1:   pipelineState = colourTransformHP1ForwardPipelineState
+        case .hp2:   pipelineState = colourTransformHP2ForwardPipelineState
+        case .hp3:   pipelineState = colourTransformHP3ForwardPipelineState
+        case .none:  return (r, g, b)  // unreachable — handled above
+        }
+        
+        return try dispatchColourTransform(
+            pipelineState: pipelineState, count: count, r: r, g: g, b: b)
+    }
+    
+    /// Apply the inverse colour space transformation to a batch of pixels using Metal GPU.
+    ///
+    /// Dispatches the appropriate HP inverse transform (HP1, HP2, or HP3) to the GPU.
+    /// Falls back to CPU for small batches or when the transform is `.none`.
+    ///
+    /// - Parameters:
+    ///   - transform: The colour transformation to invert
+    ///   - r: Transformed red component array (R′)
+    ///   - g: Transformed green component array (G′)
+    ///   - b: Transformed blue component array (B′)
+    /// - Returns: Recovered (r, g, b) components as `Int32` arrays
+    /// - Throws: `MetalAcceleratorError` if GPU operations fail
+    /// - Precondition: All arrays must have the same length
+    public func applyColourTransformInverseBatch(
+        transform: JPEGLSColorTransformation,
+        r: [Int32], g: [Int32], b: [Int32]
+    ) throws -> (r: [Int32], g: [Int32], b: [Int32]) {
+        precondition(r.count == g.count && g.count == b.count, "Arrays must have same length")
+        
+        let count = r.count
+        guard count > 0 else { return ([], [], []) }
+        
+        if transform == .none {
+            return (r, g, b)
+        }
+        
+        if count < Self.gpuThreshold {
+            return applyColourTransformCPU(transform: transform, r: r, g: g, b: b, forward: false)
+        }
+        
+        let pipelineState: MTLComputePipelineState
+        switch transform {
+        case .hp1:   pipelineState = colourTransformHP1InversePipelineState
+        case .hp2:   pipelineState = colourTransformHP2InversePipelineState
+        case .hp3:   pipelineState = colourTransformHP3InversePipelineState
+        case .none:  return (r, g, b)  // unreachable — handled above
+        }
+        
+        return try dispatchColourTransform(
+            pipelineState: pipelineState, count: count, r: r, g: g, b: b)
+    }
+    
+    /// Dispatch a colour transform shader (forward or inverse) and return the result.
+    private func dispatchColourTransform(
+        pipelineState: MTLComputePipelineState,
+        count: Int,
+        r: [Int32], g: [Int32], b: [Int32]
+    ) throws -> (r: [Int32], g: [Int32], b: [Int32]) {
+        let rInBuffer  = try makeReadBuffer(r)
+        let gInBuffer  = try makeReadBuffer(g)
+        let bInBuffer  = try makeReadBuffer(b)
+        let rOutBuffer = try makeWriteBuffer(count: count, type: Int32.self)
+        let gOutBuffer = try makeWriteBuffer(count: count, type: Int32.self)
+        let bOutBuffer = try makeWriteBuffer(count: count, type: Int32.self)
+        
+        var elementCount = UInt32(count)
+        try dispatch1D(pipelineState: pipelineState, count: count) { encoder in
+            encoder.setBuffer(rInBuffer,  offset: 0, index: 0)
+            encoder.setBuffer(gInBuffer,  offset: 0, index: 1)
+            encoder.setBuffer(bInBuffer,  offset: 0, index: 2)
+            encoder.setBuffer(rOutBuffer, offset: 0, index: 3)
+            encoder.setBuffer(gOutBuffer, offset: 0, index: 4)
+            encoder.setBuffer(bOutBuffer, offset: 0, index: 5)
+            encoder.setBytes(&elementCount, length: MemoryLayout<UInt32>.size, index: 6)
+        }
+        
+        return (
+            readBuffer(rOutBuffer, count: count, type: Int32.self),
+            readBuffer(gOutBuffer, count: count, type: Int32.self),
+            readBuffer(bOutBuffer, count: count, type: Int32.self)
+        )
     }
     
     // MARK: - CPU Fallback Implementations
@@ -323,6 +531,60 @@ public final class MetalAccelerator: @unchecked Sendable {
         }
         
         return predictions
+    }
+    
+    /// CPU fallback for gradient quantisation (used for small batches).
+    private func quantizeGradientsBatchCPU(
+        d1: [Int32], d2: [Int32], d3: [Int32],
+        t1: Int32, t2: Int32, t3: Int32
+    ) -> (q1: [Int32], q2: [Int32], q3: [Int32]) {
+        func quantise(_ d: Int32) -> Int32 {
+            if d <= -t3 { return -4 }
+            if d <= -t2 { return -3 }
+            if d <= -t1 { return -2 }
+            if d < 0    { return -1 }
+            if d == 0   { return  0 }
+            if d < t1   { return  1 }
+            if d < t2   { return  2 }
+            if d < t3   { return  3 }
+            return 4
+        }
+        let count = d1.count
+        var q1 = [Int32](repeating: 0, count: count)
+        var q2 = [Int32](repeating: 0, count: count)
+        var q3 = [Int32](repeating: 0, count: count)
+        for i in 0..<count {
+            q1[i] = quantise(d1[i])
+            q2[i] = quantise(d2[i])
+            q3[i] = quantise(d3[i])
+        }
+        return (q1, q2, q3)
+    }
+    
+    /// CPU fallback for colour space transformation.
+    private func applyColourTransformCPU(
+        transform: JPEGLSColorTransformation,
+        r: [Int32], g: [Int32], b: [Int32],
+        forward: Bool
+    ) -> (r: [Int32], g: [Int32], b: [Int32]) {
+        let count = r.count
+        var outR = [Int32](repeating: 0, count: count)
+        var outG = [Int32](repeating: 0, count: count)
+        var outB = [Int32](repeating: 0, count: count)
+        
+        for i in 0..<count {
+            let rv = Int(r[i]), gv = Int(g[i]), bv = Int(b[i])
+            let result: [Int]
+            if forward {
+                result = (try? transform.transformForward([rv, gv, bv])) ?? [rv, gv, bv]
+            } else {
+                result = (try? transform.transformInverse([rv, gv, bv])) ?? [rv, gv, bv]
+            }
+            outR[i] = Int32(result[0])
+            outG[i] = Int32(result[1])
+            outB[i] = Int32(result[2])
+        }
+        return (outR, outG, outB)
     }
 }
 
