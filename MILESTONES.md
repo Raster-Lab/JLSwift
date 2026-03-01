@@ -1378,7 +1378,7 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 - [x] Create end-to-end example: encode raw → JPEG-LS → decode → verify
 - [ ] Create end-to-end example: DICOM pixel data round-trip (deferred — requires DICOMkit)
 - [ ] Create example: batch processing with progress reporting (deferred — requires progress bar infrastructure)
-- [ ] Create example: GPU-accelerated processing on Apple Silicon (deferred — depends on Milestone 15)
+- [x] Create example: GPU-accelerated processing on Apple Silicon
 - [x] Create example: Part 2 extensions usage (colour transforms and mapping tables)
 - [ ] Create example: CharLS interoperability (deferred — requires CharLS C library integration)
 - [x] Verify all code examples compile and produce correct output
@@ -1403,6 +1403,14 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 - Added "Part 2 Extensions: Colour Transforms and Mapping Tables" section to `USAGE_EXAMPLES.md`:
   - HP1/HP2/HP3 colour-transform encode/decode round-trip with all four transforms
   - Mapping table creation and palette lookup demonstration
+- Added "GPU-Accelerated Processing on Apple Silicon" section to `USAGE_EXAMPLES.md` (Milestone 15 now complete):
+  - GPU-accelerated gradient computation via `MetalAccelerator.computeGradientsBatch`
+  - GPU-accelerated MED prediction via `MetalAccelerator.computeMEDPredictionBatch`
+  - Combined encoding preprocessing pipeline via `MetalAccelerator.computeEncodingPipelineBatch`
+  - Combined decoding reconstruction pipeline via `MetalAccelerator.computeDecodingPipelineBatch`
+  - GPU-accelerated HP2 colour-space transform round-trip (forward + inverse)
+  - CPU fallback behaviour for small batches (below `MetalAccelerator.gpuThreshold`)
+  - All code gated behind `#if canImport(Metal)` for cross-platform safety
 
 #### Phase 19.3: J2KSwift Consistency
 - [ ] Review J2KSwift project structure, naming conventions, and API patterns
