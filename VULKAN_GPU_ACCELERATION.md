@@ -2,9 +2,9 @@
 
 ## Overview
 
-JLSwift includes planned support for GPU acceleration via the Vulkan compute API on Linux and Windows platforms. Vulkan compute shaders provide cross-vendor GPU parallelism for JPEG-LS encoding operations, complementing the Metal GPU support available on Apple platforms.
+JLSwift includes GPU acceleration architecture for the Vulkan compute API on Linux and Windows platforms. Vulkan compute shaders provide cross-vendor GPU parallelism for JPEG-LS encoding operations, complementing the Metal GPU support available on Apple platforms.
 
-> **Status**: Planned (Phase 15.2). Vulkan compute support is not yet implemented. This document describes the planned architecture and usage patterns.
+> **Status**: Phase 15.2 — Swift architecture implemented with CPU fallback. GPU execution via Vulkan compute requires the Vulkan SDK and SPIR-V shader binaries, which are not yet bundled with the project. All operations currently use the CPU fallback path, producing bit-exact results that will match the future GPU implementation.
 
 ## Design Goals
 
@@ -12,92 +12,98 @@ The Vulkan GPU acceleration is designed to mirror the Metal pipeline with these 
 
 1. **Cross-Vendor Compatibility**: Supports NVIDIA, AMD, Intel, and ARM Mali GPUs via Vulkan 1.1+
 2. **Bit-Exact Results**: GPU and CPU implementations produce identical results
-3. **Conditional Compilation**: Compiled only when Vulkan headers are available
+3. **Conditional Compilation**: GPU code gated behind `#if canImport(VulkanSwift)` — CPU fallback always available
 4. **CPU Fallback**: Automatic fallback when Vulkan is unavailable or unsupported
 5. **Platform Independence**: Shared algorithm logic between Metal and Vulkan pipelines
 
-## Planned Architecture
+## Current Architecture
 
 ```
 Platform/Vulkan/
-├── VulkanAccelerator.swift      # Swift API wrapping Vulkan compute
-├── VulkanDevice.swift           # Device selection and capability detection
-├── VulkanBuffers.swift          # GPU buffer management and host–device transfer
-└── Shaders/
-    ├── jpegls_gradient.spv      # SPIR-V gradient computation shader
-    ├── jpegls_prediction.spv    # SPIR-V MED prediction shader
-    └── jpegls_encode.spv        # SPIR-V encoding pipeline shader
+├── VulkanAccelerator.swift      # Swift API with CPU fallback (implemented)
+└── VulkanDevice.swift           # Device selection and capability detection (implemented)
+```
+
+**Planned (requires Vulkan SDK):**
+
+```
+Platform/Vulkan/Shaders/
+├── jpegls_gradients.spv         # SPIR-V gradient + MED prediction shader
+├── jpegls_quantize.spv          # SPIR-V gradient quantisation shader
+├── jpegls_colour_hp1.spv        # SPIR-V HP1 colour transform shader
+├── jpegls_colour_hp2.spv        # SPIR-V HP2 colour transform shader
+└── jpegls_colour_hp3.spv        # SPIR-V HP3 colour transform shader
 ```
 
 ## GPU vs CPU Decision
 
-The Vulkan accelerator will use the same threshold-based decision as the Metal implementation:
+The Vulkan accelerator uses the same threshold-based decision as the Metal implementation:
 
 - **Small images** (< 1024 pixels): Use CPU fallback — GPU overhead exceeds benefit
 - **Large images** (≥ 1024 pixels): Use GPU compute — parallelism outweighs transfer cost
 - **Batch processing**: GPU preferred for batches of 8+ images regardless of size
 
-## Planned Usage
+## Usage
 
-### Basic Usage (Planned)
-
-```swift
-#if canImport(VulkanSwift)
-import VulkanSwift
-
-// Check Vulkan availability
-guard VulkanAccelerator.isSupported else {
-    print("Vulkan not available, using CPU fallback")
-    return
-}
-
-// Create accelerator with automatic device selection
-let accelerator = try VulkanAccelerator()
-
-// Use for gradient computation
-let (d1, d2, d3) = accelerator.computeGradients(a: 100, b: 110, c: 105)
-print("Gradients: D1=\(d1), D2=\(d2), D3=\(d3)")
-#endif
-```
-
-### Encoding with Vulkan Acceleration (Planned)
+### Basic Usage
 
 ```swift
 import JPEGLS
 
-// Encoding always uses the best available accelerator automatically
-// No code changes needed — Vulkan acceleration is transparent
-let encoder = JPEGLSEncoder()
-let jpegLSData = try encoder.encode(imageData)
-```
+// VulkanAccelerator is available on all platforms (no import guard needed).
+// isSupported reflects whether a real Vulkan GPU is found.
+let accelerator = VulkanAccelerator()
 
-### Device Selection (Planned)
-
-```swift
-#if canImport(VulkanSwift)
-import VulkanSwift
-
-// List available Vulkan devices
-let devices = try VulkanDevice.enumerateDevices()
-for device in devices {
-    print("\(device.name): \(device.deviceType), \(device.memoryMB) MB VRAM")
+// Check for GPU availability
+if VulkanAccelerator.isSupported {
+    print("Vulkan GPU compute available: \(accelerator.device?.name ?? "unknown")")
+} else {
+    print("No Vulkan GPU found — using CPU fallback")
 }
 
-// Select a specific device (by default, the highest-performance device is chosen)
-let selectedDevice = devices.first { $0.deviceType == .discreteGPU }
-let accelerator = try VulkanAccelerator(device: selectedDevice)
-#endif
+// Compute gradients (GPU when available, CPU fallback otherwise)
+let a: [Int32] = // ... north pixel values
+let b: [Int32] = // ... west pixel values
+let c: [Int32] = // ... northwest pixel values
+
+let (d1, d2, d3) = accelerator.computeGradientsBatch(a: a, b: b, c: c)
+let predictions  = accelerator.computeMEDPredictionBatch(a: a, b: b, c: c)
+
+// Quantise gradients to context indices
+let (q1, q2, q3) = accelerator.quantizeGradientsBatch(
+    d1: d1, d2: d2, d3: d3, t1: 3, t2: 7, t3: 21)
+
+// Apply HP1 colour transform
+let (rPrime, gPrime, bPrime) = accelerator.applyColourTransformForwardBatch(
+    transform: .hp1, r: rPixels, g: gPixels, b: bPixels)
 ```
 
-## Prerequisites (When Implemented)
+### Device Selection
 
-To use Vulkan GPU acceleration, the following are required:
+```swift
+import JPEGLS
+
+// List available Vulkan devices (returns [] when no SDK present)
+let devices = enumerateVulkanDevices()
+for device in devices {
+    print("\(device.name): \(device.deviceType)")
+}
+
+// Select best device
+if let best = selectBestVulkanDevice() {
+    print("Selected: \(best.name)")
+}
+```
+
+## Prerequisites (for GPU Execution)
+
+To enable real GPU acceleration, the following are required:
 
 1. **Vulkan Runtime**: Vulkan 1.1 or later installed
    - Linux: Install via package manager (`apt install libvulkan-dev`)
    - Windows: Install LunarG Vulkan SDK from vulkan.lunarg.com
 2. **Vulkan-capable GPU**: Any GPU with Vulkan compute support (NVIDIA, AMD, Intel, ARM Mali)
-3. **SPIR-V Compiler**: For building shader binaries (glslc or glslangValidator)
+3. **VulkanSwift package**: A Swift package wrapping the Vulkan API (to be added as a dependency)
 
 ```bash
 # Linux: Install Vulkan development libraries

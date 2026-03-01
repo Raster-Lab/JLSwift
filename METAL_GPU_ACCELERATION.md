@@ -23,6 +23,20 @@ Platform/Metal/
 └── JPEGLSShaders.metal         # Metal compute shaders (MSL)
 ```
 
+### Supported Operations (Phase 15.1)
+
+| Shader | Description |
+|--------|-------------|
+| `compute_gradients` | Batch D1/D2/D3 gradient computation |
+| `compute_med_prediction` | Batch MED (Median Edge Detector) prediction |
+| `compute_quantize_gradients` | Batch gradient quantisation to context indices [-4, 4] |
+| `compute_colour_transform_hp1_forward` | HP1 forward colour transform (R′=R−G, B′=B−G) |
+| `compute_colour_transform_hp1_inverse` | HP1 inverse colour transform |
+| `compute_colour_transform_hp2_forward` | HP2 forward colour transform |
+| `compute_colour_transform_hp2_inverse` | HP2 inverse colour transform |
+| `compute_colour_transform_hp3_forward` | HP3 forward colour transform |
+| `compute_colour_transform_hp3_inverse` | HP3 inverse colour transform |
+
 ## GPU vs CPU Decision
 
 The `MetalAccelerator` automatically decides whether to use GPU or CPU based on batch size:
@@ -61,6 +75,14 @@ let (d1, d2, d3) = try accelerator.computeGradientsBatch(a: a, b: b, c: c)
 
 // Compute MED predictions
 let predictions = try accelerator.computeMEDPredictionBatch(a: a, b: b, c: c)
+
+// Quantise gradients to context indices (T1=3, T2=7, T3=21)
+let (q1, q2, q3) = try accelerator.quantizeGradientsBatch(
+    d1: d1, d2: d2, d3: d3, t1: 3, t2: 7, t3: 21)
+
+// Apply HP1 colour transform
+let (rPrime, gPrime, bPrime) = try accelerator.applyColourTransformForwardBatch(
+    transform: .hp1, r: rPixels, g: gPixels, b: bPixels)
 #endif
 ```
 
@@ -146,33 +168,22 @@ This ensures the library builds on Linux and other non-Apple platforms without M
 
 ### Compute Shaders
 
-The Metal shaders implement two core operations:
+The Metal shaders implement nine operations across three categories:
+
+**Gradient Computation and Prediction:**
 
 1. **Gradient Computation** (`compute_gradients`)
-   ```metal
-   kernel void compute_gradients(
-       constant int* a [[buffer(0)]],
-       constant int* b [[buffer(1)]],
-       constant int* c [[buffer(2)]],
-       device int* d1 [[buffer(3)]],
-       device int* d2 [[buffer(4)]],
-       device int* d3 [[buffer(5)]],
-       constant uint& count [[buffer(6)]],
-       uint gid [[thread_position_in_grid]]
-   )
-   ```
-
 2. **MED Prediction** (`compute_med_prediction`)
-   ```metal
-   kernel void compute_med_prediction(
-       constant int* a [[buffer(0)]],
-       constant int* b [[buffer(1)]],
-       constant int* c [[buffer(2)]],
-       device int* pred [[buffer(3)]],
-       constant uint& count [[buffer(4)]],
-       uint gid [[thread_position_in_grid]]
-   )
-   ```
+3. **Gradient Quantisation** (`compute_quantize_gradients`) — maps each gradient to [-4, 4] using T1/T2/T3 thresholds
+
+**Colour Space Transformations:**
+
+4. **HP1 Forward** (`compute_colour_transform_hp1_forward`) — R′=R−G, G′=G, B′=B−G
+5. **HP1 Inverse** (`compute_colour_transform_hp1_inverse`) — R=R′+G′, G=G′, B=B′+G′
+6. **HP2 Forward** (`compute_colour_transform_hp2_forward`) — R′=R−G, G′=G, B′=B−((R+G)>>1)
+7. **HP2 Inverse** (`compute_colour_transform_hp2_inverse`)
+8. **HP3 Forward** (`compute_colour_transform_hp3_forward`) — B′=B, R′=R−B, G′=G−((R+B)>>1)
+9. **HP3 Inverse** (`compute_colour_transform_hp3_inverse`)
 
 ### Thread Group Configuration
 
@@ -228,15 +239,23 @@ The Metal accelerator includes comprehensive tests:
 ```bash
 # Run Metal-specific tests (macOS/iOS only)
 swift test --filter MetalAcceleratorTests
+
+# Run Phase 15 GPU compute tests
+swift test --filter MetalPhase15Tests
 ```
 
 Tests verify:
-- ✅ Initialization and device detection
+- ✅ Initialisation and device detection
 - ✅ Gradient computation correctness
 - ✅ MED prediction correctness
+- ✅ Gradient quantisation correctness (Phase 15.1)
+- ✅ HP1 forward and inverse colour transforms (Phase 15.1)
+- ✅ HP2 forward and inverse colour transforms (Phase 15.1)
+- ✅ HP3 forward and inverse colour transforms (Phase 15.1)
 - ✅ CPU fallback for small batches
 - ✅ GPU execution for large batches
-- ✅ Bit-exact match with CPU implementations
+- ✅ Bit-exact match between Metal GPU and Vulkan CPU fallback
+- ✅ Round-trip correctness (forward → inverse restores original)
 - ✅ Edge cases and boundary values
 - ✅ Error handling
 
