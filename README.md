@@ -8,7 +8,7 @@ A native Swift implementation of **JPEG-LS** (ISO/IEC 14495-1:1999 / ITU-T.87) c
 
 JLSwift is a pure Swift JPEG-LS compression library with no DICOM dependencies. It can be used in any project that requires lossless or near-lossless image compression — no DICOM knowledge is needed. The library is also designed for seamless integration with DICOMkit and other medical-imaging frameworks. Key attributes:
 
-- **Type Safety**: Leverages Swift 6.2+ strict concurrency and type system
+- **Type Safety**: Leverages Swift 6.2+ concurrency and type system
 - **Performance**: Optimised implementations with support for hardware acceleration
 - **Reliability**: Comprehensive test coverage exceeding 95% for all modules
 - **DICOM Aware, DICOM Independent**: Full support for DICOM transfer syntaxes; no DICOM runtime dependency
@@ -97,7 +97,7 @@ JPEG-LS is a lossless/near-lossless compression standard specifically designed f
 | Feature | Description |
 |---------|-------------|
 | **Native Swift** | Pure Swift implementation with no external C dependencies |
-| **Swift 6.2 Strict Concurrency** | Explicit `.swiftLanguageMode(.v6)` in Package.swift; all shared types are `Sendable`; batch processing uses `withTaskGroup` structured concurrency |
+| **Swift 6.2 Concurrency** | Explicit `.swiftLanguageMode(.v6)` in Package.swift; all shared types are `Sendable`; batch processing uses `withTaskGroup` structured concurrency |
 | **Apple Silicon Optimised** | ARM NEON/SIMD acceleration using Swift SIMD types: SIMD8 run-length detection, SIMD8 byte-stuffing scan, and CLZ-based Golomb-Rice parameter computation |
 | **Intel x86-64 Optimised** | SSE/AVX SIMD acceleration: SIMD8 run-length detection, SIMD8 byte-stuffing scan, BSR/LZCNT-based Golomb-Rice parameter computation, Intel-tuned cache parameters, and tile-size optimisation |
 | **Hardware Acceleration** | Apple Accelerate framework (vDSP) for batch gradient computation, absolute prediction-error accumulation, context-state updates, vImage planar↔interleaved conversion, and vectorised HP1/HP2/HP3 colour transforms |

@@ -679,17 +679,17 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 - **DNL marker** (`JPEGLSMarker.defineNumberOfLines`): Added `defineNumberOfLines` (0xFF 0xDC) to the marker enum. The parser now explicitly handles DNL by consuming it as a generic segment, preventing parse errors on valid files that contain a DNL marker.
 - **All 743 unit tests pass** with no regressions; coverage at 96.05%
 
-#### Phase 10.4: Swift 6.2 Strict Concurrency Compliance ✅
+#### Phase 10.4: Swift 6.2 Concurrency Compliance ✅
 - [x] Audit all types for `Sendable` conformance where shared across concurrency domains
 - [x] Adopt structured concurrency (`async`/`await`, `TaskGroup`) where appropriate
-- [x] Eliminate any data races flagged by Swift 6.2 strict concurrency checking
+- [x] Eliminate any data races flagged by Swift 6.2 concurrency checking
 - [x] Mark all global state as `@MainActor` or use appropriate isolation
 - [x] Verify thread safety of buffer pool, tile processor, and shared resources
-- [x] Enable strict concurrency checking in Package.swift and resolve all warnings
-- [x] Ensure all unit tests pass under strict concurrency mode
+- [x] Enable concurrency checking in Package.swift and resolve all warnings
+- [x] Ensure all unit tests pass under concurrency mode
 
 **Implementation Details:**
-- Added explicit `.swiftLanguageMode(.v6)` to all three targets in Package.swift (JPEGLS library, jpegls executable, JPEGLSTests) to make Swift 6 strict concurrency checking visible and self-documenting
+- Added explicit `.swiftLanguageMode(.v6)` to all three targets in Package.swift (JPEGLS library, jpegls executable, JPEGLSTests) to make Swift 6.2 concurrency checking visible and self-documenting
 - Converted `Batch` CLI command to `ParsableCommand` with `DispatchQueue`-based concurrent batch processing (compatible with Linux, avoids `AsyncParsableCommand` runtime availability issues)
 - Root `JPEGLSCLITool` command remains `ParsableCommand` for cross-platform compatibility
 - Implemented thread-safe `ResultsAggregator` class (`@unchecked Sendable` with `NSLock`) for collecting batch processing results across concurrent DispatchQueue tasks
@@ -1490,7 +1490,7 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 | **7** | CLI | Core commands (info ✅, verify ✅, encode ✅, decode ✅), utilities ✅, help & docs ✅ |
 | **8** | Validation | CharLS conformance ✅, benchmarks ✅, DICOM testing ✅, edge cases ✅ |
 | **9** | Release | API docs ✅, integration guides ✅, versioning ✅, changelog ✅, release template ✅ |
-| **10** | Standards Conformance & Refactoring | Conformance audit ✅, core refactoring ✅, file format refactoring ✅, Swift 6.2 strict concurrency ✅ |
+| **10** | Standards Conformance & Refactoring | Conformance audit ✅, core refactoring ✅, file format refactoring ✅, Swift 6.2 concurrency ✅ |
 | **11** | Part 2 Extensions | Mapping tables ✅, extended dimensions ✅, colour transforms ✅, Part 2 optimisation ✅ |
 | **12** | CharLS Interoperability | Conformance fixes ✅, bidirectional interoperability, bit-exact validation, round-trip testing ⏳ |
 | **13** | Apple Silicon Optimisation | ARM Neon enhancement, Accelerate deep integration, memory architecture tuning 📋 |
@@ -1517,7 +1517,7 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 
 ### Dependencies
 
-- **Swift 6.2+**: Required for modern concurrency and language features (strict concurrency enabled)
+- **Swift 6.2+**: Required for modern concurrency and language features (concurrency enabled)
 - **Apple Accelerate**: vDSP-based batch operations and statistical analysis (macOS, iOS, tvOS, watchOS)
 - **Metal**: GPU acceleration for Apple platforms (macOS 10.13+, iOS 11+)
 - **Vulkan**: GPU compute for Linux/Windows (planned)
