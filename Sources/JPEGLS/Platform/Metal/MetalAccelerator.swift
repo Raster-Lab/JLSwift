@@ -63,6 +63,12 @@ public final class MetalAccelerator: @unchecked Sendable {
     
     /// The compute pipeline state for HP3 inverse colour transform.
     private let colourTransformHP3InversePipelineState: MTLComputePipelineState
+
+    /// The compute pipeline state for the combined encoding preprocessing pipeline.
+    private let encodingPipelineState: MTLComputePipelineState
+
+    /// The compute pipeline state for the combined decoding reconstruction pipeline.
+    private let decodingPipelineState: MTLComputePipelineState
     
     /// Minimum number of pixels to use GPU (below this, use CPU fallback).
     /// This threshold is determined empirically based on GPU overhead vs. benefit.
@@ -110,6 +116,10 @@ public final class MetalAccelerator: @unchecked Sendable {
                 library: library, device: device, functionName: "compute_colour_transform_hp3_forward")
             self.colourTransformHP3InversePipelineState = try Self.makePipelineState(
                 library: library, device: device, functionName: "compute_colour_transform_hp3_inverse")
+            self.encodingPipelineState = try Self.makePipelineState(
+                library: library, device: device, functionName: "compute_encoding_pipeline")
+            self.decodingPipelineState = try Self.makePipelineState(
+                library: library, device: device, functionName: "compute_decoding_pipeline")
             
         } catch let e as MetalAcceleratorError {
             throw e
@@ -585,6 +595,194 @@ public final class MetalAccelerator: @unchecked Sendable {
             outB[i] = Int32(result[2])
         }
         return (outR, outG, outB)
+    }
+
+    /// CPU fallback for the combined encoding preprocessing pipeline.
+    private func computeEncodingPipelineCPU(
+        a: [Int32], b: [Int32], c: [Int32], x: [Int32],
+        near: Int32, t1: Int32, t2: Int32, t3: Int32
+    ) -> (prediction: [Int32], predError: [Int32], q1: [Int32], q2: [Int32], q3: [Int32]) {
+        func quantiseNear(_ d: Int32) -> Int32 {
+            if d <= -t3  { return -4 }
+            if d <= -t2  { return -3 }
+            if d <= -t1  { return -2 }
+            if d < -near { return -1 }
+            if d <= near { return  0 }
+            if d < t1    { return  1 }
+            if d < t2    { return  2 }
+            if d < t3    { return  3 }
+            return 4
+        }
+        func medPredict(_ av: Int32, _ bv: Int32, _ cv: Int32) -> Int32 {
+            let minAB = min(av, bv)
+            let maxAB = max(av, bv)
+            if cv >= maxAB { return minAB }
+            if cv <= minAB { return maxAB }
+            return av + bv - cv
+        }
+        let count = a.count
+        var prediction = [Int32](repeating: 0, count: count)
+        var predError  = [Int32](repeating: 0, count: count)
+        var q1 = [Int32](repeating: 0, count: count)
+        var q2 = [Int32](repeating: 0, count: count)
+        var q3 = [Int32](repeating: 0, count: count)
+        for i in 0..<count {
+            let d1 = b[i] - c[i]
+            let d2 = a[i] - c[i]
+            let d3 = c[i] - a[i]
+            q1[i] = quantiseNear(d1)
+            q2[i] = quantiseNear(d2)
+            q3[i] = quantiseNear(d3)
+            let px = medPredict(a[i], b[i], c[i])
+            prediction[i] = px
+            predError[i]  = x[i] - px
+        }
+        return (prediction, predError, q1, q2, q3)
+    }
+
+    /// CPU fallback for the combined decoding reconstruction pipeline.
+    private func computeDecodingPipelineCPU(
+        a: [Int32], b: [Int32], c: [Int32], errval: [Int32]
+    ) -> [Int32] {
+        let count = a.count
+        var reconstructed = [Int32](repeating: 0, count: count)
+        for i in 0..<count {
+            let av = a[i], bv = b[i], cv = c[i]
+            let minAB = min(av, bv)
+            let maxAB = max(av, bv)
+            let px: Int32
+            if cv >= maxAB { px = minAB }
+            else if cv <= minAB { px = maxAB }
+            else { px = av + bv - cv }
+            reconstructed[i] = px + errval[i]
+        }
+        return reconstructed
+    }
+}
+
+// MARK: - Encoding / Decoding Pipeline
+
+extension MetalAccelerator {
+
+    /// Run the combined encoding preprocessing pipeline for a batch of pixels.
+    ///
+    /// Performs gradient computation, NEAR-aware gradient quantisation, MED
+    /// prediction, and prediction-error computation in a single GPU dispatch
+    /// (or CPU fallback for small batches). This replaces three separate
+    /// `computeGradientsBatch` + `computeMEDPredictionBatch` +
+    /// `quantizeGradientsBatch` calls with one, reducing GPU dispatch overhead.
+    ///
+    /// - Parameters:
+    ///   - a: North neighbour pixel values.
+    ///   - b: West neighbour pixel values.
+    ///   - c: Northwest neighbour pixel values.
+    ///   - x: Current pixel values.
+    ///   - near: NEAR parameter (0 = lossless, 1–255 = near-lossless).
+    ///   - t1: Quantisation threshold 1.
+    ///   - t2: Quantisation threshold 2.
+    ///   - t3: Quantisation threshold 3.
+    /// - Returns: A tuple containing MED predictions, raw prediction errors,
+    ///   and quantised gradients (q1, q2, q3).
+    /// - Throws: `MetalAcceleratorError` if GPU operations fail.
+    /// - Precondition: All input arrays must have the same length.
+    public func computeEncodingPipelineBatch(
+        a: [Int32], b: [Int32], c: [Int32], x: [Int32],
+        near: Int32 = 0, t1: Int32, t2: Int32, t3: Int32
+    ) throws -> (prediction: [Int32], predError: [Int32],
+                 q1: [Int32], q2: [Int32], q3: [Int32]) {
+        precondition(
+            a.count == b.count && b.count == c.count && c.count == x.count,
+            "Arrays must have same length")
+        let count = a.count
+        guard count > 0 else { return ([], [], [], [], []) }
+
+        if count < Self.gpuThreshold {
+            return computeEncodingPipelineCPU(
+                a: a, b: b, c: c, x: x, near: near, t1: t1, t2: t2, t3: t3)
+        }
+
+        let aBuffer          = try makeReadBuffer(a)
+        let bBuffer          = try makeReadBuffer(b)
+        let cBuffer          = try makeReadBuffer(c)
+        let xBuffer          = try makeReadBuffer(x)
+        let predBuffer       = try makeWriteBuffer(count: count, type: Int32.self)
+        let predErrorBuffer  = try makeWriteBuffer(count: count, type: Int32.self)
+        let q1Buffer         = try makeWriteBuffer(count: count, type: Int32.self)
+        let q2Buffer         = try makeWriteBuffer(count: count, type: Int32.self)
+        let q3Buffer         = try makeWriteBuffer(count: count, type: Int32.self)
+
+        var elementCount = UInt32(count)
+        var nearVal = near, t1v = t1, t2v = t2, t3v = t3
+        try dispatch1D(pipelineState: encodingPipelineState, count: count) { encoder in
+            encoder.setBuffer(aBuffer,         offset: 0, index: 0)
+            encoder.setBuffer(bBuffer,         offset: 0, index: 1)
+            encoder.setBuffer(cBuffer,         offset: 0, index: 2)
+            encoder.setBuffer(xBuffer,         offset: 0, index: 3)
+            encoder.setBuffer(predBuffer,      offset: 0, index: 4)
+            encoder.setBuffer(predErrorBuffer, offset: 0, index: 5)
+            encoder.setBuffer(q1Buffer,        offset: 0, index: 6)
+            encoder.setBuffer(q2Buffer,        offset: 0, index: 7)
+            encoder.setBuffer(q3Buffer,        offset: 0, index: 8)
+            encoder.setBytes(&elementCount, length: MemoryLayout<UInt32>.size, index: 9)
+            encoder.setBytes(&nearVal, length: MemoryLayout<Int32>.size, index: 10)
+            encoder.setBytes(&t1v,     length: MemoryLayout<Int32>.size, index: 11)
+            encoder.setBytes(&t2v,     length: MemoryLayout<Int32>.size, index: 12)
+            encoder.setBytes(&t3v,     length: MemoryLayout<Int32>.size, index: 13)
+        }
+
+        return (
+            readBuffer(predBuffer,      count: count, type: Int32.self),
+            readBuffer(predErrorBuffer, count: count, type: Int32.self),
+            readBuffer(q1Buffer,        count: count, type: Int32.self),
+            readBuffer(q2Buffer,        count: count, type: Int32.self),
+            readBuffer(q3Buffer,        count: count, type: Int32.self)
+        )
+    }
+
+    /// Run the combined decoding reconstruction pipeline for a batch of pixels.
+    ///
+    /// Given the already-entropy-decoded (and de-mapped) prediction errors and
+    /// the MED neighbours for each pixel, reconstructs the original pixel values
+    /// in a single GPU dispatch (or CPU fallback for small batches).
+    ///
+    /// - Parameters:
+    ///   - a: North neighbour pixel values (already reconstructed).
+    ///   - b: West neighbour pixel values (already reconstructed).
+    ///   - c: Northwest neighbour pixel values (already reconstructed).
+    ///   - errval: Signed prediction errors from the entropy decoder.
+    /// - Returns: Reconstructed pixel values.
+    /// - Throws: `MetalAcceleratorError` if GPU operations fail.
+    /// - Precondition: All input arrays must have the same length.
+    public func computeDecodingPipelineBatch(
+        a: [Int32], b: [Int32], c: [Int32], errval: [Int32]
+    ) throws -> [Int32] {
+        precondition(
+            a.count == b.count && b.count == c.count && c.count == errval.count,
+            "Arrays must have same length")
+        let count = a.count
+        guard count > 0 else { return [] }
+
+        if count < Self.gpuThreshold {
+            return computeDecodingPipelineCPU(a: a, b: b, c: c, errval: errval)
+        }
+
+        let aBuffer            = try makeReadBuffer(a)
+        let bBuffer            = try makeReadBuffer(b)
+        let cBuffer            = try makeReadBuffer(c)
+        let errvalBuffer       = try makeReadBuffer(errval)
+        let reconstructedBuffer = try makeWriteBuffer(count: count, type: Int32.self)
+
+        var elementCount = UInt32(count)
+        try dispatch1D(pipelineState: decodingPipelineState, count: count) { encoder in
+            encoder.setBuffer(aBuffer,             offset: 0, index: 0)
+            encoder.setBuffer(bBuffer,             offset: 0, index: 1)
+            encoder.setBuffer(cBuffer,             offset: 0, index: 2)
+            encoder.setBuffer(errvalBuffer,        offset: 0, index: 3)
+            encoder.setBuffer(reconstructedBuffer, offset: 0, index: 4)
+            encoder.setBytes(&elementCount, length: MemoryLayout<UInt32>.size, index: 5)
+        }
+
+        return readBuffer(reconstructedBuffer, count: count, type: Int32.self)
     }
 }
 

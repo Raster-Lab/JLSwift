@@ -889,8 +889,8 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 
 #### Phase 15.1: Metal GPU Pipeline Enhancement
 - [ ] Profile existing Metal compute shaders on Apple Silicon (M1/M2/M3/M4)
-- [ ] Implement Metal compute shaders for full encoding pipeline (not just gradient/prediction)
-- [ ] Implement Metal compute shaders for full decoding pipeline
+- [x] Implement Metal compute shaders for full encoding pipeline (not just gradient/prediction)
+- [x] Implement Metal compute shaders for full decoding pipeline
 - [x] Implement Metal-accelerated colour space transformation (HP1/HP2/HP3 and inverse)
 - [x] Implement Metal-accelerated batch context state computation (gradient quantisation)
 - [x] Optimise GPU–CPU data transfer using shared memory on Apple Silicon unified memory
@@ -906,9 +906,9 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 - [x] Design Vulkan compute pipeline architecture mirroring the Metal pipeline
 - [x] Implement Vulkan compute shaders for gradient computation and MED prediction
 - [ ] Implement Vulkan compute shaders for encoding and decoding pipelines
-- [ ] Implement Vulkan memory management and buffer allocation
-- [ ] Implement Vulkan command buffer recording and submission
-- [ ] Implement host–device data transfer optimisation
+- [x] Implement Vulkan memory management and buffer allocation
+- [x] Implement Vulkan command buffer recording and submission
+- [x] Implement host–device data transfer optimisation
 - [x] Create Vulkan device selection and capability detection
 - [x] Implement CPU fallback for systems without Vulkan support
 - [x] Keep Vulkan code behind appropriate conditional compilation boundaries
@@ -918,11 +918,11 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 
 #### Phase 15.3: GPU Compute Testing & Validation
 - [x] Create GPU-specific test suite validating bit-exact results across CPU, Metal, and Vulkan
-- [ ] Test GPU pipelines with all image sizes, bit depths, and component configurations
-- [ ] Test GPU pipelines with near-lossless encoding modes
+- [x] Test GPU pipelines with all image sizes, bit depths, and component configurations
+- [x] Test GPU pipelines with near-lossless encoding modes
 - [x] Test graceful fallback behaviour on systems without GPU support
-- [ ] Benchmark GPU vs CPU across representative workloads
-- [ ] Document performance characteristics and recommended usage thresholds
+- [x] Benchmark GPU vs CPU across representative workloads
+- [x] Document performance characteristics and recommended usage thresholds
 
 #### Phase 15 Implementation Notes
 - Added Metal compute shaders for HP1/HP2/HP3 colour transforms (forward and inverse) and gradient quantisation in `JPEGLSShaders.metal`.
@@ -931,6 +931,14 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 - Created `VulkanAccelerator` (CPU-fallback) and `VulkanDevice` (device detection) in `Sources/JPEGLS/Platform/Vulkan/`. GPU execution is gated behind `#if canImport(VulkanSwift)` pending Vulkan SDK integration.
 - Created `GPUComputePhase15Tests.swift` with 22 Vulkan CPU-fallback tests (all platforms) and Metal Phase 15 tests (Apple platforms only, skipped on Linux CI).
 - Updated `METAL_GPU_ACCELERATION.md` and `VULKAN_GPU_ACCELERATION.md` to reflect the new operations and architecture.
+- Added `compute_encoding_pipeline` Metal shader: single-pass gradient computation, NEAR-aware quantisation, MED prediction, and prediction-error computation for a full row of pixels.
+- Added `compute_decoding_pipeline` Metal shader: single-pass reconstruction of pixel values from prediction errors and MED neighbours.
+- Added `computeEncodingPipelineBatch` and `computeDecodingPipelineBatch` methods to `MetalAccelerator` with CPU fallback.
+- Added `VulkanMemory.swift`: `VulkanBuffer` (typed host-accessible buffer) and `VulkanMemoryPool` (pool-based allocator) implementing the Vulkan memory management architecture.
+- Added `VulkanCommandBuffer.swift`: `VulkanCommandBuffer` (command recording with `bindPipeline`, `bindBuffer`, `pushConstants`, `dispatch`) and `VulkanCommandPool` (lifecycle management) implementing the Vulkan command recording architecture.
+- Added `GPUComputePhase15ExtendedTests.swift` with 38 tests covering: all image sizes (1–4× GPU threshold), 8/12/16-bit pixel ranges, greyscale and RGB component configurations, near-lossless mode semantics, and Metal encode→decode round-trip validation.
+- Added `VulkanPerformanceBenchmarks.swift` with CPU-path throughput benchmarks for gradients, MED prediction, gradient quantisation, and colour transforms at multiple image sizes.
+- Added `VulkanMemoryCommandBufferTests.swift` with 32 tests for `VulkanBuffer`, `VulkanMemoryPool`, `VulkanCommandBuffer`, and `VulkanCommandPool`.
 
 ### Milestone 16: Performance Optimisation & Benchmarking 📋
 **Target**: Achieve better-than-CharLS performance across all key metrics  
