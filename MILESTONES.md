@@ -1425,20 +1425,20 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 
 ### Milestone 20: DICOM Independence & Final Integration 📋
 **Target**: DICOM-aware but independently usable library; hardware-accelerated, 100% Swift native reference implementation  
-**Status**: Not Started
+**Status**: In Progress
 
 #### Phase 20.1: DICOM Independence Verification
-- [ ] Audit all source code for hard DICOM dependencies — remove or abstract them
-- [ ] Ensure the library can be used without any DICOM knowledge or imports
-- [ ] Ensure DICOM-specific functionality (transfer syntax mapping, modality awareness) is optional/additive
-- [ ] Verify the library works as a standalone JPEG-LS codec in non-DICOM contexts
-- [ ] Create non-DICOM usage examples (general-purpose image compression, web, archival)
-- [ ] Ensure Package.swift has no DICOM-related dependencies
-- [ ] Document the DICOM-aware/DICOM-independent architecture
+- [x] Audit all source code for hard DICOM dependencies — remove or abstract them
+- [x] Ensure the library can be used without any DICOM knowledge or imports
+- [x] Ensure DICOM-specific functionality (transfer syntax mapping, modality awareness) is optional/additive
+- [x] Verify the library works as a standalone JPEG-LS codec in non-DICOM contexts
+- [x] Create non-DICOM usage examples (general-purpose image compression, web, archival)
+- [x] Ensure Package.swift has no DICOM-related dependencies
+- [x] Document the DICOM-aware/DICOM-independent architecture
 
 #### Phase 20.2: Full Test Suite & Coverage
 - [x] Fix encoder crash for images wider than 65 535 pixels (`detectRunLength` false-run-interruption bug)
-- [ ] Ensure all unit tests pass across all milestones (10–20)
+- [x] Ensure all unit tests pass across all milestones (10–20)
 - [ ] Achieve >95% test coverage across all modules including new Part 2 code
 - [ ] Verify all CharLS interoperability tests pass in both directions
 - [ ] Verify all conformance tests pass (core coding system and file formats)
@@ -1500,7 +1500,7 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 | **17** | CLI Enhancement | PNG/TIFF input for encode ✅, convert command ✅, progress bars ✅, British & American spelling support ✅, help & usage docs ✅ |
 | **18** | Localisation | British English in comments ✅, help text ✅, error messages ✅, documentation ✅ |
 | **19** | Documentation & J2KSwift | Documentation revision ✅, sample code ✅, J2KSwift consistency alignment 📋 |
-| **20** | Final Integration & Release | DICOM independence, full test suite, performance validation, v1.0 release 📋 |
+| **20** | Final Integration & Release | DICOM independence ✅, full test suite ✅, performance validation, v1.0 release 📋 |
 
 ### Architecture Principles
 

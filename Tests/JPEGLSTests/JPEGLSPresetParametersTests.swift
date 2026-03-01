@@ -10,10 +10,14 @@ struct JPEGLSPresetParametersTests {
     func testDefault8Bit() throws {
         let params = try JPEGLSPresetParameters.defaultParameters(bitsPerSample: 8)
         
+        // Per ITU-T.87 Table C.2: factor = floor((255+128)/256) = 1
+        // T1 = CLAMP(factor*(3-2)+2, 1, 255) = CLAMP(3, 1, 255) = 3
+        // T2 = CLAMP(factor*(7-3)+3, T1, 255) = CLAMP(7, 3, 255) = 7
+        // T3 = CLAMP(factor*(21-4)+4, T2, 255) = CLAMP(21, 7, 255) = 21
         #expect(params.maxValue == 255)
-        #expect(params.threshold1 == 2)  // max(2, (255 + 128) / 256) = max(2, 1) = 2
-        #expect(params.threshold2 == 3)  // max(3, (255 + 64) / 128) = max(3, 2) = 3
-        #expect(params.threshold3 == 4)  // max(4, (255 + 42) / 85) = max(4, 3) = 4
+        #expect(params.threshold1 == 3)
+        #expect(params.threshold2 == 7)
+        #expect(params.threshold3 == 21)
         #expect(params.reset == 64)
         #expect(params.isDefault(forBitsPerSample: 8))
     }
@@ -22,10 +26,14 @@ struct JPEGLSPresetParametersTests {
     func testDefault12Bit() throws {
         let params = try JPEGLSPresetParameters.defaultParameters(bitsPerSample: 12)
         
+        // Per ITU-T.87 Table C.2: factor = floor((4095+128)/256) = 16
+        // T1 = CLAMP(16*(3-2)+2, 1, 4095) = CLAMP(18, 1, 4095) = 18
+        // T2 = CLAMP(16*(7-3)+3, T1, 4095) = CLAMP(67, 18, 4095) = 67
+        // T3 = CLAMP(16*(21-4)+4, T2, 4095) = CLAMP(276, 67, 4095) = 276
         #expect(params.maxValue == 4095)
-        #expect(params.threshold1 == 16)  // max(2, (4095 + 128) / 256) = max(2, 16) = 16
-        #expect(params.threshold2 == 32)  // max(3, (4095 + 64) / 128) = max(3, 32) = 32
-        #expect(params.threshold3 == 48)  // max(4, (4095 + 42) / 85) = max(4, 48) = 48
+        #expect(params.threshold1 == 18)
+        #expect(params.threshold2 == 67)
+        #expect(params.threshold3 == 276)
         #expect(params.reset == 64)
         #expect(params.isDefault(forBitsPerSample: 12))
     }

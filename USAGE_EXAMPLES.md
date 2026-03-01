@@ -30,6 +30,10 @@ Comprehensive real-world examples demonstrating how to use JLSwift for JPEG-LS c
   - [File Analysis and Inspection](#file-analysis-and-inspection)
   - [Batch Verification](#batch-verification)
   - [Scripting and Automation](#scripting-and-automation)
+- [Non-DICOM Usage Examples](#non-dicom-usage-examples)
+  - [General-Purpose Image Compression](#general-purpose-image-compression)
+  - [Web Asset Compression](#web-asset-compression)
+  - [Archival Storage](#archival-storage)
 
 ## Basic Examples
 
@@ -1420,6 +1424,127 @@ else
     echo "✗ Verification failed" | tee -a "$LOG_FILE"
     exit 1
 fi
+```
+
+## Non-DICOM Usage Examples
+
+JLSwift is a general-purpose JPEG-LS codec with no DICOM dependencies. It can be used in any
+context where lossless or near-lossless compression of continuous-tone images is needed — no
+knowledge of DICOM is required.
+
+### General-Purpose Image Compression
+
+Compress any greyscale or colour image using JPEG-LS — suitable for scientific imaging,
+photography, or any application that needs lossless compression:
+
+```swift
+import JPEGLS
+
+/// Compress raw pixel data to JPEG-LS bytes.
+///
+/// - Parameters:
+///   - pixels: Row-major pixel values (one element per pixel).
+///   - width: Image width in pixels.
+///   - height: Image height in pixels.
+///   - bitsPerSample: Bit depth (2–16).
+/// - Returns: Compressed JPEG-LS byte stream.
+func compressImage(pixels: [[Int]], width: Int, height: Int, bitsPerSample: Int) throws -> [UInt8] {
+    let config = try JPEGLSEncoder.Configuration(
+        width: width,
+        height: height,
+        bitsPerSample: bitsPerSample,
+        componentCount: 1
+    )
+    let encoder = JPEGLSEncoder(configuration: config)
+    return try encoder.encode(components: [pixels])
+}
+
+/// Decompress JPEG-LS bytes back to raw pixels.
+func decompressImage(data: [UInt8]) throws -> (pixels: [[Int]], width: Int, height: Int) {
+    let decoder = JPEGLSDecoder()
+    let result = try decoder.decode(data)
+    let frame = result.frameHeader
+    return (result.components[0], frame.width, frame.height)
+}
+
+// Round-trip example
+let width = 512, height = 512
+var pixels = [[Int]](repeating: [Int](repeating: 0, count: width), count: height)
+for y in 0..<height {
+    for x in 0..<width {
+        pixels[y][x] = (x ^ y) & 0xFF  // synthetic test pattern
+    }
+}
+
+let compressed = try compressImage(pixels: pixels, width: width, height: height, bitsPerSample: 8)
+let (restored, w, h) = try decompressImage(data: compressed)
+print("Compressed \(width)×\(height) to \(compressed.count) bytes (ratio: \(String(format: "%.2f", Double(width * height) / Double(compressed.count)))×)")
+```
+
+### Web Asset Compression
+
+Use JPEG-LS as a lossless intermediate format for high-quality web assets before final
+conversion. This preserves full fidelity for assets that require repeated editing:
+
+```swift
+import JPEGLS
+
+/// Archive lossless JPEG-LS from a 3-component (RGB) image.
+func archiveRGBImage(r: [[Int]], g: [[Int]], b: [[Int]], width: Int, height: Int) throws -> [UInt8] {
+    let config = try JPEGLSEncoder.Configuration(
+        width: width,
+        height: height,
+        bitsPerSample: 8,
+        componentCount: 3,
+        interleaveMode: .sample
+    )
+    let encoder = JPEGLSEncoder(configuration: config)
+    return try encoder.encode(components: [r, g, b])
+}
+
+/// Restore RGB planes from a JPEG-LS byte stream.
+func restoreRGBImage(data: [UInt8]) throws -> (r: [[Int]], g: [[Int]], b: [[Int]]) {
+    let decoder = JPEGLSDecoder()
+    let result = try decoder.decode(data)
+    return (result.components[0], result.components[1], result.components[2])
+}
+```
+
+### Archival Storage
+
+Store scientific or sensor data using near-lossless compression to reduce file size while
+keeping per-pixel error below a specified bound. This is useful for remote sensing,
+astronomy, or instrument data where slight numerical tolerance is acceptable:
+
+```swift
+import JPEGLS
+
+/// Compress 16-bit sensor data with a defined per-pixel error tolerance.
+///
+/// - Parameters:
+///   - data: 2-D array of 16-bit sample values.
+///   - width: Image width.
+///   - height: Image height.
+///   - tolerance: Maximum allowed reconstruction error per pixel (NEAR parameter).
+/// - Returns: Compressed byte stream.
+func archiveSensorData(data: [[Int]], width: Int, height: Int, tolerance: Int) throws -> [UInt8] {
+    let config = try JPEGLSEncoder.Configuration(
+        width: width,
+        height: height,
+        bitsPerSample: 16,
+        componentCount: 1,
+        near: tolerance
+    )
+    let encoder = JPEGLSEncoder(configuration: config)
+    return try encoder.encode(components: [data])
+}
+
+// Example: compress 4 Mpixel 16-bit instrument frame with tolerance ≤ 4 DN
+let frameWidth = 2048, frameHeight = 2048
+// ... populate sensorFrame: [[Int]] with actual instrument data ...
+// let compressed = try archiveSensorData(data: sensorFrame, width: frameWidth,
+//                                        height: frameHeight, tolerance: 4)
+// print("Archive size: \(compressed.count) bytes")
 ```
 
 ## Next Steps
