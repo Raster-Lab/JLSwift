@@ -21,6 +21,7 @@ Comprehensive real-world examples demonstrating how to use JLSwift for JPEG-LS c
   - [Using Buffer Pooling](#using-buffer-pooling)
   - [Cache-Friendly Data Layout](#cache-friendly-data-layout)
   - [Platform-Specific Acceleration](#platform-specific-acceleration)
+  - [GPU-Accelerated Processing on Apple Silicon](#gpu-accelerated-processing-on-apple-silicon)
   - [Memory-Efficient Streaming](#memory-efficient-streaming)
 - [Error Handling Examples](#error-handling-examples)
   - [Robust File Processing](#robust-file-processing)
@@ -885,6 +886,100 @@ func demonstratePlatformAcceleration() {
 
 demonstratePlatformAcceleration()
 ```
+
+### GPU-Accelerated Processing on Apple Silicon
+
+Use Metal compute shaders on Apple Silicon (and other Metal-capable devices) to GPU-accelerate
+the per-pixel encoding and decoding preprocessing steps. `MetalAccelerator` automatically falls
+back to CPU for small batches where GPU dispatch overhead would outweigh the benefit.
+
+```swift
+#if canImport(Metal)
+import JPEGLS
+
+/// Demonstrates GPU-accelerated batch gradient computation and MED prediction
+/// using the Metal backend on Apple Silicon.
+func demonstrateMetalAcceleration() throws {
+    guard MetalAccelerator.isSupported else {
+        print("Metal is not available on this device — skipping GPU example")
+        return
+    }
+
+    let accelerator = try MetalAccelerator()
+
+    // ----------------------------------------------------------------
+    // 1. GPU-accelerated gradient computation for a large row of pixels
+    // ----------------------------------------------------------------
+    let pixelCount = 2048  // must exceed MetalAccelerator.gpuThreshold (1 024) to use GPU
+    let a = (0..<pixelCount).map { Int32($0 % 256) }        // north neighbours
+    let b = (0..<pixelCount).map { Int32(($0 + 10) % 256) } // west neighbours
+    let c = (0..<pixelCount).map { Int32(($0 + 5) % 256) }  // northwest neighbours
+
+    let (d1, d2, d3) = try accelerator.computeGradientsBatch(a: a, b: b, c: c)
+    print("GPU gradients (first pixel): D1=\(d1[0]), D2=\(d2[0]), D3=\(d3[0])")
+
+    // ----------------------------------------------------------------
+    // 2. GPU-accelerated MED prediction
+    // ----------------------------------------------------------------
+    let predictions = try accelerator.computeMEDPredictionBatch(a: a, b: b, c: c)
+    print("GPU MED prediction (first pixel): \(predictions[0])")
+
+    // ----------------------------------------------------------------
+    // 3. Combined encoding pipeline — gradient computation, quantisation,
+    //    MED prediction, and prediction-error computation in one dispatch
+    // ----------------------------------------------------------------
+    let x = (0..<pixelCount).map { Int32(($0 + 8) % 256) }  // current pixel row
+    let (preds, predErrors, q1, q2, q3) = try accelerator.computeEncodingPipelineBatch(
+        a: a, b: b, c: c, x: x,
+        near: 0,   // lossless
+        t1: 3, t2: 7, t3: 21
+    )
+    print("GPU encoding pipeline (first pixel): pred=\(preds[0]), err=\(predErrors[0])")
+    print("  quantised gradients: q1=\(q1[0]), q2=\(q2[0]), q3=\(q3[0])")
+
+    // ----------------------------------------------------------------
+    // 4. Combined decoding pipeline — MED prediction + error reconstruction
+    //    in one dispatch (mirrors step 3 in reverse)
+    // ----------------------------------------------------------------
+    let reconstructed = try accelerator.computeDecodingPipelineBatch(
+        a: a, b: b, c: c, errval: predErrors
+    )
+    print("GPU decoding pipeline (first pixel): reconstructed=\(reconstructed[0])")
+
+    // Verify lossless round-trip: reconstructed must exactly match the original pixels
+    let allMatch = zip(x, reconstructed).allSatisfy { $0 == $1 }
+    print("Lossless round-trip verified: \(allMatch)")
+
+    // ----------------------------------------------------------------
+    // 5. GPU-accelerated HP2 colour-space transformation (forward + inverse)
+    // ----------------------------------------------------------------
+    let r = (0..<pixelCount).map { Int32($0 % 200) }
+    let g = (0..<pixelCount).map { Int32(($0 + 50) % 200) }
+    let bComp = (0..<pixelCount).map { Int32(($0 + 100) % 200) }
+
+    let (rFwd, gFwd, bFwd) = try accelerator.applyColourTransformForwardBatch(
+        transform: .hp2, r: r, g: g, b: bComp)
+    print("GPU HP2 forward (first pixel): R'=\(rFwd[0]), G'=\(gFwd[0]), B'=\(bFwd[0])")
+
+    let (rInv, gInv, bInv) = try accelerator.applyColourTransformInverseBatch(
+        transform: .hp2, r: rFwd, g: gFwd, b: bFwd)
+    let colourMatch = zip(r, rInv).allSatisfy { $0 == $1 }
+                   && zip(g, gInv).allSatisfy { $0 == $1 }
+                   && zip(bComp, bInv).allSatisfy { $0 == $1 }
+    print("HP2 colour-transform round-trip verified: \(colourMatch)")
+}
+
+try demonstrateMetalAcceleration()
+#endif
+```
+
+**Notes on GPU threshold**: `MetalAccelerator.gpuThreshold` (default: 1 024 pixels) is the
+crossover point below which CPU execution is faster due to GPU dispatch overhead. For typical
+medical images (512×512 and above) the GPU path is always taken. For small test images, the
+CPU fallback is used transparently — callers do not need to choose.
+
+See [METAL_GPU_ACCELERATION.md](METAL_GPU_ACCELERATION.md) for a full description of the Metal
+pipeline architecture, shader details, and performance benchmarks.
 
 ### Memory-Efficient Streaming
 
