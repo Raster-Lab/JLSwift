@@ -36,6 +36,41 @@ Platform/Metal/
 | `compute_colour_transform_hp2_inverse` | HP2 inverse colour transform |
 | `compute_colour_transform_hp3_forward` | HP3 forward colour transform |
 | `compute_colour_transform_hp3_inverse` | HP3 inverse colour transform |
+| `compute_encoding_pipeline` | **Full encoding preprocessing**: gradients + NEAR-aware quantisation + MED prediction + prediction error — single pass |
+| `compute_decoding_pipeline` | **Full decoding reconstruction**: MED prediction + pixel reconstruction from entropy-decoded errors — single pass |
+
+### Encoding Pipeline Shader
+
+The `compute_encoding_pipeline` shader combines four operations into a single GPU dispatch:
+1. Compute gradients D1, D2, D3 from neighbours (a=north, b=west, c=northwest)
+2. Quantise gradients using NEAR-aware thresholds (supports both lossless and near-lossless)
+3. Compute MED prediction from the same neighbours
+4. Compute raw prediction error = pixel − prediction
+
+This eliminates three separate dispatch calls, reducing GPU overhead for the hot encoding path:
+
+```swift
+// Old: three separate dispatches
+let (d1, d2, d3) = try acc.computeGradientsBatch(a: a, b: b, c: c)
+let (q1, q2, q3) = try acc.quantizeGradientsBatch(d1: d1, d2: d2, d3: d3, t1: 3, t2: 7, t3: 21)
+let predictions  = try acc.computeMEDPredictionBatch(a: a, b: b, c: c)
+
+// New: single dispatch
+let (pred, err, q1, q2, q3) = try acc.computeEncodingPipelineBatch(
+    a: a, b: b, c: c, x: currentPixels, near: 0, t1: 3, t2: 7, t3: 21)
+```
+
+### Decoding Pipeline Shader
+
+The `compute_decoding_pipeline` shader reconstructs pixel values from the entropy-decoded
+prediction errors. The CPU entropy decoder (Golomb-Rice) provides the errors; the GPU
+handles the MED prediction and reconstruction for the entire row:
+
+```swift
+// Reconstruct pixels after Golomb-Rice decoding on CPU
+let reconstructed = try acc.computeDecodingPipelineBatch(
+    a: northPixels, b: westPixels, c: nwPixels, errval: entropyDecodedErrors)
+```
 
 ## GPU vs CPU Decision
 
