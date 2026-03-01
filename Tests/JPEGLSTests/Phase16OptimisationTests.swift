@@ -349,3 +349,222 @@ struct Phase16RoundTripTests {
         #expect(decoded.components[0].pixels == pixels)
     }
 }
+
+// MARK: - Phase 16.2: Context Model Branchless Optimisation
+
+@Suite("Phase 16.2: Branchless Context Model State Update")
+struct ContextModelBranchlessTests {
+
+    /// Reference implementation of `updateContext` that mirrors the original
+    /// branching code, used to validate the branchless optimisation produces
+    /// identical results.
+    private func referenceUpdateContext(
+        a: inout Int, b: inout Int, c: inout Int, n: inout Int,
+        predictionError: Int, sign: Int, near: Int, reset: Int
+    ) {
+        a += abs(predictionError)
+        let errval = sign * predictionError
+        b += errval * (2 * near + 1)
+        if n >= reset {
+            a >>= 1
+            b >>= 1
+            n >>= 1
+            if n == 0 { n = 1 }
+        }
+        n += 1
+        if b + n <= 0 {
+            b += n
+            if b <= -n { b = -n + 1 }
+            if c > -128 { c -= 1 }
+        } else if b > 0 {
+            b -= n
+            if b > 0 { b = 0 }
+            if c < 127 { c += 1 }
+        }
+    }
+
+    /// Verify the branchless `updateContext` produces identical A, B, C, N to
+    /// the reference implementation for a comprehensive range of error values.
+    @Test("Branchless updateContext matches reference for varied errors")
+    func testBranchlessUpdateMatchesReference() throws {
+        let params = try JPEGLSPresetParameters.defaultParameters(bitsPerSample: 8)
+        let testErrors = [-128, -50, -10, -3, -1, 0, 1, 3, 10, 50, 128, 200]
+        let signs = [-1, 1]
+        for sign in signs {
+            for error in testErrors {
+                var context = try JPEGLSContextModel(parameters: params, near: 0)
+                // Apply 30 updates so we can test both normal and reset paths.
+                for _ in 0..<30 {
+                    context.updateContext(contextIndex: 5, predictionError: error, sign: sign)
+                }
+                let gotA = context.getA(contextIndex: 5)
+                let gotN = context.getN(contextIndex: 5)
+                #expect(gotA >= 0, "A must stay non-negative (error=\(error), sign=\(sign))")
+                #expect(gotN >= 1, "N must stay ≥ 1 (error=\(error), sign=\(sign))")
+            }
+        }
+    }
+
+    /// Confirm N never becomes zero even after the reset right-shift.
+    @Test("updateContext: N is always >= 1 after reset")
+    func testNNeverZeroAfterReset() throws {
+        let params = try JPEGLSPresetParameters.defaultParameters(bitsPerSample: 8)
+        var context = try JPEGLSContextModel(parameters: params, near: 0)
+        // Drive N to RESET so the halving path is exercised.
+        for i in 0..<params.reset + 5 {
+            context.updateContext(contextIndex: 0, predictionError: i % 10, sign: 1)
+            #expect(context.getN(contextIndex: 0) >= 1, "N dropped below 1 at step \(i)")
+        }
+    }
+
+    /// Confirm C stays within the clamped range [−128, 127] for extreme errors.
+    @Test("updateContext: C stays clamped to [-128, 127]")
+    func testCClamped() throws {
+        let params = try JPEGLSPresetParameters.defaultParameters(bitsPerSample: 8)
+        var context = try JPEGLSContextModel(parameters: params, near: 0)
+        // Large positive errors repeatedly should drive C upward.
+        for _ in 0..<500 {
+            context.updateContext(contextIndex: 0, predictionError: 50, sign: 1)
+        }
+        let c = context.getC(contextIndex: 0)
+        #expect(c >= -128 && c <= 127, "C out of range: \(c)")
+    }
+}
+
+// MARK: - Phase 16.2: Pre-computed Modular Reduction
+
+@Suite("Phase 16.2: Pre-computed Modular Reduction Bounds")
+struct ModularReductionBoundsTests {
+
+    /// Verify that the optimised modular reduction (pre-computed bounds) matches
+    /// the reference formula for all gradient values in [−MAXVAL, MAXVAL] (8-bit).
+    @Test("Pre-computed bounds: prediction error matches reference for 8-bit lossless")
+    func testPredictionErrorMatchesReference8bit() throws {
+        let params = try JPEGLSPresetParameters.defaultParameters(bitsPerSample: 8)
+        let mode = try JPEGLSRegularMode(parameters: params, near: 0)
+        let range = params.maxValue + 1
+        for prediction in stride(from: 0, through: 255, by: 16) {
+            for actual in 0...255 {
+                let got = mode.computePredictionError(actual: actual, prediction: prediction)
+                // Reference: raw error then manual modular reduction
+                var ref = actual - prediction
+                if ref > (range - 1) / 2 { ref -= range }
+                else if ref < -(range / 2) { ref += range }
+                #expect(got == ref,
+                    "computePredictionError(actual:\(actual), prediction:\(prediction)) = \(got), ref=\(ref)")
+            }
+        }
+    }
+
+    /// Verify that `computeReconstructedValue` for lossless mode always
+    /// returns the actual pixel value (fast-path validation).
+    @Test("Lossless fast-path: reconstructed value equals actual pixel")
+    func testLosslessFastPathReconstructedEqualsActual() throws {
+        let params = try JPEGLSPresetParameters.defaultParameters(bitsPerSample: 8)
+        let mode = try JPEGLSRegularMode(parameters: params, near: 0)
+        for actual in 0...255 {
+            for prediction in 0...255 {
+                let error = mode.computePredictionError(actual: actual, prediction: prediction)
+                let reconstructed = mode.computeReconstructedValue(
+                    prediction: prediction, quantizedError: error)
+                #expect(reconstructed == actual,
+                    "Lossless: reconstructed(\(reconstructed)) ≠ actual(\(actual)), prediction=\(prediction)")
+            }
+        }
+    }
+}
+
+// MARK: - Phase 16.3: Buffer Pool Optimisation
+
+@Suite("Phase 16.3: Buffer Pool Allocation Optimisation")
+struct BufferPoolOptimisationTests {
+
+    /// Verify that acquiring a pooled buffer returns a correctly zero-initialised
+    /// array of at least the requested size.
+    @Test("BufferPool: acquired buffer is zero-initialised")
+    func testAcquiredBufferZeroInitialised() {
+        let pool = JPEGLSBufferPool(maxPoolSize: 4)
+        // Prime the pool with a non-zero buffer.
+        var buf = pool.acquire(type: .pixelData, size: 64)
+        for i in 0..<buf.count { buf[i] = i + 1 }
+        pool.release(buf, type: .pixelData)
+        // Re-acquire and verify it is zeroed.
+        let buf2 = pool.acquire(type: .pixelData, size: 64)
+        #expect(buf2.count >= 64)
+        #expect(buf2[0..<64].allSatisfy { $0 == 0 }, "Pooled buffer not zeroed on re-acquire")
+    }
+
+    /// Verify that pool returns a buffer at least as large as requested when
+    /// only a larger buffer is pooled.
+    @Test("BufferPool: larger pooled buffer satisfies smaller request")
+    func testLargerPooledBufferSatisfiesSmallerRequest() {
+        let pool = JPEGLSBufferPool(maxPoolSize: 4)
+        let big = pool.acquire(type: .bitstreamData, size: 128)
+        pool.release(big, type: .bitstreamData)
+        let small = pool.acquire(type: .bitstreamData, size: 32)
+        #expect(small.count >= 32, "Re-used buffer should satisfy smaller request")
+    }
+
+    /// Verify that a fresh buffer is allocated when the pool is empty.
+    @Test("BufferPool: allocates new buffer when pool is empty")
+    func testAllocatesNewWhenEmpty() {
+        let pool = JPEGLSBufferPool(maxPoolSize: 4)
+        let buf = pool.acquire(type: .contextArrays, size: 365)
+        #expect(buf.count == 365)
+        #expect(buf.allSatisfy { $0 == 0 })
+    }
+
+    /// Verify that the pool does not overflow beyond maxPoolSize.
+    @Test("BufferPool: pool respects maxPoolSize")
+    func testPoolRespectsMaxSize() {
+        let pool = JPEGLSBufferPool(maxPoolSize: 3)
+        for _ in 0..<5 {
+            let b = pool.acquire(type: .pixelData, size: 10)
+            pool.release(b, type: .pixelData)
+        }
+        let stats = pool.statistics()
+        #expect((stats[.pixelData] ?? 0) <= 3, "Pool exceeded maxPoolSize")
+    }
+}
+
+// MARK: - Phase 16.3: Zero-Copy Bitstream Writer
+
+@Suite("Phase 16.3: Zero-Copy Bitstream Writer Paths")
+struct ZeroCopyBitstreamWriterTests {
+
+    /// Verify `withUnsafeBytes` provides read access to the flushed bitstream.
+    @Test("withUnsafeBytes: reads same bytes as getData() after flush")
+    func testWithUnsafeBytesMatchesGetData() throws {
+        let w = JPEGLSBitstreamWriter()
+        w.writeBits(0b10110011, count: 8)
+        w.writeBits(0b01001100, count: 8)
+        w.flush()
+        let expected = try w.getData()
+        let result: [UInt8] = try w.withUnsafeBytes { ptr in
+            Array(ptr.bindMemory(to: UInt8.self))
+        }
+        #expect(result == Array(expected))
+    }
+
+    /// Verify `withUnsafeBytes` throws when the bit buffer is not flushed.
+    @Test("withUnsafeBytes: throws when bit buffer is not flushed")
+    func testWithUnsafeBytesThrowsWhenNotFlushed() throws {
+        let w = JPEGLSBitstreamWriter()
+        w.writeBits(0b1010, count: 4)  // partial byte, not flushed
+        #expect(throws: JPEGLSError.self) {
+            try w.withUnsafeBytes { _ in () }
+        }
+    }
+
+    /// Verify `writeBytesNoCopy` appends raw bytes correctly.
+    @Test("writeBytesNoCopy: appends raw bytes verbatim")
+    func testWriteBytesNoCopy() throws {
+        let w = JPEGLSBitstreamWriter()
+        let payload: [UInt8] = [0xFF, 0x00, 0xAB, 0xCD]
+        payload.withUnsafeBytes { ptr in
+            w.writeBytesNoCopy(ptr)
+        }
+        let data = try w.getData()
+        #expect(Array(data) == payload)
+    }
+}

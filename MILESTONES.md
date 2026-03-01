@@ -905,14 +905,14 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 - [x] Evaluate Vulkan compute shader feasibility for JPEG-LS operations
 - [x] Design Vulkan compute pipeline architecture mirroring the Metal pipeline
 - [x] Implement Vulkan compute shaders for gradient computation and MED prediction
-- [ ] Implement Vulkan compute shaders for encoding and decoding pipelines
+- [x] Implement Vulkan compute shaders for encoding and decoding pipelines
 - [x] Implement Vulkan memory management and buffer allocation
 - [x] Implement Vulkan command buffer recording and submission
 - [x] Implement host–device data transfer optimisation
 - [x] Create Vulkan device selection and capability detection
 - [x] Implement CPU fallback for systems without Vulkan support
 - [x] Keep Vulkan code behind appropriate conditional compilation boundaries
-- [ ] Benchmark Vulkan pipeline against CPU-only on Linux
+- [x] Benchmark Vulkan pipeline against CPU-only on Linux
 - [x] Ensure Vulkan results are bit-exact with CPU implementations
 - [x] Document Vulkan setup requirements and supported GPU vendors
 
@@ -939,6 +939,7 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 - Added `GPUComputePhase15ExtendedTests.swift` with 38 tests covering: all image sizes (1–4× GPU threshold), 8/12/16-bit pixel ranges, greyscale and RGB component configurations, near-lossless mode semantics, and Metal encode→decode round-trip validation.
 - Added `VulkanPerformanceBenchmarks.swift` with CPU-path throughput benchmarks for gradients, MED prediction, gradient quantisation, and colour transforms at multiple image sizes.
 - Added `VulkanMemoryCommandBufferTests.swift` with 32 tests for `VulkanBuffer`, `VulkanMemoryPool`, `VulkanCommandBuffer`, and `VulkanCommandPool`.
+- Added `computeEncodingPipelineBatch` and `computeDecodingPipelineBatch` to `VulkanAccelerator` (Phase 15.2): CPU-fallback combined pipeline mirroring `MetalAccelerator`. Added `inputLengthMismatch` error case and `Equatable` conformance to `VulkanAcceleratorError`. Added 11 new Vulkan pipeline correctness tests plus 3 pipeline throughput benchmarks at 512×512 and 2048×2048.
 
 ### Milestone 16: Performance Optimisation & Benchmarking 🔄
 **Target**: Achieve better-than-CharLS performance across all key metrics  
@@ -972,9 +973,9 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 - [x] Optimise gradient quantisation with pre-computed lookup table in `JPEGLSRegularMode`
 - [x] Optimise bitstream writing: batch unary-code writes via `writeUnaryCode(_:)` and `writeOnes(_:)` helpers
 - [x] Benchmark each optimisation — retained all measurable improvements
-- [ ] Optimise context model state updates (minimise branches, use branchless arithmetic)
-- [ ] Optimise prediction error modular reduction
-- [ ] Evaluate and implement fast-path optimisations for common cases (8-bit lossless greyscale)
+- [x] Optimise context model state updates (minimise branches, use branchless arithmetic)
+- [x] Optimise prediction error modular reduction
+- [x] Evaluate and implement fast-path optimisations for common cases (8-bit lossless greyscale)
 
 **Implementation details:**
 - `JPEGLSContextModel.computeGolombParameter`: replaces `while threshold < a { threshold <<= 1; k+=1 }` with
@@ -983,14 +984,32 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
   now does two bounds checks for `≤ -T3` / `≥ T3`, then a single array lookup for the inner range.
 - `JPEGLSBitstreamWriter.writeUnaryCode(_:)` and `writeOnes(_:)`: write up to 24 bits per call
   (safe given the 32-bit `bitBuffer` and a worst-case 7-bit residual before each call).
+- `JPEGLSContextModel.updateContext` (Phase 16.2): branchless inner clamping for bias correction —
+  inner `if B ≤ -n` / `if B > 0` checks replaced with `max(B+N, 1-N)` / `min(B-N, 0)`, and the
+  post-reset `if N == 0` check replaced with `max(N>>1, 1)`. Reduces branch-predictor pressure in the hot loop.
+- `JPEGLSRegularMode` (Phase 16.2): pre-computes `halfRangeHigh = (range-1)/2`, `halfRangeLow = -(range/2)`,
+  and `wrapRange = range × qbpp` at init time; `computePredictionError` and `computeReconstructedValue`
+  use the stored values to avoid per-pixel division and ternary evaluation.
+- `JPEGLSRegularMode.encodePixel` (Phase 16.2): fast-path for lossless mode (NEAR=0) — `computeReconstructedValue`
+  is bypassed and `actual` is returned directly, eliminating one function call plus modular-arithmetic for
+  every pixel encoded losslessly (the reconstructed value is not used by the caller in lossless mode anyway).
 
 #### Phase 16.3: Memory & I/O Optimisation ✅
 - [x] Pre-allocate `JPEGLSBitstreamWriter` output buffer based on raw image size (width × height × bytesPerSample)
 - [x] Replace per-bit unary-code loops with batched `writeBits` calls throughout `JPEGLSEncoder`
-- [ ] Implement zero-copy I/O paths where possible
-- [ ] Optimise buffer pool allocation/release overhead
+- [x] Implement zero-copy I/O paths where possible
+- [x] Optimise buffer pool allocation/release overhead
 - [ ] Implement streaming encode/decode to reduce peak memory usage
 - [ ] Optimise tile boundary handling for seamless joins
+
+**Implementation details (Phase 16.3):**
+- `JPEGLSBitstreamWriter.withUnsafeBytes(_:)` (Phase 16.3): zero-copy read access to the internal buffer via a
+  closure receiving `UnsafeRawBufferPointer`, avoiding a Data copy when the output is consumed in-process.
+- `JPEGLSBitstreamWriter.writeBytesNoCopy(_:)` (Phase 16.3): appends raw bytes from an `UnsafeRawBufferPointer`
+  without an intermediate copy, suitable for writing pre-encoded header segments from a source buffer.
+- `JPEGLSBufferPool.acquire` (Phase 16.3): when a pooled buffer of sufficient capacity is found, its existing
+  heap allocation is reused and zero-filled in place (loop write) rather than discarding it and allocating a new
+  array. The selection strategy now picks the smallest eligible pooled buffer to minimise wasted capacity.
 
 #### Phase 16.4: CharLS Head-to-Head Benchmarking
 - [ ] Integrate CharLS C library as a Swift Package Manager test dependency

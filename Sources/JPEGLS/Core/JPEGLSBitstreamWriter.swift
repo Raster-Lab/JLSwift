@@ -34,7 +34,30 @@ public final class JPEGLSBitstreamWriter {
         }
         return data
     }
-    
+
+    /// Access the accumulated data without copying via a closure.
+    ///
+    /// This zero-copy path lets callers read the bitstream bytes directly
+    /// from the internal buffer, avoiding the allocation that `getData()` would
+    /// require when the result is immediately consumed (e.g. written to a file or
+    /// passed to a downstream decoder in the same process).
+    ///
+    /// - Important: The bit buffer must be fully flushed before calling this
+    ///   method, otherwise `JPEGLSError.internalError` is thrown.
+    /// - Parameter body: A closure that receives a `UnsafeRawBufferPointer` to the
+    ///   internal byte buffer.  The pointer is only valid for the duration of the
+    ///   closure; do not store it.
+    /// - Returns: The value returned by `body`.
+    /// - Throws: `JPEGLSError.internalError` if the bit buffer is not flushed.
+    public func withUnsafeBytes<R>(_ body: (UnsafeRawBufferPointer) throws -> R) throws -> R {
+        guard bitsInBuffer == 0 else {
+            throw JPEGLSError.internalError(
+                reason: "Bit buffer not flushed, \(bitsInBuffer) bits remaining"
+            )
+        }
+        return try data.withUnsafeBytes(body)
+    }
+
     /// Current write position in bytes
     public var currentPosition: Int {
         return data.count
@@ -55,6 +78,15 @@ public final class JPEGLSBitstreamWriter {
     /// - Parameter bytes: The bytes to write
     public func writeBytes(_ bytes: Data) {
         data.append(contentsOf: bytes)
+    }
+    
+    /// Write bytes from a raw buffer pointer without copying, for
+    /// zero-copy bulk transfer of pre-encoded data.
+    ///
+    /// - Parameter buffer: Raw buffer whose bytes are appended verbatim.
+    ///   No JPEG-LS bit-stuffing is applied; use only for pre-encoded data.
+    public func writeBytesNoCopy(_ buffer: UnsafeRawBufferPointer) {
+        data.append(contentsOf: buffer)
     }
     
     /// Write a 16-bit big-endian value

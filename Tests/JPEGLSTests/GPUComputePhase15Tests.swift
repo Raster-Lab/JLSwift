@@ -239,6 +239,177 @@ struct VulkanAcceleratorTests {
         #expect(rp == r && gp == g && bp == b)
     }
 
+    // MARK: Encoding pipeline
+
+    @Test("Vulkan: computeEncodingPipelineBatch — lossless prediction+error=x")
+    func testEncodingPipelineLossless() throws {
+        let a: [Int32] = [100, 200, 50]
+        let b: [Int32] = [110, 190, 60]
+        let c: [Int32] = [ 95, 195, 55]
+        let x: [Int32] = [105, 185, 65]
+        let (pred, err, _, _, _) = try accelerator.computeEncodingPipelineBatch(
+            a: a, b: b, c: c, x: x, near: 0, t1: 3, t2: 7, t3: 21)
+        for i in 0..<x.count {
+            #expect(pred[i] + err[i] == x[i],
+                "Pixel \(i): pred(\(pred[i])) + err(\(err[i])) should == x(\(x[i]))")
+        }
+    }
+
+    @Test("Vulkan: computeEncodingPipelineBatch — quantised gradients in [-4,4]")
+    func testEncodingPipelineGradientRange() throws {
+        let count = 16
+        var a = [Int32](repeating: 0, count: count)
+        var b = [Int32](repeating: 0, count: count)
+        var c = [Int32](repeating: 0, count: count)
+        var x = [Int32](repeating: 0, count: count)
+        for i in 0..<count {
+            a[i] = Int32(i * 10)
+            b[i] = Int32((i + 3) * 10)
+            c[i] = Int32((i + 1) * 10)
+            x[i] = Int32((i + 2) * 10)
+        }
+        let (_, _, q1, q2, q3) = try accelerator.computeEncodingPipelineBatch(
+            a: a, b: b, c: c, x: x, near: 0, t1: 3, t2: 7, t3: 21)
+        for i in 0..<count {
+            #expect(q1[i] >= -4 && q1[i] <= 4)
+            #expect(q2[i] >= -4 && q2[i] <= 4)
+            #expect(q3[i] >= -4 && q3[i] <= 4)
+        }
+    }
+
+    @Test("Vulkan: computeEncodingPipelineBatch — empty arrays")
+    func testEncodingPipelineEmpty() throws {
+        let (pred, err, q1, q2, q3) = try accelerator.computeEncodingPipelineBatch(
+            a: [], b: [], c: [], x: [], near: 0, t1: 3, t2: 7, t3: 21)
+        #expect(pred.isEmpty && err.isEmpty && q1.isEmpty && q2.isEmpty && q3.isEmpty)
+    }
+
+    @Test("Vulkan: computeEncodingPipelineBatch — NEAR=3 gradients within near → q=0")
+    func testEncodingPipelineNear3ZeroGradients() throws {
+        // d1 = b-c = 1 (≤ NEAR=3), d2 = a-c = 0, d3 = c-a = 0 → all q=0
+        let a: [Int32] = [10]
+        let b: [Int32] = [11]
+        let c: [Int32] = [10]
+        let x: [Int32] = [12]
+        let (_, _, q1, q2, q3) = try accelerator.computeEncodingPipelineBatch(
+            a: a, b: b, c: c, x: x, near: 3, t1: 3, t2: 7, t3: 21)
+        #expect(q1 == [0])
+        #expect(q2 == [0])
+        #expect(q3 == [0])
+    }
+
+    @Test("Vulkan: computeEncodingPipelineBatch — mismatched array lengths throws")
+    func testEncodingPipelineMismatchedLengths() {
+        #expect(throws: VulkanAcceleratorError.inputLengthMismatch) {
+            try accelerator.computeEncodingPipelineBatch(
+                a: [1, 2], b: [3], c: [4, 5], x: [6, 7],
+                near: 0, t1: 3, t2: 7, t3: 21)
+        }
+    }
+
+    @Test("Vulkan: computeEncodingPipelineBatch matches standalone gradient+MED+quantise")
+    func testEncodingPipelineMatchesStandaloneOps() throws {
+        let count = 32
+        var a = [Int32](repeating: 0, count: count)
+        var b = [Int32](repeating: 0, count: count)
+        var c = [Int32](repeating: 0, count: count)
+        var x = [Int32](repeating: 0, count: count)
+        for i in 0..<count {
+            a[i] = Int32(i % 200)
+            b[i] = Int32((i + 50) % 200)
+            c[i] = Int32((i + 25) % 200)
+            x[i] = Int32((i + 100) % 200)
+        }
+        let t1: Int32 = 3, t2: Int32 = 7, t3: Int32 = 21
+
+        let (pred, err, pq1, pq2, pq3) = try accelerator.computeEncodingPipelineBatch(
+            a: a, b: b, c: c, x: x, near: 0, t1: t1, t2: t2, t3: t3)
+
+        // Standalone operations
+        let (d1, d2, d3) = accelerator.computeGradientsBatch(a: a, b: b, c: c)
+        let (sq1, sq2, sq3) = accelerator.quantizeGradientsBatch(
+            d1: d1, d2: d2, d3: d3, t1: t1, t2: t2, t3: t3)
+        let spred = accelerator.computeMEDPredictionBatch(a: a, b: b, c: c)
+        let serr = zip(x, spred).map { $0 - $1 }
+
+        #expect(pred == spred, "Combined pipeline prediction must match standalone")
+        #expect(err == serr, "Combined pipeline errors must match standalone")
+        #expect(pq1 == sq1, "Combined pipeline q1 must match standalone")
+        #expect(pq2 == sq2, "Combined pipeline q2 must match standalone")
+        #expect(pq3 == sq3, "Combined pipeline q3 must match standalone")
+    }
+
+    // MARK: Decoding pipeline
+
+    @Test("Vulkan: computeDecodingPipelineBatch — reconstructs MED(a,b,c)+errval")
+    func testDecodingPipeline() throws {
+        let a: [Int32]      = [100, 200, 50]
+        let b: [Int32]      = [110, 190, 60]
+        let c: [Int32]      = [ 95, 195, 55]
+        let errval: [Int32] = [  5,  -5, 10]
+        let reconstructed = try accelerator.computeDecodingPipelineBatch(
+            a: a, b: b, c: c, errval: errval)
+        for i in 0..<a.count {
+            let av = a[i], bv = b[i], cv = c[i]
+            let px: Int32
+            if cv >= max(av, bv)      { px = min(av, bv) }
+            else if cv <= min(av, bv) { px = max(av, bv) }
+            else                       { px = av + bv - cv }
+            #expect(reconstructed[i] == px + errval[i])
+        }
+    }
+
+    @Test("Vulkan: computeDecodingPipelineBatch — empty arrays")
+    func testDecodingPipelineEmpty() throws {
+        let result = try accelerator.computeDecodingPipelineBatch(
+            a: [], b: [], c: [], errval: [])
+        #expect(result.isEmpty)
+    }
+
+    @Test("Vulkan: computeDecodingPipelineBatch — mismatched array lengths throws")
+    func testDecodingPipelineMismatchedLengths() {
+        #expect(throws: VulkanAcceleratorError.inputLengthMismatch) {
+            try accelerator.computeDecodingPipelineBatch(
+                a: [1, 2], b: [3, 4], c: [5], errval: [6, 7])
+        }
+    }
+
+    // MARK: Encode → Decode round-trip
+
+    @Test("Vulkan: encode→decode round-trip (lossless, small batch)")
+    func testEncodeDecodeLosslessRoundTripSmall() throws {
+        let a: [Int32] = [100, 200,  50, 150]
+        let b: [Int32] = [110, 190,  60, 140]
+        let c: [Int32] = [ 95, 195,  55, 145]
+        let x: [Int32] = [105, 188,  62, 148]
+
+        let (_, err, _, _, _) = try accelerator.computeEncodingPipelineBatch(
+            a: a, b: b, c: c, x: x, near: 0, t1: 3, t2: 7, t3: 21)
+        let reconstructed = try accelerator.computeDecodingPipelineBatch(
+            a: a, b: b, c: c, errval: err)
+        #expect(reconstructed == x, "Lossless encode→decode must reconstruct exactly")
+    }
+
+    @Test("Vulkan: encode→decode round-trip (lossless, large batch, above threshold)")
+    func testEncodeDecodeLosslessRoundTripLarge() throws {
+        let count = VulkanAccelerator.gpuThreshold * 2
+        var a = [Int32](repeating: 0, count: count)
+        var b = [Int32](repeating: 0, count: count)
+        var c = [Int32](repeating: 0, count: count)
+        var x = [Int32](repeating: 0, count: count)
+        for i in 0..<count {
+            a[i] = Int32(i % 256)
+            b[i] = Int32((i + 64) % 256)
+            c[i] = Int32((i + 32) % 256)
+            x[i] = Int32((i + 128) % 256)
+        }
+        let (_, err, _, _, _) = try accelerator.computeEncodingPipelineBatch(
+            a: a, b: b, c: c, x: x, near: 0, t1: 3, t2: 7, t3: 21)
+        let reconstructed = try accelerator.computeDecodingPipelineBatch(
+            a: a, b: b, c: c, errval: err)
+        #expect(reconstructed == x)
+    }
+
     // MARK: VulkanDevice
 
     @Test("VulkanDevice properties are accessible")
