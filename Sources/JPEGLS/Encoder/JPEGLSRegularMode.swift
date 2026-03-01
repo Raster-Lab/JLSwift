@@ -47,6 +47,18 @@ public struct JPEGLSRegularMode: Sendable {
     /// Index = gradient + gradientTableOffset.
     private let gradientTableOffset: Int
 
+    /// Pre-computed wrap range for `computeReconstructedValue`.
+    /// For lossless: `range`. For near-lossless: `range × qbpp`.
+    private let wrapRange: Int
+
+    /// Pre-computed upper bound for modular reduction in `computePredictionError`.
+    /// `= (range − 1) / 2`
+    private let halfRangeHigh: Int
+
+    /// Pre-computed lower bound for modular reduction in `computePredictionError`.
+    /// `= −(range / 2)`
+    private let halfRangeLow: Int
+
     // MARK: - Initialization
 
     /// Initialize regular mode encoder with preset parameters.
@@ -73,6 +85,11 @@ public struct JPEGLSRegularMode: Sendable {
         } else {
             self.range = (parameters.maxValue + 2 * near) / qbpp + 1
         }
+
+        // Pre-compute modular-reduction bounds and wrap range to avoid per-pixel arithmetic.
+        self.halfRangeHigh = (self.range - 1) / 2
+        self.halfRangeLow  = -(self.range / 2)
+        self.wrapRange     = near == 0 ? self.range : self.range * ((near << 1) | 1)
 
         // Build gradient quantisation lookup table for the inner range [-T3, T3].
         // Values outside this range always map to ±4 (handled by early-exit checks).
@@ -232,10 +249,11 @@ public struct JPEGLSRegularMode: Sendable {
         let rawError = actual - prediction
         var error = computeQuantizedError(rawError)
         
-        // Apply modular reduction per ITU-T.87 Section 4.2.2
-        if error > (range - 1) / 2 {
+        // Apply modular reduction per ITU-T.87 Section 4.2.2.
+        // Use pre-computed bounds to avoid per-pixel division.
+        if error > halfRangeHigh {
             error -= range
-        } else if error < -(range / 2) {
+        } else if error < halfRangeLow {
             error += range
         }
         
@@ -258,9 +276,9 @@ public struct JPEGLSRegularMode: Sendable {
     public func computeReconstructedValue(prediction: Int, quantizedError: Int) -> Int {
         let dequantized = near > 0 ? quantizedError * qbpp : quantizedError
         var rv = prediction + dequantized
-        // Apply modular correction matching the decoder's reconstructSample
+        // Apply modular correction matching the decoder's reconstructSample.
         // Per ITU-T.87 §A.4.4: wrap range is RANGE × (2·NEAR + 1), thresholds −NEAR and MAXVAL+NEAR.
-        let wrapRange = near == 0 ? range : range * qbpp
+        // Use the pre-computed wrapRange to avoid the ternary per call.
         if rv < -near {
             rv += wrapRange
         } else if rv > parameters.maxValue + near {
@@ -397,11 +415,18 @@ public struct JPEGLSRegularMode: Sendable {
         // Step 9: Encode using Golomb-Rice
         let (unaryLength, remainder) = golombEncode(value: mappedError, k: k)
         
-        // Compute reconstructed value for near-lossless neighbour tracking
-        let reconstructedValue = computeReconstructedValue(
-            prediction: correctedPrediction,
-            quantizedError: quantisedError
-        )
+        // Compute reconstructed value for near-lossless neighbour tracking.
+        // For lossless (NEAR=0) the reconstructed value is always equal to the
+        // actual pixel, so we skip the modular-arithmetic computation entirely.
+        let reconstructedValue: Int
+        if near == 0 {
+            reconstructedValue = actual
+        } else {
+            reconstructedValue = computeReconstructedValue(
+                prediction: correctedPrediction,
+                quantizedError: quantisedError
+            )
+        }
         
         // Store quantisedError (uncorrected, sign-denormalised) per ITU-T.87 §A.6.2.
         // The XOR correction is only for mapping; context update uses the original

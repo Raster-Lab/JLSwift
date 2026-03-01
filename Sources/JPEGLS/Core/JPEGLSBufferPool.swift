@@ -16,7 +16,7 @@ public final class JPEGLSBufferPool: @unchecked Sendable {
     
     /// Pooled buffer wrapper
     private struct PooledBuffer {
-        let data: [Int]
+        var data: [Int]
         let capacity: Int
         var lastUsed: Date
     }
@@ -36,29 +36,36 @@ public final class JPEGLSBufferPool: @unchecked Sendable {
         self.bufferLifetime = bufferLifetime
     }
     
-    /// Acquires a buffer from the pool or creates a new one
+    /// Acquires a buffer from the pool or creates a new one.
+    ///
+    /// When a pooled buffer of sufficient capacity is found it is returned
+    /// after zeroing its contents, avoiding a new heap allocation.  New
+    /// buffers are created only when no suitable pooled buffer exists.
+    ///
     /// - Parameters:
     ///   - type: The type of buffer to acquire
-    ///   - size: Required buffer size
-    /// - Returns: A zero-initialized buffer of at least the requested size. The returned buffer
-    ///   may be larger than requested if a larger pooled buffer was available.
-    /// - Note: Due to Swift's copy-on-write array semantics, this returns a new zero-initialized
-    ///   array of the pooled buffer's size. Future optimization could use unsafe buffer pointers
-    ///   for more efficient memory reuse.
+    ///   - size: Required buffer size (number of `Int` elements)
+    /// - Returns: A zero-initialized buffer of at least the requested size.
     public func acquire(type: BufferType, size: Int) -> [Int] {
         lock.lock()
         defer { lock.unlock() }
         
         // Try to find a suitable buffer in the pool
         if var buffers = pools[type] {
-            // Find first buffer with sufficient capacity
-            if let index = buffers.firstIndex(where: { $0.capacity >= size }) {
-                let pooledBuffer = buffers.remove(at: index)
+            // Find the smallest buffer that satisfies the size requirement to
+            // minimise wasted capacity while still avoiding a new allocation.
+            if let index = buffers.indices.min(by: {
+                let ca = buffers[$0].capacity, cb = buffers[$1].capacity
+                let aOk = ca >= size, bOk = cb >= size
+                if aOk && bOk { return ca < cb }
+                return aOk
+            }), buffers[index].capacity >= size {
+                var pooledBuffer = buffers.remove(at: index)
                 pools[type] = buffers
-                
-                // Return a zero-initialized array of the pooled capacity
-                // This reuses the capacity information from the pool
-                return Array(repeating: 0, count: pooledBuffer.capacity)
+                // Zero-fill the live portion and return.
+                // This reuses the existing heap allocation rather than allocating a new array.
+                for i in 0..<size { pooledBuffer.data[i] = 0 }
+                return pooledBuffer.data
             }
         }
         

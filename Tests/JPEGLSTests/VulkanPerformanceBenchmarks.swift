@@ -323,4 +323,93 @@ struct VulkanPerformanceBenchmarks {
         let result = buf.read(count: count, type: Int32.self)
         #expect(result == pixels)
     }
+
+    // MARK: - Encoding/Decoding Pipeline Benchmarks
+
+    @Test("Benchmark: Vulkan encoding pipeline — 512×512")
+    func benchmarkEncodingPipeline512x512() {
+        let accelerator = VulkanAccelerator()
+        let count = 512 * 512
+        let (a, b, c) = makePixelData(count: count)
+        let x = (0..<count).map { Int32(($0 + 50) % 256) }
+        for _ in 0..<VulkanPerformanceBenchmarks.warmupIterations {
+            _ = try? accelerator.computeEncodingPipelineBatch(
+                a: a, b: b, c: c, x: x, near: 0, t1: 3, t2: 7, t3: 21)
+        }
+        let (mnTime, mxTime, avgTime) = measure {
+            _ = try? accelerator.computeEncodingPipelineBatch(
+                a: a, b: b, c: c, x: x, near: 0, t1: 3, t2: 7, t3: 21)
+        }
+        let throughput = Double(count) / avgTime / 1_000_000.0
+        print("""
+        
+        Vulkan Encoding Pipeline 512×512:
+          Pixels:       \(count)
+          Avg time:     \(String(format: "%.3f", avgTime * 1000)) ms
+          Min/Max:      \(String(format: "%.3f", mnTime * 1000)) / \(String(format: "%.3f", mxTime * 1000)) ms
+          Throughput:   \(String(format: "%.2f", throughput)) Mpix/s  (CPU fallback)
+        """)
+        // Correctness check: prediction + error == x for lossless
+        let (pred, err, _, _, _) = try! accelerator.computeEncodingPipelineBatch(
+            a: a, b: b, c: c, x: x, near: 0, t1: 3, t2: 7, t3: 21)
+        for i in 0..<count {
+            #expect(pred[i] + err[i] == x[i])
+        }
+    }
+
+    @Test("Benchmark: Vulkan decoding pipeline — 512×512")
+    func benchmarkDecodingPipeline512x512() {
+        let accelerator = VulkanAccelerator()
+        let count = 512 * 512
+        let (a, b, c) = makePixelData(count: count)
+        let x = (0..<count).map { Int32(($0 + 50) % 256) }
+        let (_, errval, _, _, _) = try! accelerator.computeEncodingPipelineBatch(
+            a: a, b: b, c: c, x: x, near: 0, t1: 3, t2: 7, t3: 21)
+        for _ in 0..<VulkanPerformanceBenchmarks.warmupIterations {
+            _ = try? accelerator.computeDecodingPipelineBatch(a: a, b: b, c: c, errval: errval)
+        }
+        let (mnTime, mxTime, avgTime) = measure {
+            _ = try? accelerator.computeDecodingPipelineBatch(a: a, b: b, c: c, errval: errval)
+        }
+        let throughput = Double(count) / avgTime / 1_000_000.0
+        print("""
+        
+        Vulkan Decoding Pipeline 512×512:
+          Pixels:       \(count)
+          Avg time:     \(String(format: "%.3f", avgTime * 1000)) ms
+          Min/Max:      \(String(format: "%.3f", mnTime * 1000)) / \(String(format: "%.3f", mxTime * 1000)) ms
+          Throughput:   \(String(format: "%.2f", throughput)) Mpix/s  (CPU fallback)
+        """)
+        // Correctness check: lossless encode → decode reconstructs x
+        let reconstructed = try! accelerator.computeDecodingPipelineBatch(
+            a: a, b: b, c: c, errval: errval)
+        #expect(reconstructed == x)
+    }
+
+    @Test("Benchmark: Vulkan encoding pipeline — 2048×2048")
+    func benchmarkEncodingPipeline2048x2048() {
+        let accelerator = VulkanAccelerator()
+        let count = 2048 * 2048
+        let (a, b, c) = makePixelData(count: count)
+        let x = (0..<count).map { Int32(($0 + 50) % 256) }
+        for _ in 0..<VulkanPerformanceBenchmarks.warmupIterations {
+            _ = try? accelerator.computeEncodingPipelineBatch(
+                a: a, b: b, c: c, x: x, near: 0, t1: 3, t2: 7, t3: 21)
+        }
+        let (mnTime, mxTime, avgTime) = measure {
+            _ = try? accelerator.computeEncodingPipelineBatch(
+                a: a, b: b, c: c, x: x, near: 0, t1: 3, t2: 7, t3: 21)
+        }
+        let throughput = Double(count) / avgTime / 1_000_000.0
+        let dataSize   = Double(count * 4 * MemoryLayout<Int32>.size) / (1024 * 1024)
+        print("""
+        
+        Vulkan Encoding Pipeline 2048×2048:
+          Pixels:       \(count)
+          Data:         \(String(format: "%.1f", dataSize)) MB
+          Avg time:     \(String(format: "%.3f", avgTime * 1000)) ms
+          Min/Max:      \(String(format: "%.3f", mnTime * 1000)) / \(String(format: "%.3f", mxTime * 1000)) ms
+          Throughput:   \(String(format: "%.2f", throughput)) Mpix/s  (CPU fallback)
+        """)
+    }
 }

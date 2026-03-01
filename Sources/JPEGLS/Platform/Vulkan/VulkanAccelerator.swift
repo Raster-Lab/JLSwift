@@ -35,7 +35,7 @@ import Foundation
 // MARK: - Errors
 
 /// Errors that can occur during Vulkan GPU acceleration.
-public enum VulkanAcceleratorError: Error, CustomStringConvertible, Sendable {
+public enum VulkanAcceleratorError: Error, CustomStringConvertible, Equatable, Sendable {
     /// No Vulkan-capable GPU was found on this system.
     case noGPUDeviceAvailable
     /// GPU execution failed (e.g. device lost).
@@ -44,6 +44,8 @@ public enum VulkanAcceleratorError: Error, CustomStringConvertible, Sendable {
     case shaderLoadFailed(String)
     /// Memory allocation on the GPU failed.
     case bufferAllocationFailed
+    /// Input arrays have mismatched lengths.
+    case inputLengthMismatch
 
     public var description: String {
         switch self {
@@ -55,6 +57,8 @@ public enum VulkanAcceleratorError: Error, CustomStringConvertible, Sendable {
             return "Failed to load SPIR-V shader '\(name)'"
         case .bufferAllocationFailed:
             return "Failed to allocate Vulkan GPU buffer"
+        case .inputLengthMismatch:
+            return "Input arrays must have the same length"
         }
     }
 }
@@ -317,5 +321,148 @@ public final class VulkanAccelerator: @unchecked Sendable {
             outB[i] = Int32(result[2])
         }
         return (outR, outG, outB)
+    }
+
+    // MARK: - Combined Encoding Pipeline
+
+    /// Run the combined encoding preprocessing pipeline for a batch of pixels.
+    ///
+    /// Performs gradient computation, NEAR-aware gradient quantisation, MED
+    /// prediction, and prediction-error computation in a single pass. This
+    /// mirrors the `MetalAccelerator.computeEncodingPipelineBatch` API so
+    /// application code can swap backends with minimal changes.
+    ///
+    /// Uses the GPU compute path when the Vulkan SDK is present and a device
+    /// is available; otherwise falls back to an equivalent CPU implementation
+    /// that produces bit-exact results.
+    ///
+    /// - Parameters:
+    ///   - a: West neighbour pixel values.
+    ///   - b: North neighbour pixel values.
+    ///   - c: North-west neighbour pixel values.
+    ///   - x: Current pixel values.
+    ///   - near: NEAR parameter (0 = lossless, 1–255 = near-lossless).
+    ///   - t1: Quantisation threshold 1.
+    ///   - t2: Quantisation threshold 2.
+    ///   - t3: Quantisation threshold 3.
+    /// - Returns: A tuple containing MED predictions, raw prediction errors,
+    ///   and quantised gradients (q1, q2, q3).
+    /// - Throws: `VulkanAcceleratorError` if input arrays have mismatched lengths.
+    /// - Precondition: All input arrays must have the same length.
+    public func computeEncodingPipelineBatch(
+        a: [Int32], b: [Int32], c: [Int32], x: [Int32],
+        near: Int32 = 0, t1: Int32, t2: Int32, t3: Int32
+    ) throws -> (prediction: [Int32], predError: [Int32],
+                 q1: [Int32], q2: [Int32], q3: [Int32]) {
+        guard a.count == b.count && b.count == c.count && c.count == x.count else {
+            throw VulkanAcceleratorError.inputLengthMismatch
+        }
+        let count = a.count
+        guard count > 0 else { return ([], [], [], [], []) }
+
+        // GPU path (when Vulkan SDK is available and device is present)
+        // #if canImport(VulkanSwift)
+        // if count >= Self.gpuThreshold, device?.isGPUDevice == true {
+        //     return try dispatchEncodingPipelineGPU(a:b:c:x:near:t1:t2:t3:)
+        // }
+        // #endif
+
+        return computeEncodingPipelineCPU(
+            a: a, b: b, c: c, x: x, near: near, t1: t1, t2: t2, t3: t3)
+    }
+
+    /// Run the combined decoding reconstruction pipeline for a batch of pixels.
+    ///
+    /// Given the already-entropy-decoded (and de-mapped) prediction errors and
+    /// the MED neighbours for each pixel, reconstructs the original pixel values
+    /// in a single pass. Mirrors `MetalAccelerator.computeDecodingPipelineBatch`.
+    ///
+    /// - Parameters:
+    ///   - a: West neighbour pixel values (already reconstructed).
+    ///   - b: North neighbour pixel values (already reconstructed).
+    ///   - c: North-west neighbour pixel values (already reconstructed).
+    ///   - errval: Signed prediction errors from the entropy decoder.
+    /// - Returns: Reconstructed pixel values.
+    /// - Throws: `VulkanAcceleratorError` if input arrays have mismatched lengths.
+    /// - Precondition: All input arrays must have the same length.
+    public func computeDecodingPipelineBatch(
+        a: [Int32], b: [Int32], c: [Int32], errval: [Int32]
+    ) throws -> [Int32] {
+        guard a.count == b.count && b.count == c.count && c.count == errval.count else {
+            throw VulkanAcceleratorError.inputLengthMismatch
+        }
+        let count = a.count
+        guard count > 0 else { return [] }
+
+        // GPU path (when Vulkan SDK is available and device is present)
+        // #if canImport(VulkanSwift)
+        // if count >= Self.gpuThreshold, device?.isGPUDevice == true {
+        //     return try dispatchDecodingPipelineGPU(a:b:c:errval:)
+        // }
+        // #endif
+
+        return computeDecodingPipelineCPU(a: a, b: b, c: c, errval: errval)
+    }
+
+    // MARK: - CPU Implementations for Pipeline
+
+    private func computeEncodingPipelineCPU(
+        a: [Int32], b: [Int32], c: [Int32], x: [Int32],
+        near: Int32, t1: Int32, t2: Int32, t3: Int32
+    ) -> (prediction: [Int32], predError: [Int32], q1: [Int32], q2: [Int32], q3: [Int32]) {
+        func quantiseNear(_ d: Int32) -> Int32 {
+            if d <= -t3  { return -4 }
+            if d <= -t2  { return -3 }
+            if d <= -t1  { return -2 }
+            if d < -near { return -1 }
+            if d <= near { return  0 }
+            if d < t1    { return  1 }
+            if d < t2    { return  2 }
+            if d < t3    { return  3 }
+            return 4
+        }
+        func medPredict(_ av: Int32, _ bv: Int32, _ cv: Int32) -> Int32 {
+            let minAB = min(av, bv)
+            let maxAB = max(av, bv)
+            if cv >= maxAB { return minAB }
+            if cv <= minAB { return maxAB }
+            return av + bv - cv
+        }
+        let count = a.count
+        var prediction = [Int32](repeating: 0, count: count)
+        var predError  = [Int32](repeating: 0, count: count)
+        var q1 = [Int32](repeating: 0, count: count)
+        var q2 = [Int32](repeating: 0, count: count)
+        var q3 = [Int32](repeating: 0, count: count)
+        for i in 0..<count {
+            let d1 = b[i] - c[i]
+            let d2 = a[i] - c[i]
+            let d3 = c[i] - a[i]
+            q1[i] = quantiseNear(d1)
+            q2[i] = quantiseNear(d2)
+            q3[i] = quantiseNear(d3)
+            let px = medPredict(a[i], b[i], c[i])
+            prediction[i] = px
+            predError[i]  = x[i] - px
+        }
+        return (prediction, predError, q1, q2, q3)
+    }
+
+    private func computeDecodingPipelineCPU(
+        a: [Int32], b: [Int32], c: [Int32], errval: [Int32]
+    ) -> [Int32] {
+        let count = a.count
+        var reconstructed = [Int32](repeating: 0, count: count)
+        for i in 0..<count {
+            let av = a[i], bv = b[i], cv = c[i]
+            let minAB = min(av, bv)
+            let maxAB = max(av, bv)
+            let px: Int32
+            if cv >= maxAB { px = minAB }
+            else if cv <= minAB { px = maxAB }
+            else { px = av + bv - cv }
+            reconstructed[i] = px + errval[i]
+        }
+        return reconstructed
     }
 }

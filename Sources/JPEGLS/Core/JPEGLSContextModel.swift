@@ -269,37 +269,26 @@ public struct JPEGLSContextModel: Sendable {
         // Reset when N reaches RESET value per ITU-T.87 Section A.6.2
         // Reset check happens BEFORE N is incremented (per standard and CharLS).
         if contextN[contextIndex] >= parameters.reset {
-            contextA[contextIndex] = contextA[contextIndex] >> 1
-            contextB[contextIndex] = contextB[contextIndex] >> 1
-            contextN[contextIndex] = contextN[contextIndex] >> 1
-            
-            // Ensure N doesn't become zero
-            if contextN[contextIndex] == 0 {
-                contextN[contextIndex] = 1
-            }
+            contextA[contextIndex] >>= 1
+            contextB[contextIndex] >>= 1
+            // Use max(..., 1) to ensure N doesn't become zero after the right-shift.
+            contextN[contextIndex] = max(contextN[contextIndex] >> 1, 1)
         }
         
         // Increment N (after reset check, before bias correction)
         contextN[contextIndex] += 1
         
-        // Bias correction per ITU-T.87 Section A.6.3 (code segment A.13)
+        // Bias correction per ITU-T.87 Section A.6.3 (code segment A.13).
+        // Inner clamping uses max/min instead of nested branches to reduce
+        // branch-predictor pressure in the hot encoding loop.
+        let b = contextB[contextIndex]
         let n = contextN[contextIndex]
-        if contextB[contextIndex] + n <= 0 {
-            contextB[contextIndex] += n
-            if contextB[contextIndex] <= -n {
-                contextB[contextIndex] = -n + 1
-            }
-            if contextC[contextIndex] > -128 {
-                contextC[contextIndex] -= 1
-            }
-        } else if contextB[contextIndex] > 0 {
-            contextB[contextIndex] -= n
-            if contextB[contextIndex] > 0 {
-                contextB[contextIndex] = 0
-            }
-            if contextC[contextIndex] < 127 {
-                contextC[contextIndex] += 1
-            }
+        if b + n <= 0 {
+            contextB[contextIndex] = max(b + n, 1 - n)
+            contextC[contextIndex] = max(contextC[contextIndex] - 1, -128)
+        } else if b > 0 {
+            contextB[contextIndex] = min(b - n, 0)
+            contextC[contextIndex] = min(contextC[contextIndex] + 1, 127)
         }
     }
     
