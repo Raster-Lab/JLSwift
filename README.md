@@ -99,6 +99,7 @@ JPEG-LS is a lossless/near-lossless compression standard specifically designed f
 | **Native Swift** | Pure Swift implementation with no external C dependencies |
 | **Swift 6.2 Strict Concurrency** | Explicit `.swiftLanguageMode(.v6)` in Package.swift; all shared types are `Sendable`; batch processing uses `withTaskGroup` structured concurrency |
 | **Apple Silicon Optimised** | ARM NEON/SIMD acceleration using Swift SIMD types: SIMD8 run-length detection, SIMD8 byte-stuffing scan, and CLZ-based Golomb-Rice parameter computation |
+| **Intel x86-64 Optimised** | SSE/AVX SIMD acceleration: SIMD8 run-length detection, SIMD8 byte-stuffing scan, BSR/LZCNT-based Golomb-Rice parameter computation, Intel-tuned cache parameters, and tile-size optimisation |
 | **Hardware Acceleration** | Apple Accelerate framework (vDSP) for batch gradient computation, absolute prediction-error accumulation, context-state updates, vImage planar↔interleaved conversion, and vectorised HP1/HP2/HP3 colour transforms |
 | **Metal GPU Acceleration** | Optional GPU acceleration for large images (macOS 10.13+, iOS 11+) |
 | **Memory Optimised** | Cache-line–aligned context arrays, L1-cache–tuned tile sizes, `UnifiedMemoryBufferPool` for Apple Silicon unified memory, memory-mapped I/O via `mmap`, and prefetch hints for sequential access patterns |
@@ -140,6 +141,8 @@ JPEGLS/
 │   ├── Accelerate/          # Apple Accelerate framework (vDSP batch operations)
 │   ├── ARM64/               # Apple Silicon / ARM NEON code
 │   └── x86_64/              # x86-64 specific code (removable)
+│       ├── X86_64Accelerator       # SSE/AVX SIMD accelerator
+│       └── IntelMemoryOptimizer    # Intel cache/memory optimisation
 └── PlatformProtocols        # Protocol-based platform abstraction
 ```
 
