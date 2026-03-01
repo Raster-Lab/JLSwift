@@ -1,17 +1,17 @@
 # JLSwift
 
-A native Swift implementation of **JPEG-LS** (ISO/IEC 14495-1:1999 / ITU-T.87) compression for DICOM medical imaging. Optimised for Apple Silicon with hardware acceleration support.
+A native Swift implementation of **JPEG-LS** (ISO/IEC 14495-1:1999 / ITU-T.87) compression. Usable as a standalone general-purpose codec and optimised for Apple Silicon with hardware acceleration support. Fully compatible with DICOM medical imaging workflows.
 
 [![CI](https://github.com/Raster-Lab/JLSwift/actions/workflows/ci.yml/badge.svg)](https://github.com/Raster-Lab/JLSwift/actions/workflows/ci.yml)
 
 ## Overview
 
-JLSwift provides a native Swift JPEG-LS compression library designed for the DICOMkit project and optimised for medical imaging workflows. The library emphasises:
+JLSwift is a pure Swift JPEG-LS compression library with no DICOM dependencies. It can be used in any project that requires lossless or near-lossless image compression — no DICOM knowledge is needed. The library is also designed for seamless integration with DICOMkit and other medical-imaging frameworks. Key attributes:
 
 - **Type Safety**: Leverages Swift 6.2+ strict concurrency and type system
 - **Performance**: Optimised implementations with support for hardware acceleration
 - **Reliability**: Comprehensive test coverage exceeding 95% for all modules
-- **DICOM Compatible**: Full support for DICOM transfer syntaxes
+- **DICOM Aware, DICOM Independent**: Full support for DICOM transfer syntaxes; no DICOM runtime dependency
 
 ### Library Modules
 

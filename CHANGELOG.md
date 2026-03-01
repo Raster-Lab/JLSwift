@@ -8,9 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- Semantic versioning strategy documentation (VERSIONING.md)
-- Comprehensive changelog (CHANGELOG.md)
-- Release notes template (RELEASE_NOTES_TEMPLATE.md)
+
+#### DICOM Independence & Final Integration (Milestone 20)
+- Non-DICOM usage examples in USAGE_EXAMPLES.md (general-purpose compression, web assets, archival storage)
+- DICOM-aware/DICOM-independent architecture documented in README.md
+
+### Fixed
+
+#### DICOM Independence & Final Integration (Milestone 20)
+- Fixed incorrect threshold values in `JPEGLSPresetParametersTests` for 8-bit and 12-bit images; test expectations now match the ITU-T.87 Table C.2 formula (8-bit: T1=3, T2=7, T3=21; 12-bit: T1=18, T2=67, T3=276)
+- Fixed incorrect expected values in `JPEGLSNearLosslessTests` for reconstructed-value boundary tests; test inputs now avoid the ITU-T.87 modular-wrap threshold, correctly exercising the clamp-to-MAXVAL and clamp-to-zero paths
 
 ## [0.8.0] - In Progress
 

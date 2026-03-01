@@ -253,10 +253,11 @@ struct JPEGLSNearLosslessTests {
         let params = try createDefaultParameters()
         let encoder = try JPEGLSNearLossless(parameters: params, near: 2)
         
-        // Prediction = 250, quantized error = 2
-        // Dequantized = 10
-        // Reconstructed = 250 + 10 = 260, clamped to 255
-        let reconstructed = encoder.computeReconstructedValue(prediction: 250, quantizedError: 2)
+        // Prediction = 251, quantized error = 1
+        // Dequantized = 1 * 5 = 5
+        // Reconstructed = 251 + 5 = 256; 256 ≤ MAXVAL(255)+NEAR(2)=257 so no ITU-T.87 wrap
+        // clamp(256, 0, 255) = 255
+        let reconstructed = encoder.computeReconstructedValue(prediction: 251, quantizedError: 1)
         #expect(reconstructed == 255)
     }
     
@@ -265,10 +266,11 @@ struct JPEGLSNearLosslessTests {
         let params = try createDefaultParameters()
         let encoder = try JPEGLSNearLossless(parameters: params, near: 2)
         
-        // Prediction = 5, quantized error = -2
-        // Dequantized = -10
-        // Reconstructed = 5 - 10 = -5, clamped to 0
-        let reconstructed = encoder.computeReconstructedValue(prediction: 5, quantizedError: -2)
+        // Prediction = 3, quantized error = -1
+        // Dequantized = -1 * 5 = -5
+        // Reconstructed = 3 - 5 = -2; -2 >= -NEAR(-2) so no ITU-T.87 wrap
+        // clamp(-2, 0, 255) = 0
+        let reconstructed = encoder.computeReconstructedValue(prediction: 3, quantizedError: -1)
         #expect(reconstructed == 0)
     }
     
