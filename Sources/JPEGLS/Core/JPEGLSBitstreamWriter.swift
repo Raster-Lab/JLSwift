@@ -140,6 +140,48 @@ public final class JPEGLSBitstreamWriter {
     public func resetBitBuffer() {
         flush()
     }
+
+    /// Write a unary code: n zero bits followed by a single 1 bit.
+    ///
+    /// This is a performance-optimised alternative to calling `writeBits(0, count: 1)` in a loop
+    /// followed by `writeBits(1, count: 1)`.  Writing in batches of up to 24 bits reduces
+    /// function-call overhead significantly in the Golomb-Rice coding hot path.
+    ///
+    /// The batch size is capped at 24 because the internal `bitBuffer` is 32 bits wide and may
+    /// already hold up to 7 bits from the previous call.  Adding 25 bits (24 zeros + 1 terminator)
+    /// to a 7-bit residual gives exactly 32 bits, which fits without overflow.
+    ///
+    /// - Parameter n: Number of leading zero bits (must be ≥ 0)
+    public func writeUnaryCode(_ n: Int) {
+        var remaining = n
+        // Write up to 24 zeros at a time.  Combined with a worst-case 7-bit residual in
+        // the buffer, the total (7 + 24 = 31) safely fits in the 32-bit UInt32 bitBuffer.
+        while remaining >= 24 {
+            writeBits(0, count: 24)
+            remaining -= 24
+        }
+        // Write the remaining zeros and the terminating 1 in one call (max count = 24
+        // when remaining == 23, giving 7 + 24 = 31 bits total — within UInt32 range).
+        writeBits(1, count: remaining + 1)
+    }
+
+    /// Write n consecutive 1 bits (used for Golomb run-length continuation codes).
+    ///
+    /// This is a performance-optimised alternative to calling `writeBits(1, count: 1)` in a loop.
+    /// The batch size is capped at 24 for the same UInt32 overflow reason as `writeUnaryCode`.
+    ///
+    /// - Parameter n: Number of 1 bits to write (must be ≥ 0)
+    public func writeOnes(_ n: Int) {
+        var remaining = n
+        // (1 << 24) - 1 = 0x00FF_FFFF fits in UInt32 with room to spare.
+        while remaining >= 24 {
+            writeBits(0x00FFFFFF, count: 24)
+            remaining -= 24
+        }
+        if remaining > 0 {
+            writeBits(UInt32((1 << remaining) - 1), count: remaining)
+        }
+    }
     
     /// Write a marker segment with length field
     ///

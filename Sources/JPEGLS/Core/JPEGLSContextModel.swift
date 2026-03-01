@@ -316,23 +316,22 @@ public struct JPEGLSContextModel: Sendable {
         guard contextIndex >= 0 && contextIndex < Self.regularContextCount else {
             return 0
         }
-        
+
         let a = contextA[contextIndex]
         let n = contextN[contextIndex]  // Use N (occurrence counter), not B
-        
-        guard n > 0 else {
-            return 0
-        }
-        
-        var k = 0
-        var threshold = n
-        
-        while threshold < a && k < 16 {
-            threshold = threshold << 1
-            k += 1
-        }
-        
-        return k
+
+        guard n > 0 else { return 0 }
+        guard a > n else { return 0 }
+
+        // Fast computation using integer bit widths:
+        // find smallest k ≥ 0 such that n << k ≥ a.
+        // floor(log2(a)) − floor(log2(n)) gives a lower bound on k;
+        // at most one additional increment is ever needed.
+        let logA = Int.bitWidth - 1 - a.leadingZeroBitCount  // floor(log2(a))
+        let logN = Int.bitWidth - 1 - n.leadingZeroBitCount  // floor(log2(n))
+        var k = logA - logN
+        if n << k < a { k += 1 }
+        return min(k, 16)
     }
     
     /// Compute error correction for k=0 map swap per ITU-T.87 §A.5.2 / CharLS.

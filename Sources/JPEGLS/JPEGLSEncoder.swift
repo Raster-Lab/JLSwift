@@ -139,8 +139,18 @@ public struct JPEGLSEncoder: Sendable {
         _ imageData: MultiComponentImageData,
         configuration: Configuration
     ) throws -> Data {
-        let writer = JPEGLSBitstreamWriter()
-        
+        // Pre-allocate the bitstream buffer based on raw image size.
+        // For lossless encoding the compressed size is at most the raw pixel data size;
+        // adding a small fixed overhead for markers and headers avoids reallocation in
+        // typical cases.
+        let bitsPerSample = imageData.frameHeader.bitsPerSample
+        let bytesPerSample = (bitsPerSample + 7) / 8
+        let estimatedCapacity = imageData.frameHeader.width *
+                                imageData.frameHeader.height *
+                                imageData.frameHeader.componentCount *
+                                bytesPerSample + 4096
+        let writer = JPEGLSBitstreamWriter(capacity: estimatedCapacity)
+
         // Write SOI marker (Start of Image)
         writer.writeMarker(.startOfImage)
         
@@ -737,9 +747,7 @@ public struct JPEGLSEncoder: Sendable {
                     )
                     
                     // Write continuation bits (1s)
-                    for _ in 0..<encoded.continuationBits {
-                        writer.writeBits(1, count: 1)
-                    }
+                    writer.writeOnes(encoded.continuationBits)
                     
                     // Store the run value as reconstructed for every run pixel.
                     if near > 0 {
@@ -942,9 +950,7 @@ public struct JPEGLSEncoder: Sendable {
                             runIndex: context.currentRunIndex
                         )
                         
-                        for _ in 0..<encoded.continuationBits {
-                            writer.writeBits(1, count: 1)
-                        }
+                        writer.writeOnes(encoded.continuationBits)
                         
                         let finalRunIndex = min(encoded.runIndex + encoded.continuationBits, 31)
 
@@ -1174,9 +1180,7 @@ public struct JPEGLSEncoder: Sendable {
                         runLength: actualRunLength,
                         runIndex: context.currentRunIndex
                     )
-                    for _ in 0..<encoded.continuationBits {
-                        writer.writeBits(1, count: 1)
-                    }
+                    writer.writeOnes(encoded.continuationBits)
 
                     let finalRunIndex = min(encoded.runIndex + encoded.continuationBits, 31)
 
@@ -1387,14 +1391,12 @@ public struct JPEGLSEncoder: Sendable {
     ) {
         let limitThreshold = limit - qbppBits - 1
         if encoded.unaryLength >= limitThreshold {
-            // Limited binary code
-            for _ in 0..<limitThreshold { writer.writeBits(0, count: 1) }
-            writer.writeBits(1, count: 1)
+            // Limited binary code: write limitThreshold zeros + 1, then MErrval−1 in qbppBits.
+            writer.writeUnaryCode(limitThreshold)
             writer.writeBits(UInt32(encoded.mappedError - 1), count: qbppBits)
         } else {
-            // Standard Golomb-Rice code
-            for _ in 0..<encoded.unaryLength { writer.writeBits(0, count: 1) }
-            writer.writeBits(1, count: 1)
+            // Standard Golomb-Rice: write unaryLength zeros + 1, then k-bit remainder.
+            writer.writeUnaryCode(encoded.unaryLength)
             if encoded.golombK > 0 {
                 writer.writeBits(UInt32(encoded.remainder), count: encoded.golombK)
             }
@@ -1481,12 +1483,10 @@ public struct JPEGLSEncoder: Sendable {
         
         let (unaryLength, remainder) = regularMode.golombEncode(value: eMappedErrorValue, k: k)
         if unaryLength >= limitThreshold {
-            for _ in 0..<limitThreshold { writer.writeBits(0, count: 1) }
-            writer.writeBits(1, count: 1)
+            writer.writeUnaryCode(limitThreshold)
             writer.writeBits(UInt32(eMappedErrorValue - 1), count: qbppBits)
         } else {
-            for _ in 0..<unaryLength { writer.writeBits(0, count: 1) }
-            writer.writeBits(1, count: 1)
+            writer.writeUnaryCode(unaryLength)
             if k > 0 {
                 writer.writeBits(UInt32(remainder), count: k)
             }

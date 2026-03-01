@@ -18,25 +18,37 @@ import Foundation
 /// 7. Update context statistics for adaptation
 public struct JPEGLSRegularMode: Sendable {
     // MARK: - Properties
-    
+
     /// Preset parameters controlling thresholds and limits
     private let parameters: JPEGLSPresetParameters
-    
+
     /// Public accessor for preset parameters
     public var presetParameters: JPEGLSPresetParameters { parameters }
-    
+
     /// Near-lossless parameter (0 for lossless mode)
     private let near: Int
-    
+
     /// Range value: RANGE = (MAXVAL + 2*NEAR)/qbpp + 1
     /// Used for modular reduction of prediction errors
     private let range: Int
-    
+
     /// Quantization factor: qbpp = (NEAR == 0) ? 0 : ((NEAR << 1) | 1)
     private let qbpp: Int
-    
+
+    /// Pre-computed gradient quantisation lookup table.
+    ///
+    /// The table covers the inner range [−T3, T3] (size = 2·T3 + 1).
+    /// Gradient values outside this range are handled by the early-exit checks in
+    /// `quantizeGradient` and always map to ±4.  Building the table once at init
+    /// avoids repeated branch evaluation in the per-pixel hot path.
+    private let gradientTable: [Int]
+
+    /// Offset used to convert a gradient value in [−T3, T3] to a table index.
+    /// Index = gradient + gradientTableOffset.
+    private let gradientTableOffset: Int
+
     // MARK: - Initialization
-    
+
     /// Initialize regular mode encoder with preset parameters.
     ///
     /// - Parameters:
@@ -47,13 +59,13 @@ public struct JPEGLSRegularMode: Sendable {
         guard near >= 0 && near <= 255 else {
             throw JPEGLSError.invalidNearParameter(near: near)
         }
-        
+
         self.parameters = parameters
         self.near = near
-        
+
         // Compute quantization factor per ITU-T.87 Section 4.2.1
         self.qbpp = (near == 0) ? 0 : ((near << 1) | 1)
-        
+
         // Compute RANGE per ITU-T.87 Section 4.2.1
         // RANGE = (MAXVAL + 2*NEAR)/qbpp + 1
         if near == 0 {
@@ -61,6 +73,28 @@ public struct JPEGLSRegularMode: Sendable {
         } else {
             self.range = (parameters.maxValue + 2 * near) / qbpp + 1
         }
+
+        // Build gradient quantisation lookup table for the inner range [-T3, T3].
+        // Values outside this range always map to ±4 (handled by early-exit checks).
+        let t3 = parameters.threshold3
+        let tableSize = 2 * t3 + 1
+        self.gradientTableOffset = t3
+        var table = [Int](repeating: 0, count: tableSize)
+        for i in 0..<tableSize {
+            let g = i - t3  // gradient in [−T3, T3]
+            if g < -near {
+                if g <= -parameters.threshold2 { table[i] = -3 }
+                else if g <= -parameters.threshold1 { table[i] = -2 }
+                else { table[i] = -1 }
+            } else if g <= near {
+                table[i] = 0
+            } else {
+                if g < parameters.threshold1 { table[i] = 1 }
+                else if g < parameters.threshold2 { table[i] = 2 }
+                else { table[i] = 3 }
+            }
+        }
+        self.gradientTable = table
     }
     
     // MARK: - Gradient Computation
@@ -98,20 +132,17 @@ public struct JPEGLSRegularMode: Sendable {
     /// threshold parameters T1, T2, T3 to produce quantization indices
     /// in the range [-4, 4].
     ///
+    /// Uses a pre-computed lookup table for the inner range [−T3, T3] to avoid
+    /// repeated branch evaluation in the encoding hot path.
+    ///
     /// - Parameter gradient: Raw gradient value
     /// - Returns: Quantized gradient in range [-4, 4]
     public func quantizeGradient(_ gradient: Int) -> Int {
-        // Quantization per ITU-T.87 Table A.7 / CharLS quantize_gradient_org.
-        // Uses strict less-than for upper threshold boundaries.
+        // Gradients outside [−T3, T3] always map to ±4.
         if gradient <= -parameters.threshold3 { return -4 }
-        if gradient <= -parameters.threshold2 { return -3 }
-        if gradient <= -parameters.threshold1 { return -2 }
-        if gradient < -near { return -1 }
-        if gradient <= near { return 0 }
-        if gradient < parameters.threshold1 { return 1 }
-        if gradient < parameters.threshold2 { return 2 }
-        if gradient < parameters.threshold3 { return 3 }
-        return 4
+        if gradient >= parameters.threshold3 { return 4 }
+        // Inner range: use pre-computed table for zero-branch lookup.
+        return gradientTable[gradient + gradientTableOffset]
     }
     
     // MARK: - MED Prediction
