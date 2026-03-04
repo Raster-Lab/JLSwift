@@ -30,7 +30,7 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
   - [x] `Sources/JPEGLS/Platform/` — Platform-specific optimisations
   - [x] `Sources/JPEGLS/Platform/ARM64/` — Apple Silicon / ARM NEON code
   - [x] `Sources/JPEGLS/Platform/x86_64/` — x86-64 specific code (removable)
-  - [x] `Sources/jpegls/` — CLI tool source
+  - [x] `Sources/jpeglscli/` — CLI tool source
 - [x] Define architecture boundary protocols for platform abstraction
 - [x] Create conditional compilation structure for architecture separation
 

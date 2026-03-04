@@ -279,7 +279,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `Sources/JPEGLS/Platform/` — Platform-specific optimisations
   - `Sources/JPEGLS/Platform/ARM64/` — Apple Silicon / ARM NEON code
   - `Sources/JPEGLS/Platform/x86_64/` — x86-64 specific code
-  - `Sources/jpegls/` — CLI tool source
+  - `Sources/jpeglscli/` — CLI tool source
 - JPEG-LS marker segment types (SOI, EOI, SOF, SOS, LSE, etc.)
 - `JPEGLSFrameHeader` structures per ITU-T.87
 - `JPEGLSScanHeader` structures

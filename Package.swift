@@ -37,6 +37,7 @@ let package = Package(
                 "JPEGLS",
                 .product(name: "ArgumentParser", package: "swift-argument-parser"),
             ],
+            path: "Sources/jpeglscli",
             swiftSettings: [
                 .swiftLanguageMode(.v6)
             ]
