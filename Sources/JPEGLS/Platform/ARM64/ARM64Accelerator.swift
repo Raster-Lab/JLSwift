@@ -146,7 +146,7 @@ public struct ARM64Accelerator: PlatformAccelerator {
             )
             let mask = chunk .== ffVec
             
-            if mask.any() {
+            if mask != SIMDMask(repeating: false) {
                 for j in 0..<vectorSize where mask[j] {
                     positions.append(i + j)
                 }
