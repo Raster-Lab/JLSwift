@@ -732,7 +732,7 @@ JLSwift/
 │   │   ├── Encoder/           # Encoding implementation
 │   │   ├── Platform/          # Platform-specific code
 │   │   └── JPEGLS.swift       # Module exports
-│   └── jpegls/                # Command-line tool
+│   └── jpeglscli/              # Command-line tool
 ├── Tests/
 │   └── JPEGLSTests/           # JPEGLS unit tests
 ├── .github/
