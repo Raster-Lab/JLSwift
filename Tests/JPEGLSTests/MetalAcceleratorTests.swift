@@ -34,7 +34,7 @@ struct MetalAcceleratorTests {
     
     @Test("Compute gradients for single pixel batch")
     func testSinglePixelGradients() throws {
-        #guard(MetalAccelerator.isSupported)
+        guard MetalAccelerator.isSupported else { return }
         
         let accelerator = try MetalAccelerator()
         
@@ -56,7 +56,7 @@ struct MetalAcceleratorTests {
     
     @Test("Compute gradients for small batch (CPU fallback)")
     func testSmallBatchGradients() throws {
-        #guard(MetalAccelerator.isSupported)
+        guard MetalAccelerator.isSupported else { return }
         
         let accelerator = try MetalAccelerator()
         
@@ -76,7 +76,7 @@ struct MetalAcceleratorTests {
     
     @Test("Compute gradients for large batch (GPU)")
     func testLargeBatchGradients() throws {
-        #guard(MetalAccelerator.isSupported)
+        guard MetalAccelerator.isSupported else { return }
         
         let accelerator = try MetalAccelerator()
         
@@ -105,7 +105,7 @@ struct MetalAcceleratorTests {
     
     @Test("Compute gradients with negative values")
     func testGradientsWithNegativeValues() throws {
-        #guard(MetalAccelerator.isSupported)
+        guard MetalAccelerator.isSupported else { return }
         
         let accelerator = try MetalAccelerator()
         
@@ -125,7 +125,7 @@ struct MetalAcceleratorTests {
     
     @Test("Compute gradients with boundary values")
     func testGradientsWithBoundaryValues() throws {
-        #guard(MetalAccelerator.isSupported)
+        guard MetalAccelerator.isSupported else { return }
         
         let accelerator = try MetalAccelerator()
         
@@ -146,7 +146,7 @@ struct MetalAcceleratorTests {
     
     @Test("Compute gradients with empty arrays")
     func testGradientsWithEmptyArrays() throws {
-        #guard(MetalAccelerator.isSupported)
+        guard MetalAccelerator.isSupported else { return }
         
         let accelerator = try MetalAccelerator()
         
@@ -165,7 +165,7 @@ struct MetalAcceleratorTests {
     
     @Test("Compute MED prediction for single pixel")
     func testSinglePixelMEDPrediction() throws {
-        #guard(MetalAccelerator.isSupported)
+        guard MetalAccelerator.isSupported else { return }
         
         let accelerator = try MetalAccelerator()
         
@@ -193,7 +193,7 @@ struct MetalAcceleratorTests {
     
     @Test("Compute MED prediction for small batch (CPU fallback)")
     func testSmallBatchMEDPrediction() throws {
-        #guard(MetalAccelerator.isSupported)
+        guard MetalAccelerator.isSupported else { return }
         
         let accelerator = try MetalAccelerator()
         
@@ -211,7 +211,7 @@ struct MetalAcceleratorTests {
     
     @Test("Compute MED prediction for large batch (GPU)")
     func testLargeBatchMEDPrediction() throws {
-        #guard(MetalAccelerator.isSupported)
+        guard MetalAccelerator.isSupported else { return }
         
         let accelerator = try MetalAccelerator()
         
@@ -267,7 +267,7 @@ struct MetalAcceleratorTests {
     
     @Test("Compute MED prediction with equal pixel values")
     func testMEDPredictionWithEqualValues() throws {
-        #guard(MetalAccelerator.isSupported)
+        guard MetalAccelerator.isSupported else { return }
         
         let accelerator = try MetalAccelerator()
         
@@ -283,7 +283,7 @@ struct MetalAcceleratorTests {
     
     @Test("Compute MED prediction with zero values")
     func testMEDPredictionWithZeroValues() throws {
-        #guard(MetalAccelerator.isSupported)
+        guard MetalAccelerator.isSupported else { return }
         
         let accelerator = try MetalAccelerator()
         
@@ -298,7 +298,7 @@ struct MetalAcceleratorTests {
     
     @Test("Compute MED prediction with empty arrays")
     func testMEDPredictionWithEmptyArrays() throws {
-        #guard(MetalAccelerator.isSupported)
+        guard MetalAccelerator.isSupported else { return }
         
         let accelerator = try MetalAccelerator()
         
@@ -315,7 +315,7 @@ struct MetalAcceleratorTests {
     
     @Test("Metal gradients match scalar implementation")
     func testGradientsBitExactMatch() throws {
-        #guard(MetalAccelerator.isSupported)
+        guard MetalAccelerator.isSupported else { return }
         
         let metalAccelerator = try MetalAccelerator()
         let scalarAccelerator = ScalarAccelerator()
@@ -354,7 +354,7 @@ struct MetalAcceleratorTests {
     
     @Test("Metal MED predictions match scalar implementation")
     func testMEDPredictionBitExactMatch() throws {
-        #guard(MetalAccelerator.isSupported)
+        guard MetalAccelerator.isSupported else { return }
         
         let metalAccelerator = try MetalAccelerator()
         let scalarAccelerator = ScalarAccelerator()

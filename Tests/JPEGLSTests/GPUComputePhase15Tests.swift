@@ -448,7 +448,7 @@ struct MetalPhase15Tests {
 
     @Test("Metal: quantizeGradientsBatch — small batch (CPU fallback)")
     func testQuantizeGradientsSmallBatch() throws {
-        #guard(MetalAccelerator.isSupported)
+        guard MetalAccelerator.isSupported else { return }
         let accelerator = try MetalAccelerator()
         let t1: Int32 = 3, t2: Int32 = 7, t3: Int32 = 21
         let d: [Int32] = [-30, -10, -5, -1, 0, 1, 5, 10, 30]
@@ -462,7 +462,7 @@ struct MetalPhase15Tests {
 
     @Test("Metal: quantizeGradientsBatch — large batch (GPU)")
     func testQuantizeGradientsLargeBatch() throws {
-        #guard(MetalAccelerator.isSupported)
+        guard MetalAccelerator.isSupported else { return }
         let accelerator = try MetalAccelerator()
         let t1: Int32 = 3, t2: Int32 = 7, t3: Int32 = 21
         let count = MetalAccelerator.gpuThreshold * 2
@@ -478,7 +478,7 @@ struct MetalPhase15Tests {
 
     @Test("Metal: quantizeGradientsBatch — empty arrays")
     func testQuantizeGradientsEmpty() throws {
-        #guard(MetalAccelerator.isSupported)
+        guard MetalAccelerator.isSupported else { return }
         let accelerator = try MetalAccelerator()
         let (q1, q2, q3) = try accelerator.quantizeGradientsBatch(
             d1: [], d2: [], d3: [], t1: 3, t2: 7, t3: 21)
@@ -487,7 +487,7 @@ struct MetalPhase15Tests {
 
     @Test("Metal: quantizeGradientsBatch matches Vulkan CPU fallback")
     func testQuantizeGradientsBitExact() throws {
-        #guard(MetalAccelerator.isSupported)
+        guard MetalAccelerator.isSupported else { return }
         let metalAcc = try MetalAccelerator()
         let vulkanAcc = VulkanAccelerator()
         let t1: Int32 = 3, t2: Int32 = 7, t3: Int32 = 21
@@ -513,7 +513,7 @@ struct MetalPhase15Tests {
 
     @Test("Metal: HP1 forward transform — small batch (CPU fallback)")
     func testHP1ForwardSmallBatch() throws {
-        #guard(MetalAccelerator.isSupported)
+        guard MetalAccelerator.isSupported else { return }
         let accelerator = try MetalAccelerator()
         let r: [Int32] = [200, 100]
         let g: [Int32] = [100,  50]
@@ -527,7 +527,7 @@ struct MetalPhase15Tests {
 
     @Test("Metal: HP1 inverse round-trips — small batch (CPU fallback)")
     func testHP1RoundTripSmallBatch() throws {
-        #guard(MetalAccelerator.isSupported)
+        guard MetalAccelerator.isSupported else { return }
         let accelerator = try MetalAccelerator()
         let r: [Int32] = [200, 100, 50]
         let g: [Int32] = [100,  50, 30]
@@ -541,7 +541,7 @@ struct MetalPhase15Tests {
 
     @Test("Metal: HP1 forward transform — large batch (GPU)")
     func testHP1ForwardLargeBatch() throws {
-        #guard(MetalAccelerator.isSupported)
+        guard MetalAccelerator.isSupported else { return }
         let accelerator = try MetalAccelerator()
         let count = MetalAccelerator.gpuThreshold * 2
         let r = [Int32](repeating: 200, count: count)
@@ -556,7 +556,7 @@ struct MetalPhase15Tests {
 
     @Test("Metal: HP1 large batch round-trips correctly (GPU)")
     func testHP1RoundTripLargeBatch() throws {
-        #guard(MetalAccelerator.isSupported)
+        guard MetalAccelerator.isSupported else { return }
         let accelerator = try MetalAccelerator()
         let count = MetalAccelerator.gpuThreshold * 2
         var r = [Int32](repeating: 0, count: count)
@@ -578,7 +578,7 @@ struct MetalPhase15Tests {
 
     @Test("Metal: HP2 inverse round-trips correctly — large batch (GPU)")
     func testHP2RoundTripLargeBatch() throws {
-        #guard(MetalAccelerator.isSupported)
+        guard MetalAccelerator.isSupported else { return }
         let accelerator = try MetalAccelerator()
         let count = MetalAccelerator.gpuThreshold * 2
         var r = [Int32](repeating: 0, count: count)
@@ -600,7 +600,7 @@ struct MetalPhase15Tests {
 
     @Test("Metal: HP3 inverse round-trips correctly — large batch (GPU)")
     func testHP3RoundTripLargeBatch() throws {
-        #guard(MetalAccelerator.isSupported)
+        guard MetalAccelerator.isSupported else { return }
         let accelerator = try MetalAccelerator()
         let count = MetalAccelerator.gpuThreshold * 2
         var r = [Int32](repeating: 0, count: count)
@@ -622,7 +622,7 @@ struct MetalPhase15Tests {
 
     @Test("Metal: .none forward transform returns input unchanged")
     func testIdentityForward() throws {
-        #guard(MetalAccelerator.isSupported)
+        guard MetalAccelerator.isSupported else { return }
         let accelerator = try MetalAccelerator()
         let r: [Int32] = [10, 20, 30]
         let g: [Int32] = [40, 50, 60]
@@ -636,7 +636,7 @@ struct MetalPhase15Tests {
 
     @Test("Metal colour transforms match Vulkan CPU results — HP1 large batch")
     func testColourTransformBitExactHP1() throws {
-        #guard(MetalAccelerator.isSupported)
+        guard MetalAccelerator.isSupported else { return }
         let metalAcc  = try MetalAccelerator()
         let vulkanAcc = VulkanAccelerator()
         let count = MetalAccelerator.gpuThreshold * 2
@@ -657,7 +657,7 @@ struct MetalPhase15Tests {
 
     @Test("Metal colour transforms match Vulkan CPU results — HP2 large batch")
     func testColourTransformBitExactHP2() throws {
-        #guard(MetalAccelerator.isSupported)
+        guard MetalAccelerator.isSupported else { return }
         let metalAcc  = try MetalAccelerator()
         let vulkanAcc = VulkanAccelerator()
         let count = MetalAccelerator.gpuThreshold * 2
@@ -678,7 +678,7 @@ struct MetalPhase15Tests {
 
     @Test("Metal colour transforms match Vulkan CPU results — HP3 large batch")
     func testColourTransformBitExactHP3() throws {
-        #guard(MetalAccelerator.isSupported)
+        guard MetalAccelerator.isSupported else { return }
         let metalAcc  = try MetalAccelerator()
         let vulkanAcc = VulkanAccelerator()
         let count = MetalAccelerator.gpuThreshold * 2

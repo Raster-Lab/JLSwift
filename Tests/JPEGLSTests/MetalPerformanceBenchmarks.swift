@@ -60,7 +60,7 @@ struct MetalPerformanceBenchmarks {
     
     @Test("Benchmark: Metal gradient computation - 512×512 (below threshold)")
     func benchmarkGradients512x512() throws {
-        #guard(MetalAccelerator.isSupported)
+        guard MetalAccelerator.isSupported else { return }
         
         let accelerator = try MetalAccelerator()
         let count = 512 * 512  // 262,144 pixels (below GPU threshold)
@@ -72,7 +72,7 @@ struct MetalPerformanceBenchmarks {
         }
         
         // Measure
-        let (minTime, maxTime, avgTime) = measure {
+        let (minTime, maxTime, avgTime) = try measure {
             _ = try accelerator.computeGradientsBatch(a: a, b: b, c: c)
         }
         
@@ -93,7 +93,7 @@ struct MetalPerformanceBenchmarks {
     
     @Test("Benchmark: Metal gradient computation - 1024×1024 (at threshold)")
     func benchmarkGradients1024x1024() throws {
-        #guard(MetalAccelerator.isSupported)
+        guard MetalAccelerator.isSupported else { return }
         
         let accelerator = try MetalAccelerator()
         let count = 1024 * 1024  // 1,048,576 pixels (just above GPU threshold)
@@ -105,7 +105,7 @@ struct MetalPerformanceBenchmarks {
         }
         
         // Measure
-        let (minTime, maxTime, avgTime) = measure {
+        let (minTime, maxTime, avgTime) = try measure {
             _ = try accelerator.computeGradientsBatch(a: a, b: b, c: c)
         }
         
@@ -126,7 +126,7 @@ struct MetalPerformanceBenchmarks {
     
     @Test("Benchmark: Metal gradient computation - 2048×2048 (large image)")
     func benchmarkGradients2048x2048() throws {
-        #guard(MetalAccelerator.isSupported)
+        guard MetalAccelerator.isSupported else { return }
         
         let accelerator = try MetalAccelerator()
         let count = 2048 * 2048  // 4,194,304 pixels
@@ -138,7 +138,7 @@ struct MetalPerformanceBenchmarks {
         }
         
         // Measure
-        let (minTime, maxTime, avgTime) = measure {
+        let (minTime, maxTime, avgTime) = try measure {
             _ = try accelerator.computeGradientsBatch(a: a, b: b, c: c)
         }
         
@@ -161,7 +161,7 @@ struct MetalPerformanceBenchmarks {
     
     @Test("Benchmark: Metal gradient computation - 4096×4096 (very large)")
     func benchmarkGradients4096x4096() throws {
-        #guard(MetalAccelerator.isSupported)
+        guard MetalAccelerator.isSupported else { return }
         
         let accelerator = try MetalAccelerator()
         let count = 4096 * 4096  // 16,777,216 pixels
@@ -173,7 +173,7 @@ struct MetalPerformanceBenchmarks {
         }
         
         // Measure
-        let (minTime, maxTime, avgTime) = measure {
+        let (minTime, maxTime, avgTime) = try measure {
             _ = try accelerator.computeGradientsBatch(a: a, b: b, c: c)
         }
         
@@ -198,7 +198,7 @@ struct MetalPerformanceBenchmarks {
     
     @Test("Benchmark: Metal MED prediction - 1024×1024")
     func benchmarkMEDPrediction1024x1024() throws {
-        #guard(MetalAccelerator.isSupported)
+        guard MetalAccelerator.isSupported else { return }
         
         let accelerator = try MetalAccelerator()
         let count = 1024 * 1024
@@ -210,7 +210,7 @@ struct MetalPerformanceBenchmarks {
         }
         
         // Measure
-        let (minTime, maxTime, avgTime) = measure {
+        let (minTime, maxTime, avgTime) = try measure {
             _ = try accelerator.computeMEDPredictionBatch(a: a, b: b, c: c)
         }
         
@@ -230,7 +230,7 @@ struct MetalPerformanceBenchmarks {
     
     @Test("Benchmark: Metal MED prediction - 2048×2048")
     func benchmarkMEDPrediction2048x2048() throws {
-        #guard(MetalAccelerator.isSupported)
+        guard MetalAccelerator.isSupported else { return }
         
         let accelerator = try MetalAccelerator()
         let count = 2048 * 2048
@@ -242,7 +242,7 @@ struct MetalPerformanceBenchmarks {
         }
         
         // Measure
-        let (minTime, maxTime, avgTime) = measure {
+        let (minTime, maxTime, avgTime) = try measure {
             _ = try accelerator.computeMEDPredictionBatch(a: a, b: b, c: c)
         }
         
@@ -264,7 +264,7 @@ struct MetalPerformanceBenchmarks {
     
     @Test("Benchmark: CPU vs GPU comparison - 2048×2048 gradients")
     func benchmarkCPUvsGPUGradients() throws {
-        #guard(MetalAccelerator.isSupported)
+        guard MetalAccelerator.isSupported else { return }
         
         let metalAccelerator = try MetalAccelerator()
         let scalarAccelerator = ScalarAccelerator()
@@ -276,7 +276,7 @@ struct MetalPerformanceBenchmarks {
             _ = try metalAccelerator.computeGradientsBatch(a: a, b: b, c: c)
         }
         
-        let (_, _, gpuTime) = measure {
+        let (_, _, gpuTime) = try measure {
             _ = try metalAccelerator.computeGradientsBatch(a: a, b: b, c: c)
         }
         
@@ -311,7 +311,7 @@ struct MetalPerformanceBenchmarks {
     
     @Test("Benchmark: CPU vs GPU comparison - 2048×2048 MED prediction")
     func benchmarkCPUvsGPUMEDPrediction() throws {
-        #guard(MetalAccelerator.isSupported)
+        guard MetalAccelerator.isSupported else { return }
         
         let metalAccelerator = try MetalAccelerator()
         let scalarAccelerator = ScalarAccelerator()
@@ -323,7 +323,7 @@ struct MetalPerformanceBenchmarks {
             _ = try metalAccelerator.computeMEDPredictionBatch(a: a, b: b, c: c)
         }
         
-        let (_, _, gpuTime) = measure {
+        let (_, _, gpuTime) = try measure {
             _ = try metalAccelerator.computeMEDPredictionBatch(a: a, b: b, c: c)
         }
         

@@ -4,3 +4,10 @@
 *.xcworkspace/
 Package.resolved
 default.profraw
+
+# Stray compiler intermediates (emitted to CWD by older broken builds)
+*.o
+*.d
+*.dia
+*.swiftdeps
+.vscode/

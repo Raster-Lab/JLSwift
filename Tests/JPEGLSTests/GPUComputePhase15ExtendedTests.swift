@@ -496,7 +496,7 @@ struct MetalEncodingDecodingPipelineTests {
 
     @Test("Metal: encodingPipeline — small batch lossless (NEAR=0)")
     func testEncodingPipelineSmallBatchLossless() throws {
-        #guard(MetalAccelerator.isSupported)
+        guard MetalAccelerator.isSupported else { return }
         let accelerator = try MetalAccelerator()
         let a: [Int32] = [100, 200, 50]
         let b: [Int32] = [110, 190, 60]
@@ -513,7 +513,7 @@ struct MetalEncodingDecodingPipelineTests {
 
     @Test("Metal: encodingPipeline — small batch near-lossless (NEAR=3)")
     func testEncodingPipelineSmallBatchNearLossless() throws {
-        #guard(MetalAccelerator.isSupported)
+        guard MetalAccelerator.isSupported else { return }
         let accelerator = try MetalAccelerator()
         let a: [Int32] = [100, 200, 50]
         let b: [Int32] = [110, 190, 60]
@@ -535,7 +535,7 @@ struct MetalEncodingDecodingPipelineTests {
 
     @Test("Metal: encodingPipeline — NEAR=3 gradients near zero → q=0")
     func testEncodingPipelineNear3GradientsNearZero() throws {
-        #guard(MetalAccelerator.isSupported)
+        guard MetalAccelerator.isSupported else { return }
         let accelerator = try MetalAccelerator()
         // b[i]-c[i] = 1, a[i]-c[i] = 0, c[i]-a[i] = 0 → all within NEAR=3 → q=0
         // d1 = b - c = 11 - 10 = 1  (≤ NEAR=3)
@@ -555,7 +555,7 @@ struct MetalEncodingDecodingPipelineTests {
 
     @Test("Metal: encodingPipeline — quantised gradients match NEAR=0 for large gradients")
     func testEncodingPipelineQuantisedGradientsLarge() throws {
-        #guard(MetalAccelerator.isSupported)
+        guard MetalAccelerator.isSupported else { return }
         let accelerator = try MetalAccelerator()
         // With NEAR=0, the encoding pipeline should produce same quantisation
         // as the standalone quantizeGradientsBatch call.
@@ -577,7 +577,7 @@ struct MetalEncodingDecodingPipelineTests {
 
     @Test("Metal: encodingPipeline — empty arrays")
     func testEncodingPipelineEmpty() throws {
-        #guard(MetalAccelerator.isSupported)
+        guard MetalAccelerator.isSupported else { return }
         let accelerator = try MetalAccelerator()
         let (pred, err, q1, q2, q3) = try accelerator.computeEncodingPipelineBatch(
             a: [], b: [], c: [], x: [], near: 0, t1: 3, t2: 7, t3: 21)
@@ -588,7 +588,7 @@ struct MetalEncodingDecodingPipelineTests {
 
     @Test("Metal: decodingPipeline — reconstructs pixels from errors (small batch)")
     func testDecodingPipelineSmallBatch() throws {
-        #guard(MetalAccelerator.isSupported)
+        guard MetalAccelerator.isSupported else { return }
         let accelerator = try MetalAccelerator()
         let a: [Int32]      = [100, 200, 50]
         let b: [Int32]      = [110, 190, 60]
@@ -609,7 +609,7 @@ struct MetalEncodingDecodingPipelineTests {
 
     @Test("Metal: decodingPipeline — empty arrays")
     func testDecodingPipelineEmpty() throws {
-        #guard(MetalAccelerator.isSupported)
+        guard MetalAccelerator.isSupported else { return }
         let accelerator = try MetalAccelerator()
         let result = try accelerator.computeDecodingPipelineBatch(
             a: [], b: [], c: [], errval: [])
@@ -620,7 +620,7 @@ struct MetalEncodingDecodingPipelineTests {
 
     @Test("Metal: encode → decode round-trip (lossless, small batch)")
     func testEncodeDecodeLosslessRoundTripSmall() throws {
-        #guard(MetalAccelerator.isSupported)
+        guard MetalAccelerator.isSupported else { return }
         let accelerator = try MetalAccelerator()
         let a: [Int32] = [100, 200,  50, 150]
         let b: [Int32] = [110, 190,  60, 140]
@@ -636,7 +636,7 @@ struct MetalEncodingDecodingPipelineTests {
 
     @Test("Metal: encode → decode round-trip (lossless, large batch, GPU path)")
     func testEncodeDecodeLosslessRoundTripLarge() throws {
-        #guard(MetalAccelerator.isSupported)
+        guard MetalAccelerator.isSupported else { return }
         let accelerator = try MetalAccelerator()
         let count = MetalAccelerator.gpuThreshold * 2
         var a = [Int32](repeating: 0, count: count)
@@ -658,7 +658,7 @@ struct MetalEncodingDecodingPipelineTests {
 
     @Test("Metal: encoding pipeline matches standalone gradient + MED + quantise calls")
     func testEncodingPipelineMatchesStandaloneOps() throws {
-        #guard(MetalAccelerator.isSupported)
+        guard MetalAccelerator.isSupported else { return }
         let accelerator = try MetalAccelerator()
         let count = MetalAccelerator.gpuThreshold * 2
         var a = [Int32](repeating: 0, count: count)
