@@ -12,7 +12,7 @@
 //
 // Note: Near-lossless encoder round-trip tests are limited to small images (≤8×8)
 // due to a known pre-existing encoder issue. The decoder is correct (validated by
-// CharLS bit-exact comparison tests). See Phase 8.1 / Phase 12.1 in MILESTONES.md.
+// CharLS bit-exact comparison tests). See Phase 8.1 / Phase 12.1 in docs/MILESTONES.md.
 //
 // Note: Test patterns avoid purely flat (constant-value) images >8×8 and gradient
 // patterns that produce flat transformed components after HP1/HP3 colour transforms,

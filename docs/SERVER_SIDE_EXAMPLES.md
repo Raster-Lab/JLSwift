@@ -1612,4 +1612,4 @@ For more information:
 - [USAGE_EXAMPLES.md](USAGE_EXAMPLES.md) - General usage patterns
 - [PERFORMANCE_TUNING.md](PERFORMANCE_TUNING.md) - Performance optimisation guide
 - [TROUBLESHOOTING.md](TROUBLESHOOTING.md) - Common issues and solutions
-- [README.md](README.md) - Project overview and API reference
+- [README.md](../README.md) - Project overview and API reference

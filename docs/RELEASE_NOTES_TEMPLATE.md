@@ -175,7 +175,7 @@ Thank you to everyone who contributed to this release:
 
 ## Full Changelog
 
-See [CHANGELOG.md](CHANGELOG.md) for the complete list of changes in this release.
+See [CHANGELOG.md](../CHANGELOG.md) for the complete list of changes in this release.
 
 **Full Changelog**: vX.Y.Z-1...vX.Y.Z
 

@@ -35,7 +35,7 @@ validation, string manipulation, and mathematical operations.
 
 - When code changes are made, the following documents **must** be updated:
   - **README.md**: Update to reflect any new features, API changes, or usage instructions.
-  - **MILESTONES.md**: Update to reflect progress on project milestones and goals.
+  - **docs/MILESTONES.md**: Update to reflect progress on project milestones and goals.
 - All public types and methods must have documentation comments using `///` syntax.
 - Include usage examples in documentation comments where helpful.
 
@@ -52,8 +52,12 @@ JLSwift/
 │   ├── copilot-instructions.md  # This file
 │   └── workflows/
 │       └── ci.yml             # CI pipeline with coverage enforcement
-├── README.md                  # Project documentation
-└── MILESTONES.md              # Project milestones and roadmap
+├── README.md                  # Project overview (repo home)
+├── CHANGELOG.md               # Release history
+├── docs/                      # Guides, specs, and reference docs
+│   └── MILESTONES.md          # Project milestones and roadmap (+ others)
+└── man/
+    └── jpegls.1               # CLI man page
 ```
 
 ## Build and Test Commands
@@ -96,7 +100,7 @@ Before submitting or approving a PR, verify:
 1. All tests pass (`swift test`).
 2. Test coverage is above 95%.
 3. README.md is updated if features or APIs changed.
-4. MILESTONES.md is updated if milestone progress changed.
+4. docs/MILESTONES.md is updated if milestone progress changed.
 5. All public APIs have documentation comments.
 6. Code follows Swift 6.2+ best practices and concurrency model.
 7. Automatic code review has been run and feedback addressed.

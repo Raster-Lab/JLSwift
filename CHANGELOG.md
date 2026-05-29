@@ -50,7 +50,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - USAGE_EXAMPLES.md with 25+ real-world standalone examples
 - SWIFTUI_EXAMPLES.md with SwiftUI integration patterns for iOS/macOS
 - APPKIT_EXAMPLES.md with AppKit integration patterns for macOS
-- Man page documentation (jpegls.1) in groff format
+- Man page documentation (man/jpegls.1) in groff format
 - Man page installation instructions in README
 
 ### Changed
@@ -300,7 +300,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Release Notes Format
 
-See [RELEASE_NOTES_TEMPLATE.md](RELEASE_NOTES_TEMPLATE.md) for the release notes template used for GitHub releases.
+See [RELEASE_NOTES_TEMPLATE.md](docs/RELEASE_NOTES_TEMPLATE.md) for the release notes template used for GitHub releases.
 
 ## Version History
 
