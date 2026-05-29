@@ -15,7 +15,7 @@ let package = Package(
         ),
         .executable(
             name: "jpegls",
-            targets: ["jpegls"]
+            targets: ["jpeglscli"]
         ),
     ],
     dependencies: [
@@ -32,7 +32,7 @@ let package = Package(
             ]
         ),
         .executableTarget(
-            name: "jpegls",
+            name: "jpeglscli",
             dependencies: [
                 "JPEGLS",
                 .product(name: "ArgumentParser", package: "swift-argument-parser"),

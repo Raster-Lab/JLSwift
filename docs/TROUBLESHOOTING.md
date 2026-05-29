@@ -649,7 +649,7 @@ let testData = try MultiComponentImageData.grayscale(
 
 ### Useful Resources
 
-- **[README.md](README.md)**: Project overview
+- **[README.md](../README.md)**: Project overview
 - **[GETTING_STARTED.md](GETTING_STARTED.md)**: Quick start guide
 - **[PERFORMANCE_TUNING.md](PERFORMANCE_TUNING.md)**: Performance optimisation
 - **[MILESTONES.md](MILESTONES.md)**: Development roadmap

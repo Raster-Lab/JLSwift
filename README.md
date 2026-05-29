@@ -543,12 +543,12 @@ Complete documentation for the `jpegls` command-line tool is available as a Unix
 
 ```bash
 # System-wide installation (requires sudo)
-sudo cp jpegls.1 /usr/local/share/man/man1/
+sudo cp man/jpegls.1 /usr/local/share/man/man1/
 sudo mandb  # Update man page database (on Linux)
 
 # User installation (no sudo required)
 mkdir -p ~/.local/share/man/man1
-cp jpegls.1 ~/.local/share/man/man1/
+cp man/jpegls.1 ~/.local/share/man/man1/
 # Add to ~/.bashrc or ~/.zshrc: export MANPATH="$HOME/.local/share/man:$MANPATH"
 ```
 
@@ -559,7 +559,7 @@ cp jpegls.1 ~/.local/share/man/man1/
 man jpegls
 
 # Or view directly without installation
-man ./jpegls.1
+man ./man/jpegls.1
 ```
 
 The man page includes:
@@ -577,7 +577,7 @@ The man page includes:
 | 1.2.840.10008.1.2.4.80 | JPEG-LS Lossless Image Compression |
 | 1.2.840.10008.1.2.4.81 | JPEG-LS Lossy (Near-Lossless) Image Compression |
 
-See [MILESTONES.md](MILESTONES.md) for the detailed development roadmap.
+See [MILESTONES.md](docs/MILESTONES.md) for the detailed development roadmap.
 
 ## Building & Testing
 
@@ -714,7 +714,7 @@ JLSwift includes comprehensive conformance testing using reference files from th
 
 The conformance tests are located in `Tests/JPEGLSTests/CharLSConformanceTests.swift` with reference fixtures in `Tests/JPEGLSTests/TestFixtures/`. These tests ensure compatibility with the JPEG-LS standard (ISO/IEC 14495-1:1999 / ITU-T.87) and provide a foundation for bit-exact comparison with CharLS output.
 
-A full standards conformance matrix (`CONFORMANCE_MATRIX.md`) documents the mapping between every normative section of ITU-T.87 and its implementation in JLSwift, including all deviations found and fixed during Milestone 10 (Phases 10.1–10.4).
+A full standards conformance matrix (`docs/CONFORMANCE_MATRIX.md`) documents the mapping between every normative section of ITU-T.87 and its implementation in JLSwift, including all deviations found and fixed during Milestone 10 (Phases 10.1–10.4).
 
 ### Code Coverage Requirement
 
@@ -740,7 +740,11 @@ JLSwift/
 │   └── workflows/
 │       └── ci.yml             # CI pipeline (build → test with caching & concurrency)
 ├── README.md                  # This file
-└── MILESTONES.md              # Project roadmap
+├── CHANGELOG.md               # Release history
+├── docs/                      # Guides, specs, and reference docs (see docs/README.md)
+│   └── MILESTONES.md          # Project roadmap (+ guides, specs)
+└── man/
+    └── jpegls.1               # CLI man page
 ```
 
 ## Documentation
@@ -748,19 +752,19 @@ JLSwift/
 | Document | Description |
 |----------|-------------|
 | [README.md](README.md) | Project overview and usage guide (this file) |
-| [GETTING_STARTED.md](GETTING_STARTED.md) | Quick start guide with examples and common patterns |
-| [USAGE_EXAMPLES.md](USAGE_EXAMPLES.md) | Comprehensive real-world usage examples |
-| [SWIFTUI_EXAMPLES.md](SWIFTUI_EXAMPLES.md) | SwiftUI integration guide with image loading examples |
-| [APPKIT_EXAMPLES.md](APPKIT_EXAMPLES.md) | AppKit integration guide for macOS applications |
-| [SERVER_SIDE_EXAMPLES.md](SERVER_SIDE_EXAMPLES.md) | Server-side Swift integration guide (Vapor, Hummingbird, NIO) |
-| [DICOMKIT_INTEGRATION.md](DICOMKIT_INTEGRATION.md) | DICOMkit integration guide for DICOM imaging workflows |
-| [PERFORMANCE_TUNING.md](PERFORMANCE_TUNING.md) | Performance optimisation and benchmarking guide |
-| [METAL_GPU_ACCELERATION.md](METAL_GPU_ACCELERATION.md) | Metal GPU acceleration guide for large images |
-| [TROUBLESHOOTING.md](TROUBLESHOOTING.md) | Common issues and solutions |
-| [VERSIONING.md](VERSIONING.md) | Semantic versioning strategy and release guidelines |
+| [GETTING_STARTED.md](docs/GETTING_STARTED.md) | Quick start guide with examples and common patterns |
+| [USAGE_EXAMPLES.md](docs/USAGE_EXAMPLES.md) | Comprehensive real-world usage examples |
+| [SWIFTUI_EXAMPLES.md](docs/SWIFTUI_EXAMPLES.md) | SwiftUI integration guide with image loading examples |
+| [APPKIT_EXAMPLES.md](docs/APPKIT_EXAMPLES.md) | AppKit integration guide for macOS applications |
+| [SERVER_SIDE_EXAMPLES.md](docs/SERVER_SIDE_EXAMPLES.md) | Server-side Swift integration guide (Vapor, Hummingbird, NIO) |
+| [DICOMKIT_INTEGRATION.md](docs/DICOMKIT_INTEGRATION.md) | DICOMkit integration guide for DICOM imaging workflows |
+| [PERFORMANCE_TUNING.md](docs/PERFORMANCE_TUNING.md) | Performance optimisation and benchmarking guide |
+| [METAL_GPU_ACCELERATION.md](docs/METAL_GPU_ACCELERATION.md) | Metal GPU acceleration guide for large images |
+| [TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) | Common issues and solutions |
+| [VERSIONING.md](docs/VERSIONING.md) | Semantic versioning strategy and release guidelines |
 | [CHANGELOG.md](CHANGELOG.md) | Complete history of changes and releases |
-| [MILESTONES.md](MILESTONES.md) | Project milestones and development roadmap |
-| [X86_64_REMOVAL_GUIDE.md](X86_64_REMOVAL_GUIDE.md) | Step-by-step guide for removing x86-64 support |
+| [MILESTONES.md](docs/MILESTONES.md) | Project milestones and development roadmap |
+| [X86_64_REMOVAL_GUIDE.md](docs/X86_64_REMOVAL_GUIDE.md) | Step-by-step guide for removing x86-64 support |
 | [Copilot Instructions](.github/copilot-instructions.md) | Coding guidelines for contributors |
 
 ### API Documentation
@@ -774,9 +778,9 @@ swift package generate-documentation
 
 ### User Guides
 
-- **[Getting Started](GETTING_STARTED.md)**: Installation, quick start, and basic usage examples
-- **[Performance Tuning](PERFORMANCE_TUNING.md)**: Hardware acceleration, memory optimisation, and profiling
-- **[Troubleshooting](TROUBLESHOOTING.md)**: Solutions to common problems and debugging tips
+- **[Getting Started](docs/GETTING_STARTED.md)**: Installation, quick start, and basic usage examples
+- **[Performance Tuning](docs/PERFORMANCE_TUNING.md)**: Hardware acceleration, memory optimisation, and profiling
+- **[Troubleshooting](docs/TROUBLESHOOTING.md)**: Solutions to common problems and debugging tips
 
 ## Contributing
 
@@ -785,7 +789,7 @@ When contributing to JLSwift, please follow these guidelines:
 1. **Code Style**: Follow the [Swift API Design Guidelines](https://www.swift.org/documentation/api-design-guidelines/)
 2. **Testing**: All public APIs must have corresponding unit tests with >95% coverage
 3. **Documentation**: All public types and methods must have documentation comments
-4. **Documentation Updates**: Update README.md and MILESTONES.md when features or APIs change
+4. **Documentation Updates**: Update README.md and docs/MILESTONES.md when features or APIs change
 5. **British English**: All comments, documentation, help text, and error messages must use British English (e.g., colour, optimise, initialise, behaviour, organisation). Public API identifiers (type names, method names, property names) retain their original American spelling.
 
 ### Pull Request Checklist
@@ -793,7 +797,7 @@ When contributing to JLSwift, please follow these guidelines:
 - [ ] All tests pass (`swift test`)
 - [ ] Test coverage is above 95%
 - [ ] README.md is updated if features or APIs changed
-- [ ] MILESTONES.md is updated if milestone progress changed
+- [ ] docs/MILESTONES.md is updated if milestone progress changed
 - [ ] All public APIs have documentation comments
 - [ ] Code follows Swift 6.2+ best practices
 

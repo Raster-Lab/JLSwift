@@ -1551,7 +1551,7 @@ let frameWidth = 2048, frameHeight = 2048
 
 ### Documentation Resources
 
-- [README.md](README.md) - Project overview and features
+- [README.md](../README.md) - Project overview and features
 - [GETTING_STARTED.md](GETTING_STARTED.md) - Quick start guide
 - [PERFORMANCE_TUNING.md](PERFORMANCE_TUNING.md) - Performance optimisation
 - [TROUBLESHOOTING.md](TROUBLESHOOTING.md) - Common issues and solutions
@@ -1581,7 +1581,7 @@ swift test --filter JPEGLSPerformanceBenchmarks
 
 ### Contributing
 
-See [Copilot Instructions](.github/copilot-instructions.md) for coding guidelines and contribution requirements.
+See [Copilot Instructions](../.github/copilot-instructions.md) for coding guidelines and contribution requirements.
 
 ### Related Documentation
 

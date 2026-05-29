@@ -7,7 +7,7 @@ import Foundation
 /// Validates that the Milestone 16 performance improvements produce bit-exact
 /// output equivalent to the reference implementations and report measurable
 /// speed gains.  Tests cover:
-///   - Phase 16.1: Baseline measurements (documented in MILESTONES.md)
+///   - Phase 16.1: Baseline measurements (documented in docs/MILESTONES.md)
 ///   - Phase 16.2: Algorithmic optimisations (CLZ Golomb-Rice, gradient table)
 ///   - Phase 16.3: Memory & I/O optimisations (batch bit writes, buffer pre-sizing)
 

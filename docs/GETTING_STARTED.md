@@ -418,7 +418,7 @@ do {
 
 ### Learn More
 
-- **[README.md](README.md)**: Detailed feature documentation
+- **[README.md](../README.md)**: Detailed feature documentation
 - **[USAGE_EXAMPLES.md](USAGE_EXAMPLES.md)**: Comprehensive real-world usage examples
 - **[MILESTONES.md](MILESTONES.md)**: Development roadmap and progress
 - **[PERFORMANCE_TUNING.md](PERFORMANCE_TUNING.md)**: Performance optimisation guide
@@ -458,7 +458,7 @@ swift test --filter JPEGLSPerformanceBenchmarks
 ### Community
 
 - **Issues**: [GitHub Issues](https://github.com/Raster-Lab/JLSwift/issues)
-- **Contributing**: See [Copilot Instructions](.github/copilot-instructions.md)
+- **Contributing**: See [Copilot Instructions](../.github/copilot-instructions.md)
 
 ### Related Documentation
 
