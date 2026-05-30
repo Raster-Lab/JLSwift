@@ -161,7 +161,12 @@ extension JPEGLSCLITool {
                         s.encodeSeconds += encS
                         s.decodeSeconds += decS
                         s.pixels += pixelCount
-                        if near == 0 && !lossless { s.failures += 1 }
+                        if near == 0 && !lossless {
+                            s.failures += 1
+                            let where_ = firstMismatch(decoded.components.first?.pixels, pixels)
+                            FileHandle.standardError.write(Data(
+                                "FAIL lossless: \(url.path)  \(img.columns)x\(img.rows) \(bps)-bit\(where_)\n".utf8))
+                        }
 
                         frames.append(FrameResult(
                             modality: mod, width: img.columns, height: img.rows,
@@ -171,6 +176,8 @@ extension JPEGLSCLITool {
                         ))
                     } catch {
                         s.failures += 1
+                        FileHandle.standardError.write(Data(
+                            "FAIL error: \(url.path)  \(error)\n".utf8))
                     }
                 }
                 stats[mod] = s
@@ -189,6 +196,21 @@ extension JPEGLSCLITool {
             guard let a = a, a.count == b.count else { return false }
             for r in 0..<a.count where a[r] != b[r] { return false }
             return true
+        }
+
+        /// Describe the first differing sample between decoded and original
+        /// pixels, for actionable failure reports. Empty string if identical.
+        private func firstMismatch(_ a: [[Int]]?, _ b: [[Int]]) -> String {
+            guard let a = a else { return "  (decoded image had no component)" }
+            if a.count != b.count { return "  (decoded \(a.count) rows != original \(b.count))" }
+            for r in 0..<a.count where a[r] != b[r] {
+                let cols = min(a[r].count, b[r].count)
+                for c in 0..<cols where a[r][c] != b[r][c] {
+                    return "  first mismatch at (row \(r), col \(c)): decoded \(a[r][c]) != original \(b[r][c])"
+                }
+                return "  row \(r) length differs (decoded \(a[r].count) vs original \(b[r].count))"
+            }
+            return ""
         }
 
         private func printTable(stats: [String: ModalityStats]) {

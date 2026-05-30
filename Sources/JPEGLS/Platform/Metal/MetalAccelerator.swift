@@ -96,8 +96,8 @@ public final class MetalAccelerator: @unchecked Sendable {
         
         // Create compute pipeline states for all shaders
         do {
-            let library = try device.makeDefaultLibrary(bundle: .module)
-            
+            let library = try Self.loadShaderLibrary(device: device)
+
             self.gradientPipelineState = try Self.makePipelineState(
                 library: library, device: device, functionName: "compute_gradients")
             self.predictionPipelineState = try Self.makePipelineState(
@@ -129,7 +129,46 @@ public final class MetalAccelerator: @unchecked Sendable {
     }
     
     // MARK: - Private Helpers
-    
+
+    /// Load the Metal shader library for `JPEGLSShaders.metal`.
+    ///
+    /// Tries the precompiled `default.metallib` first — this is produced when the
+    /// package is built by Xcode's build system. Under Swift Package Manager on the
+    /// command line (`swift build`/`swift test`), `.process` only *copies* the
+    /// `.metal` file into the resource bundle without compiling it, so no
+    /// `default.metallib` exists and `makeDefaultLibrary(bundle:)` fails. In that
+    /// case we locate the bundled `.metal` source and compile it at runtime, so the
+    /// GPU path works in both environments.
+    private static func loadShaderLibrary(device: MTLDevice) throws -> MTLLibrary {
+        // Fast path: precompiled default library (Xcode-built bundles).
+        if let library = try? device.makeDefaultLibrary(bundle: .module) {
+            return library
+        }
+
+        // Fallback: compile the bundled shader source at runtime (SPM CLI builds).
+        guard let sourceURL = Bundle.module.url(
+            forResource: "JPEGLSShaders", withExtension: "metal"
+        ) else {
+            throw MetalAcceleratorError.libraryCreationFailed(
+                "JPEGLSShaders.metal not found in module bundle and no default.metallib present")
+        }
+
+        let source: String
+        do {
+            source = try String(contentsOf: sourceURL, encoding: .utf8)
+        } catch {
+            throw MetalAcceleratorError.libraryCreationFailed(
+                "Failed to read JPEGLSShaders.metal: \(error)")
+        }
+
+        do {
+            return try device.makeLibrary(source: source, options: nil)
+        } catch {
+            throw MetalAcceleratorError.libraryCreationFailed(
+                "Runtime compilation of JPEGLSShaders.metal failed: \(error)")
+        }
+    }
+
     /// Create a compute pipeline state for the named shader function.
     private static func makePipelineState(
         library: MTLLibrary,
@@ -506,9 +545,13 @@ public final class MetalAccelerator: @unchecked Sendable {
         var d3 = [Int32](repeating: 0, count: count)
         
         for i in 0..<count {
-            d1[i] = b[i] - c[i]  // horizontal gradient
-            d2[i] = a[i] - c[i]  // vertical gradient
-            d3[i] = c[i] - a[i]  // diagonal gradient
+            // Use wrapping subtraction to match the GPU shader, which computes
+            // these differences in 32-bit `int` with two's-complement wraparound.
+            // This keeps the CPU and GPU paths bit-identical and prevents the
+            // public API from trapping on extreme Int32 inputs (e.g. 0 - Int32.min).
+            d1[i] = b[i] &- c[i]  // horizontal gradient
+            d2[i] = a[i] &- c[i]  // vertical gradient
+            d3[i] = c[i] &- a[i]  // diagonal gradient
         }
         
         return (d1, d2, d3)
@@ -798,7 +841,10 @@ public enum MetalAcceleratorError: Error, CustomStringConvertible {
     
     /// Failed to find shader function.
     case shaderFunctionNotFound(String)
-    
+
+    /// Failed to load or compile the Metal shader library.
+    case libraryCreationFailed(String)
+
     /// Failed to create compute pipeline state.
     case pipelineCreationFailed(Error)
     
@@ -819,6 +865,8 @@ public enum MetalAcceleratorError: Error, CustomStringConvertible {
             return "Failed to create Metal command queue"
         case .shaderFunctionNotFound(let name):
             return "Shader function '\(name)' not found in Metal library"
+        case .libraryCreationFailed(let reason):
+            return "Failed to load Metal shader library: \(reason)"
         case .pipelineCreationFailed(let error):
             return "Failed to create compute pipeline state: \(error)"
         case .bufferCreationFailed:
