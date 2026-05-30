@@ -7,19 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
-
-#### DICOM Independence & Final Integration (Milestone 20)
-- Non-DICOM usage examples in USAGE_EXAMPLES.md (general-purpose compression, web assets, archival storage)
-- DICOM-aware/DICOM-independent architecture documented in README.md
-
-### Fixed
-
-#### DICOM Independence & Final Integration (Milestone 20)
-- Fixed incorrect threshold values in `JPEGLSPresetParametersTests` for 8-bit and 12-bit images; test expectations now match the ITU-T.87 Table C.2 formula (8-bit: T1=3, T2=7, T3=21; 12-bit: T1=18, T2=67, T3=276)
-- Fixed incorrect expected values in `JPEGLSNearLosslessTests` for reconstructed-value boundary tests; test inputs now avoid the ITU-T.87 modular-wrap threshold, correctly exercising the clamp-to-MAXVAL and clamp-to-zero paths
-
-## [0.8.0] - In Progress
+## [0.8.0] - 2026-05-30
 
 ### Added
 
@@ -53,16 +41,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Man page documentation (man/jpegls.1) in groff format
 - Man page installation instructions in README
 
+#### DICOM Test Harness & Tooling
+- `jpegls bench-dicom` command: JPEG-LS round-trip benchmark over a DICOM corpus, reporting per-modality encode/decode throughput and lossless verification
+- First-mismatch diagnostics on `bench-dicom` lossless failures (reports row/col and decoded vs original sample value, written to stderr)
+
+#### DICOM Independence & Final Integration (Milestone 20)
+- Non-DICOM usage examples in USAGE_EXAMPLES.md (general-purpose compression, web assets, archival storage)
+- DICOM-aware/DICOM-independent architecture documented in README.md
+
 ### Changed
 - Overall project test coverage measured at 95.80% on Linux x86_64 (exceeds 95% threshold)
 - Coverage varies by platform due to conditional compilation of platform-specific optimisations
 - README.md updated with accurate coverage measurements and platform notes
 - README.md updated with links to new documentation guides
 - MILESTONES.md updated to reflect progress on Milestone 8 and 9
+- Reorganised repository layout: documentation moved into `docs/`, man page into `man/`
+- Renamed executable target `jpegls` → `jpeglscli` to avoid a case-insensitive-filesystem collision with the `JPEGLS` library target (the built product is still named `jpegls`)
 
 ### Fixed
 - Parser now handles CharLS-encoded files with extension markers
 - All 12 CharLS reference files can be parsed without errors
+- Build & test compilation on case-insensitive (Apple) filesystems
+- `SIMDMask.any()` build error on ARM64 (replaced with an equality check)
+- Metal GPU path now works under `swift build`/`swift test`: when no precompiled `default.metallib` is present (SwiftPM copies the `.metal` source rather than compiling it), `MetalAccelerator` compiles the bundled shader source at runtime instead of failing with "no default library was found"
+- `ARM64Accelerator.computeGolombRiceParameter` now clamps the result to the documented `[0, 31]` range for pathological `a/n` ratios (previously could return an unclamped value; now matches `X86_64Accelerator`)
+- `MetalAccelerator.computeGradientsBatch` CPU fallback now uses wrapping subtraction to match the GPU shader's two's-complement semantics, keeping the two paths bit-identical and preventing a trap on extreme `Int32` inputs (e.g. `0 - Int32.min`)
+
+#### DICOM Independence & Final Integration (Milestone 20)
+- Fixed incorrect threshold values in `JPEGLSPresetParametersTests` for 8-bit and 12-bit images; test expectations now match the ITU-T.87 Table C.2 formula (8-bit: T1=3, T2=7, T3=21; 12-bit: T1=18, T2=67, T3=276)
+- Fixed incorrect expected values in `JPEGLSNearLosslessTests` for reconstructed-value boundary tests; test inputs now avoid the ITU-T.87 modular-wrap threshold, correctly exercising the clamp-to-MAXVAL and clamp-to-zero paths
 
 ## [0.7.0] - Completed
 
@@ -314,5 +321,5 @@ See [RELEASE_NOTES_TEMPLATE.md](docs/RELEASE_NOTES_TEMPLATE.md) for the release 
 - **0.8.0** - Validation & conformance (CharLS, benchmarks, edge cases)
 - **1.0.0** - Planned stable release
 
-<!-- Note: Comparison links will be added after the first release is tagged -->
-[Unreleased]: https://github.com/Raster-Lab/JLSwift/commits/main
+[Unreleased]: https://github.com/Raster-Lab/JLSwift/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/Raster-Lab/JLSwift/releases/tag/v0.8.0
