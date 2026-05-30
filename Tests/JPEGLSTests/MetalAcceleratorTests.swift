@@ -135,15 +135,18 @@ struct MetalAcceleratorTests {
         let c: [Int32] = [32768, 32768, 0, 0]
         
         let (d1, d2, d3) = try accelerator.computeGradientsBatch(a: a, b: b, c: c)
-        
-        // Verify gradients computed correctly
+
+        // Verify gradients computed correctly. Use wrapping subtraction to match
+        // the accelerator's two's-complement wraparound semantics — with Int32.min
+        // boundary inputs, plain subtraction (e.g. 0 - Int32.min) would itself
+        // overflow and trap.
         for i in 0..<a.count {
-            #expect(d1[i] == b[i] - c[i])
-            #expect(d2[i] == a[i] - c[i])
-            #expect(d3[i] == c[i] - a[i])
+            #expect(d1[i] == b[i] &- c[i])
+            #expect(d2[i] == a[i] &- c[i])
+            #expect(d3[i] == c[i] &- a[i])
         }
     }
-    
+
     @Test("Compute gradients with empty arrays")
     func testGradientsWithEmptyArrays() throws {
         guard MetalAccelerator.isSupported else { return }

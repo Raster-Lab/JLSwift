@@ -193,8 +193,11 @@ public struct ARM64Accelerator: PlatformAccelerator {
         while k < 31 && (n << k) < a {
             k += 1
         }
-        
-        return k
+
+        // Clamp to the documented [0, 31] range. When the CLZ-based estimate
+        // already starts above 31 (pathological a/n), the loop above is skipped,
+        // so the clamp here is what enforces the upper bound (matches X86_64Accelerator).
+        return min(k, 31)
     }
     
     // MARK: - NEON-Optimized MED Predictor
