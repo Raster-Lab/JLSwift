@@ -617,84 +617,144 @@ public struct JPEGLSDecoder: Sendable {
         let runDecoder = try JPEGLSRunModeDecoder(parameters: parameters, near: scanHeader.near)
         var context = try JPEGLSContextModel(parameters: parameters, near: scanHeader.near)
         let (limit, qbppBits) = computeGolombLimit(parameters: parameters, near: scanHeader.near, bitsPerSample: bitsPerSample)
-        
-        // Initialize pixel buffer
-        var pixels = Array(repeating: Array(repeating: 0, count: width), count: height)
-        
-        // Track the left-edge value for boundary Rc at col=0.
-        // In CharLS this is previous_line[0], which equals the first pixel of
-        // the row decoded TWO iterations ago (0 for rows 0 and 1).
-        var prevRowEdge = 0
-        
-        // Decode pixels in raster order
-        for row in 0..<height {
-            // Note: RUNindex is NOT reset per line. Per ITU-T.87 §A.7.1 and CharLS,
-            // RUNindex persists across scan lines; it is only initialised to 0 at scan start.
-            // Capture the edge value before this row updates it.
-            let edgeForThisRow = prevRowEdge
-            // After this row, the edge for the NEXT row becomes the first pixel
-            // of the current previous row (i.e., prev_row[0]).
-            if row > 0 {
-                prevRowEdge = pixels[row - 1][0]
-            }
-            var col = 0
-            while col < width {
-                // Get neighbor pixels
-                let (a, b, c, d) = getNeighbors(pixels: pixels, row: row, col: col, width: width, prevRowEdge: edgeForThisRow)
-                
-                // Check for run mode: all quantized gradients are zero
-                let (d1, d2, d3) = decoder.computeGradients(a: a, b: b, c: c, d: d)
-                let q1 = decoder.quantizeGradient(d1)
-                let q2 = decoder.quantizeGradient(d2)
-                let q3 = decoder.quantizeGradient(d3)
-                
-                if q1 == 0 && q2 == 0 && q3 == 0 {
-                    // Run mode: decode run of pixels with value = a (the run value)
-                    let runResult = try decodeRun(
-                        reader: reader,
-                        runDecoder: runDecoder,
-                        context: &context,
-                        runValue: a,
-                        row: row,
-                        col: col,
-                        previousRow: row > 0 ? pixels[row - 1] : nil,
-                        remainingInLine: width - col,
-                        parameters: parameters,
-                        near: scanHeader.near,
-                        limit: limit,
-                        qbppBits: qbppBits
-                    )
-                    
-                    // Fill in run result
-                    col = fillRunResult(
-                        runResult: runResult,
-                        pixels: &pixels,
-                        row: row,
-                        col: col,
-                        width: width,
-                        runValue: a
-                    )
-                } else {
-                    // Regular mode
-                    let pixel = try decodeSinglePixel(
-                        reader: reader,
-                        decoder: decoder,
-                        runDecoder: runDecoder,
-                        context: &context,
-                        a: a, b: b, c: c,
-                        q1: q1, q2: q2, q3: q3,
-                        parameters: parameters,
-                        near: scanHeader.near,
-                        limit: limit,
-                        qbppBits: qbppBits
-                    )
-                    pixels[row][col] = pixel
-                    col += 1
+        let near = scanHeader.near
+
+        // Decode into a flat UInt16 plane (samples are clamped to
+        // MAXVAL ≤ 2^16 − 1 by the pipeline) accessed through one unsafe
+        // buffer scoped over the whole scan: no nested-array indirection,
+        // no per-access bounds checks, no copy-on-write uniqueness checks
+        // per row, and half the memory traffic of [[Int]].
+        var flat = [UInt16](repeating: 0, count: width * height)
+
+        try flat.withUnsafeMutableBufferPointer { buf in
+            // Track the left-edge value for boundary Rc at col=0.
+            // In CharLS this is previous_line[0], which equals the first pixel
+            // of the row decoded TWO iterations ago (0 for rows 0 and 1).
+            var prevRowEdge = 0
+
+            // Decode pixels in raster order
+            for row in 0..<height {
+                // Note: RUNindex is NOT reset per line. Per ITU-T.87 §A.7.1 and CharLS,
+                // RUNindex persists across scan lines; it is only initialised to 0 at scan start.
+                let rowBase = row * width
+                let prevBase = rowBase - width
+                // Capture the edge value before this row updates it.
+                let edgeForThisRow = prevRowEdge
+                if row > 0 {
+                    prevRowEdge = Int(buf[prevBase])
+                }
+                var col = 0
+                while col < width {
+                    // Causal neighbours per ITU-T.87 §3.2 (same boundary
+                    // semantics as getNeighbors, over the flat plane).
+                    let a: Int, b: Int, c: Int, d: Int
+                    if row == 0 {
+                        a = col == 0 ? 0 : Int(buf[rowBase + col - 1])
+                        b = 0; c = 0; d = 0
+                    } else if col == 0 {
+                        let top = Int(buf[prevBase])
+                        a = top
+                        b = top
+                        c = edgeForThisRow
+                        d = width > 1 ? Int(buf[prevBase + 1]) : top
+                    } else {
+                        a = Int(buf[rowBase + col - 1])
+                        b = Int(buf[prevBase + col])
+                        c = Int(buf[prevBase + col - 1])
+                        d = col + 1 < width ? Int(buf[prevBase + col + 1]) : b
+                    }
+
+                    // Check for run mode: all quantized gradients are zero
+                    let (d1, d2, d3) = decoder.computeGradients(a: a, b: b, c: c, d: d)
+                    let q1 = decoder.quantizeGradient(d1)
+                    let q2 = decoder.quantizeGradient(d2)
+                    let q3 = decoder.quantizeGradient(d3)
+
+                    if q1 == 0 && q2 == 0 && q3 == 0 {
+                        // Run mode: decode run of pixels with value = a.
+                        // readRunLength clamps to remainingInLine, so the
+                        // fill below cannot overrun the row.
+                        let remainingInLine = width - col
+                        let runLength = try readRunLength(
+                            reader: reader,
+                            runDecoder: runDecoder,
+                            context: &context,
+                            remainingInLine: remainingInLine
+                        )
+                        if runLength > 0 {
+                            let rv = UInt16(truncatingIfNeeded: a)
+                            for i in (rowBase + col)..<(rowBase + col + runLength) {
+                                buf[i] = rv
+                            }
+                            col += runLength
+                        }
+
+                        if runLength < remainingInLine {
+                            // Interrupted run: decode the interruption sample
+                            // (per ITU-T.87 §A.7.2 / CharLS).
+                            let ra = a
+                            let rb = row > 0 ? Int(buf[prevBase + col]) : 0
+                            let riType = (abs(ra - rb) <= near) ? 1 : 0
+                            let k = context.computeRunInterruptionGolombK(riType: riType)
+                            let j = runDecoder.computeJ(runIndex: context.currentRunIndex)
+                            let adjustedLimit = limit - j - 1
+                            let eMappedErrorValue = try readGolombCode(
+                                reader: reader, k: k, limit: adjustedLimit, qbppBits: qbppBits
+                            )
+                            let errorValue = context.computeRunInterruptionErrorValue(
+                                temp: eMappedErrorValue + riType, k: k, riType: riType
+                            )
+                            let sample: Int
+                            if riType == 1 {
+                                sample = runDecoder.reconstructSample(prediction: ra, error: errorValue)
+                            } else {
+                                let signCorrectedError = errorValue * (rb >= ra ? 1 : -1)
+                                sample = runDecoder.reconstructSample(prediction: rb, error: signCorrectedError)
+                            }
+                            context.updateRunInterruptionContext(
+                                errorValue: errorValue,
+                                eMappedErrorValue: eMappedErrorValue,
+                                riType: riType
+                            )
+                            // Per CharLS, decrement RUNindex AFTER the interruption pixel.
+                            context.decrementRunIndex()
+
+                            buf[rowBase + col] = UInt16(truncatingIfNeeded: sample)
+                            col += 1
+                        }
+                    } else {
+                        // Regular mode
+                        let pixel = try decodeSinglePixel(
+                            reader: reader,
+                            decoder: decoder,
+                            runDecoder: runDecoder,
+                            context: &context,
+                            a: a, b: b, c: c,
+                            q1: q1, q2: q2, q3: q3,
+                            parameters: parameters,
+                            near: near,
+                            limit: limit,
+                            qbppBits: qbppBits
+                        )
+                        buf[rowBase + col] = UInt16(truncatingIfNeeded: pixel)
+                        col += 1
+                    }
                 }
             }
         }
 
-        return pixels
+        // Widen back to the public [[Int]] representation once per scan.
+        return flat.withUnsafeBufferPointer { buf in
+            (0..<height).map { row -> [Int] in
+                let base = row * width
+                return [Int](unsafeUninitializedCapacity: width) { out, count in
+                    for i in 0..<width {
+                        out[i] = Int(buf[base + i])
+                    }
+                    count = width
+                }
+            }
+        }
     }
     
     /// Decode a single line for a component (used for line-interleaved mode)

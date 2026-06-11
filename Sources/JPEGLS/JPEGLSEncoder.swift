@@ -712,6 +712,24 @@ public struct JPEGLSEncoder: Sendable {
             throw JPEGLSError.encodingFailed(reason: "Failed to get component pixels")
         }
 
+        // Lossless scans take the flat fast path: no reconstructed-value
+        // tracking is needed, so the whole scan can run over a contiguous
+        // UInt16 plane.
+        if near == 0 {
+            try encodeNoneInterleavedLossless(
+                componentPixels: componentPixels,
+                width: buffer.width,
+                height: buffer.height,
+                regularMode: regularMode,
+                runMode: runMode,
+                context: &context,
+                writer: writer,
+                limit: limit,
+                qbppBits: qbppBits
+            )
+            return
+        }
+
         // Track reconstructed values for near-lossless neighbour computation.
         // For lossless (NEAR = 0) this array is never read — every access below
         // is guarded by `near > 0` — so skip the full-frame allocation entirely
@@ -870,6 +888,167 @@ public struct JPEGLSEncoder: Sendable {
         }
     }
     
+    /// Lossless (NEAR = 0) non-interleaved scan over a flat UInt16 plane.
+    ///
+    /// Identical coding decisions to the general path — same neighbours,
+    /// gradients, run detection, and bit output — but the pixels live in one
+    /// contiguous buffer accessed through an unsafe pointer scoped over the
+    /// whole scan: no nested-array indirection, no per-access bounds checks,
+    /// and the run scan compares against the row directly. Input samples are
+    /// validated to [0, MAXVAL ≤ 2^16 − 1] by MultiComponentImageData.
+    private func encodeNoneInterleavedLossless(
+        componentPixels: [[Int]],
+        width: Int,
+        height: Int,
+        regularMode: JPEGLSRegularMode,
+        runMode: JPEGLSRunMode,
+        context: inout JPEGLSContextModel,
+        writer: JPEGLSBitstreamWriter,
+        limit: Int,
+        qbppBits: Int
+    ) throws {
+        // Flatten once per scan.
+        var flat = [UInt16](repeating: 0, count: width * height)
+        flat.withUnsafeMutableBufferPointer { out in
+            for row in 0..<height {
+                let base = row * width
+                componentPixels[row].withUnsafeBufferPointer { src in
+                    for i in 0..<width {
+                        out[base + i] = UInt16(truncatingIfNeeded: src[i])
+                    }
+                }
+            }
+        }
+
+        try flat.withUnsafeBufferPointer { buf in
+            var prevRowEdge = 0
+            for row in 0..<height {
+                // Note: RUNindex is NOT reset per line. Per ITU-T.87 §A.7.1 and CharLS,
+                // RUNindex persists across scan lines; it is only initialised to 0 at scan start.
+                let rowBase = row * width
+                let prevBase = rowBase - width
+                let edgeForThisRow = prevRowEdge
+                if row > 0 {
+                    prevRowEdge = Int(buf[prevBase])
+                }
+                var col = 0
+                while col < width {
+                    // Causal neighbours per ITU-T.87 §3.2 (same boundary
+                    // semantics as the general path).
+                    let actual = Int(buf[rowBase + col])
+                    let a: Int, b: Int, c: Int, d: Int
+                    if row == 0 {
+                        a = col == 0 ? 0 : Int(buf[rowBase + col - 1])
+                        b = 0; c = 0; d = 0
+                    } else if col == 0 {
+                        let top = Int(buf[prevBase])
+                        a = top
+                        b = top
+                        c = edgeForThisRow
+                        d = width > 1 ? Int(buf[prevBase + 1]) : top
+                    } else {
+                        a = Int(buf[rowBase + col - 1])
+                        b = Int(buf[prevBase + col])
+                        c = Int(buf[prevBase + col - 1])
+                        d = col + 1 < width ? Int(buf[prevBase + col + 1]) : b
+                    }
+
+                    // Check for run mode: all quantized gradients are zero
+                    let (d1, d2, d3) = regularMode.computeGradients(a: a, b: b, c: c, d: d)
+                    let q1 = regularMode.quantizeGradient(d1)
+                    let q2 = regularMode.quantizeGradient(d2)
+                    let q3 = regularMode.quantizeGradient(d3)
+
+                    if q1 == 0 && q2 == 0 && q3 == 0 {
+                        // Run mode: scan the rest of the row for the run value
+                        // (exact equality — lossless) with a 4-way unrolled test.
+                        let runValue = a
+                        let rv16 = UInt16(truncatingIfNeeded: runValue)
+                        let rowEnd = rowBase + width
+                        var i = rowBase + col
+                        while i + 4 <= rowEnd {
+                            if buf[i] != rv16 || buf[i + 1] != rv16
+                                || buf[i + 2] != rv16 || buf[i + 3] != rv16 {
+                                break
+                            }
+                            i += 4
+                        }
+                        while i < rowEnd && buf[i] == rv16 {
+                            i += 1
+                        }
+                        let actualRunLength = i - (rowBase + col)
+                        let remainingInLine = width - col
+
+                        // Encode run length
+                        let encoded = runMode.encodeRunLength(
+                            runLength: actualRunLength,
+                            runIndex: context.currentRunIndex
+                        )
+
+                        // Write continuation bits (1s)
+                        writer.writeOnes(encoded.continuationBits)
+
+                        // Compute finalRunIndex now so it can be used for the interruption
+                        // pixel's adjustedLimit (matching the decoder, which uses the
+                        // post-continuation run index when computing J for the limit).
+                        let finalRunIndex = min(encoded.runIndex + encoded.continuationBits, 31)
+
+                        if actualRunLength < remainingInLine {
+                            // Run was interrupted — write termination and remainder.
+                            writeRunTermination(encoded: encoded, writer: writer)
+
+                            let interruptionCol = col + actualRunLength
+                            let interruptionActual = Int(buf[rowBase + interruptionCol])
+                            let encRb = row > 0 ? Int(buf[prevBase + interruptionCol]) : 0
+
+                            // Per ITU-T.87 / CharLS: use finalRunIndex (post-continuation)
+                            // for J when computing adjustedLimit in the interruption pixel.
+                            context.setRunIndex(finalRunIndex)
+                            _ = writeRunInterruptionBits(
+                                interruptionValue: interruptionActual,
+                                runValue: runValue,
+                                rb: encRb,
+                                near: 0,
+                                context: &context,
+                                regularMode: regularMode,
+                                runMode: runMode,
+                                writer: writer,
+                                limit: limit,
+                                qbppBits: qbppBits
+                            )
+                            // Decrement RUNindex after the interruption pixel, matching
+                            // the decoder which calls decrementRunIndex() at this point.
+                            context.setRunIndex(max(finalRunIndex - 1, 0))
+                            col = interruptionCol + 1
+                        } else {
+                            // Run reaches end of line: write one '1' bit for a
+                            // partial last block; nothing for an exact fill
+                            // (per ITU-T.87 §A.7.1).
+                            if encoded.remainder > 0 {
+                                writer.writeBits(1, count: 1)
+                            }
+                            col += actualRunLength
+                            context.setRunIndex(finalRunIndex)
+                        }
+                    } else {
+                        // Regular mode
+                        _ = encodePixel(
+                            actual: actual,
+                            a: a, b: b, c: c,
+                            q1: q1, q2: q2, q3: q3,
+                            regularMode: regularMode,
+                            context: &context,
+                            writer: writer,
+                            limit: limit,
+                            qbppBits: qbppBits
+                        )
+                        col += 1
+                    }
+                }
+            }
+        }
+    }
+
     /// Encode line-interleaved scan
     private func encodeLineInterleaved(
         buffer: JPEGLSPixelBuffer,
