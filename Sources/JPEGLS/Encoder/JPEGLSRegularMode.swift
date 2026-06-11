@@ -373,40 +373,60 @@ public struct JPEGLSRegularMode: Sendable {
     ) -> EncodedPixel {
         // Step 1: Compute local gradients
         let (d1, d2, d3) = computeGradients(a: a, b: b, c: c, d: d)
-        
+
         // Step 2: Quantize gradients
         let q1 = quantizeGradient(d1)
         let q2 = quantizeGradient(d2)
         let q3 = quantizeGradient(d3)
-        
+
         // Step 3: Compute context index and sign
-        let contextIndex = context.computeContextIndex(q1: q1, q2: q2, q3: q3)
-        let sign = context.computeContextSign(q1: q1, q2: q2, q3: q3)
-        
+        let (contextIndex, sign) = context.computeContextIndexAndSign(q1: q1, q2: q2, q3: q3)
+
+        return encodePixel(
+            actual: actual, a: a, b: b, c: c,
+            contextIndex: contextIndex, sign: sign, context: context
+        )
+    }
+
+    /// Encode a single pixel in regular mode with a precomputed context.
+    ///
+    /// Identical to `encodePixel(actual:a:b:c:d:context:)` from step 4
+    /// onward; the caller supplies the context index and sign it already
+    /// derived from the quantized gradients (the scan loop computes them
+    /// for the run-mode test, so recomputing here would quantize every
+    /// gradient twice per pixel).
+    public func encodePixel(
+        actual: Int,
+        a: Int,
+        b: Int,
+        c: Int,
+        contextIndex: Int,
+        sign: Int,
+        context: JPEGLSContextModel
+    ) -> EncodedPixel {
+        // Steps 5/7/7a inputs: bias C[Q], Golomb k, and the k=0 error
+        // correction from a single context-record load.
+        let (biasC, k, errorCorrection) = context.pixelCodingState(contextIndex: contextIndex)
+
         // Step 4: Compute MED prediction
         let basePrediction = computeMEDPrediction(a: a, b: b, c: c)
-        
+
         // Step 5: Apply bias correction
-        let biasC = context.getC(contextIndex: contextIndex)
         let correctedPrediction = applyBiasCorrection(
             prediction: basePrediction,
             biasC: biasC,
             sign: sign
         )
-        
+
         // Step 6: Compute quantised (near-lossless) or exact (lossless) prediction error
         let quantisedError = computePredictionError(actual: actual, prediction: correctedPrediction)
-        
+
         // Step 6a: Apply sign to normalise the error per ITU-T.87 Section 4.3.3.
         // When the context sign is negative the error is negated so that the encoded
         // error is always relative to the normalised (positive-sign) context.
         let error = sign * quantisedError
-        
-        // Step 7: Get Golomb parameter k from context (needed for error correction)
-        let k = context.computeGolombParameter(contextIndex: contextIndex)
-        
+
         // Step 7a: Apply error correction XOR per ITU-T.87 §A.4.1
-        let errorCorrection = context.getErrorCorrection(contextIndex: contextIndex, k: k)
         let correctedError = error ^ errorCorrection
         
         // Step 8: Map to non-negative for Golomb coding

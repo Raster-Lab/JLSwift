@@ -93,23 +93,38 @@ public struct JPEGLSRunMode: Sendable {
         startIndex: Int,
         runValue: Int
     ) -> Int {
-        var runLength = 0
         let limit = pixels.count
-        
-        // Scan ahead to count matching pixels.
+
         // For near-lossless (NEAR > 0) a pixel is part of the run when
         // |pixel − runValue| ≤ NEAR; for lossless (NEAR = 0) this reduces
-        // to exact equality.
-        for i in startIndex..<limit {
-            if abs(pixels[i] - runValue) <= near {
-                runLength += 1
-            } else {
-                // Run interrupted
-                break
+        // to exact equality, which scans much faster: the buffer is immutable
+        // during the scan, so an unsafe buffer pointer (no per-element bounds
+        // checks) with a 4-way unrolled equality test lets the compiler
+        // evaluate the comparisons branchlessly per block.
+        if near == 0 {
+            return pixels.withUnsafeBufferPointer { buf -> Int in
+                var i = startIndex
+                while i + 4 <= limit {
+                    if (buf[i] != runValue) || (buf[i + 1] != runValue)
+                        || (buf[i + 2] != runValue) || (buf[i + 3] != runValue) {
+                        break
+                    }
+                    i += 4
+                }
+                while i < limit && buf[i] == runValue {
+                    i += 1
+                }
+                return i - startIndex
             }
         }
-        
-        return runLength
+
+        return pixels.withUnsafeBufferPointer { buf -> Int in
+            var i = startIndex
+            while i < limit && abs(buf[i] - runValue) <= near {
+                i += 1
+            }
+            return i - startIndex
+        }
     }
     
     // MARK: - J[RUNindex] Mapping

@@ -17,7 +17,7 @@ This guide demonstrates how to integrate JLSwift JPEG-LS compression into SwiftU
 - [Performance Optimisation](#performance-optimisation)
   - [Caching Decoded Images](#caching-decoded-images)
   - [Background Decoding](#background-decoding)
-  - [Memory-Efficient Tile Loading](#memory-efficient-tile-loading)
+  - [Loading Very Large Images](#loading-very-large-images)
 - [Error Handling](#error-handling)
 - [Platform Differences](#platform-differences)
 
@@ -1036,90 +1036,55 @@ struct BackgroundDecodingImageView: View {
 }
 ```
 
-### Memory-Efficient Tile Loading
+### Loading Very Large Images
 
-For very large medical images, use tile-based loading:
+For very large medical images, decode off the main actor and rely on
+restart-interval parallelism. The codec decodes the full frame as one flat
+pixel plane per scan — there is no tile or region decoding API — but images
+encoded with restart markers (ITU-T.87 DRI/RSTm) are split at the RST
+markers and decoded concurrently across cores, automatically:
 
 ```swift
 import SwiftUI
 import JPEGLS
 
-struct TiledImageView: View {
+struct LargeImageView: View {
     let imageURL: URL
-    let tileSize: Int = 512
     
-    @State private var tiles: [TileInfo] = []
-    
-    struct TileInfo: Identifiable {
-        let id = UUID()
-        let rect: CGRect
-        var image: Image?
-    }
+    @State private var image: Image?
     
     var body: some View {
-        GeometryReader { geometry in
-            Canvas { context, size in
-                for tile in tiles {
-                    if let image = tile.image {
-                        // Draw tile at its position
-                        context.draw(image, in: tile.rect)
-                    }
-                }
-            }
-            .onAppear {
-                loadTiles()
+        Group {
+            if let image {
+                image
+                    .resizable()
+                    .scaledToFit()
+            } else {
+                ProgressView("Decoding…")
             }
         }
-    }
-    
-    private func loadTiles() {
-        Task {
+        .task {
             do {
-                // Load file metadata
-                let data = try Data(contentsOf: imageURL)
-                let parser = JPEGLSParser(data: data)
-                let parseResult = try parser.parse()
-                
-                let width = Int(parseResult.frameHeader.width)
-                let height = Int(parseResult.frameHeader.height)
-                
-                // Calculate tile layout
-                let tileProcessor = JPEGLSTileProcessor(
-                    imageWidth: width,
-                    imageHeight: height,
-                    configuration: TileConfiguration(
-                        tileWidth: tileSize,
-                        tileHeight: tileSize,
-                        overlap: 0
-                    )
-                )
-                
-                let tileRects = tileProcessor.calculateTiles()
-                
-                // Create tile info
-                await MainActor.run {
-                    tiles = tileRects.map { rect in
-                        TileInfo(rect: CGRect(
-                            x: CGFloat(rect.x),
-                            y: CGFloat(rect.y),
-                            width: CGFloat(rect.width),
-                            height: CGFloat(rect.height)
-                        ))
-                    }
-                }
-                
-                // Load tiles progressively
-                for index in tiles.indices {
-                    // In a real implementation, you would decode only the tile region
-                    // This is a simplified example
-                    try await Task.sleep(nanoseconds: 100_000_000) // Simulate load
-                }
+                // Decode on a background task. When the file contains
+                // restart markers, the decoder splits at the RST markers
+                // and decodes the intervals concurrently.
+                let cgImage = try JPEGLSImageLoader.loadCGImage(from: imageURL)
+                #if os(macOS)
+                image = Image(nsImage: NSImage(cgImage: cgImage, size: .zero))
+                #else
+                image = Image(uiImage: UIImage(cgImage: cgImage))
+                #endif
             } catch {
-                print("Failed to load tiles: \(error)")
+                print("Failed to load image: \(error)")
             }
         }
     }
 }
+
+// When producing large frames, encode with restart markers so that
+// decoding (and encoding) can parallelise across cores:
+// let config = try JPEGLSEncoder.Configuration(restartInterval: 256)
+// let encoded = try JPEGLSEncoder().encode(imageData, configuration: config)
 ```
 
 ## Error Handling

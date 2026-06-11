@@ -11,3 +11,4 @@ default.profraw
 *.dia
 *.swiftdeps
 .vscode/
+.build-unchecked/

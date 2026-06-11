@@ -24,9 +24,6 @@ let package = Package(
     targets: [
         .target(
             name: "JPEGLS",
-            resources: [
-                .process("Platform/Metal/JPEGLSShaders.metal")
-            ],
             swiftSettings: [
                 .swiftLanguageMode(.v6)
             ]

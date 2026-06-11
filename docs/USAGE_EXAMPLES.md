@@ -13,15 +13,12 @@ Comprehensive real-world examples demonstrating how to use JLSwift for JPEG-LS c
 - [Advanced Examples](#advanced-examples)
   - [Medical Imaging Workflow](#medical-imaging-workflow)
   - [Batch Image Processing](#batch-image-processing)
-  - [Large Image Processing with Tiling](#large-image-processing-with-tiling)
+  - [Large Image Processing with Restart Intervals](#large-image-processing-with-restart-intervals)
   - [Custom Preset Parameters](#custom-preset-parameters)
   - [Multi-Component with Different Interleaving](#multi-component-with-different-interleaving)
   - [Part 2 Extensions: Colour Transforms and Mapping Tables](#part-2-extensions-colour-transforms-and-mapping-tables)
 - [Performance Optimisation Examples](#performance-optimisation-examples)
-  - [Using Buffer Pooling](#using-buffer-pooling)
-  - [Cache-Friendly Data Layout](#cache-friendly-data-layout)
-  - [Platform-Specific Acceleration](#platform-specific-acceleration)
-  - [GPU-Accelerated Processing on Apple Silicon](#gpu-accelerated-processing-on-apple-silicon)
+  - [Built-In Optimisations](#built-in-optimisations)
   - [Memory-Efficient Streaming](#memory-efficient-streaming)
 - [Error Handling Examples](#error-handling-examples)
   - [Robust File Processing](#robust-file-processing)
@@ -453,89 +450,47 @@ let images = [
 try batchEncodeImages(images: images)
 ```
 
-### Large Image Processing with Tiling
+### Large Image Processing with Restart Intervals
 
-Process large images efficiently using tile-based approach:
+Process large images efficiently using restart-interval parallelism
+(ITU-T.87 DRI/RSTm). There is no tiling API — the codec works on one flat
+pixel plane per scan; restart intervals are the parallelism and
+error-resilience mechanism. Supported for lossless (NEAR = 0),
+non-interleaved scans:
 
 ```swift
 import JPEGLS
 
-func processLargeImageWithTiles() throws {
+func processLargeImageWithRestartIntervals() throws {
     let imageWidth = 8192
     let imageHeight = 8192
-    let tileWidth = 512
-    let tileHeight = 512
     
     print("Processing large image: \(imageWidth)x\(imageHeight)")
     
-    // Create tile processor
-    let tileProcessor = JPEGLSTileProcessor(
-        imageWidth: imageWidth,
-        imageHeight: imageHeight,
-        configuration: TileConfiguration(
-            tileWidth: tileWidth,
-            tileHeight: tileHeight,
-            overlap: 4
-        )
-    )
-    
-    // Calculate memory savings
-    let savings = tileProcessor.estimateMemorySavings(bytesPerPixel: 2)
-    print("Estimated memory reduction: \(Int(savings * 100))%")
-    
-    // Get tiles with overlap for proper boundary handling
-    let tiles = tileProcessor.calculateTilesWithOverlap()
-    print("Image divided into \(tiles.count) tiles")
-    
-    // Process each tile
-    for (index, tile) in tiles.enumerated() {
-        print("\nProcessing tile \(index + 1)/\(tiles.count):")
-        print("  Position: (\(tile.x), \(tile.y))")
-        print("  Size: \(tile.width)x\(tile.height)")
-        
-        // Load only the tile data (not the entire image)
-        let tilePixels = loadImageTile(
-            x: tile.x, y: tile.y,
-            width: tile.width, height: tile.height,
-            imageWidth: imageWidth, imageHeight: imageHeight
-        )
-        
-        // Create image data for this tile
-        let imageData = try MultiComponentImageData.grayscale(
-            pixels: tilePixels,
-            bitsPerSample: 8
-        )
-        
-        // Encode the tile using the high-level encoder
-        let encoder = JPEGLSEncoder()
-        let jpegLSData = try encoder.encode(imageData)
-        
-        print("  ✓ Encoded: \(jpegLSData.count) bytes")
-    }
-    
-    print("\n✓ Large image processing complete")
-}
-
-func loadImageTile(x: Int, y: Int, width: Int, height: Int, 
-                   imageWidth: Int, imageHeight: Int) -> [[Int]] {
-    // Simulate loading a specific tile from a large image
-    // In practice, this would read from file or memory-mapped data
+    // Load the full frame (test pattern here; read from file in practice)
     var pixels: [[Int]] = []
-    
-    for row in y..<min(y + height, imageHeight) {
+    for row in 0..<imageHeight {
         var pixelRow: [Int] = []
-        for col in x..<min(x + width, imageWidth) {
-            // Generate test pattern
-            let value = (row + col) % 256
-            pixelRow.append(value)
+        for col in 0..<imageWidth {
+            pixelRow.append((row + col) % 256)
         }
         pixels.append(pixelRow)
     }
     
-    return pixels
+    let imageData = try MultiComponentImageData.grayscale(
+        pixels: pixels,
+        bitsPerSample: 8
+    )
+    
+    // Large frames: parallelise a single image across cores with restart markers
+    let config = try JPEGLSEncoder.Configuration(restartInterval: 256)
+    let jpegLSData = try JPEGLSEncoder().encode(imageData, configuration: config)
+    // Decoding splits at the RST markers automatically and decodes intervals concurrently.
+    
+    print("✓ Encoded: \(jpegLSData.count) bytes")
 }
 
-try processLargeImageWithTiles()
+try processLargeImageWithRestartIntervals()
 ```
 
 ### Custom Preset Parameters
@@ -740,250 +695,24 @@ try exploreMappingTables()
 
 ## Performance Optimisation Examples
 
-### Using Buffer Pooling
+### Built-In Optimisations
 
-Optimise performance with buffer reuse:
-
-```swift
-import JPEGLS
-
-func efficientBatchProcessing(imageCount: Int) throws {
-    print("Processing \(imageCount) images with buffer pooling...")
-    
-    // Use shared buffer pool for context arrays
-    for i in 0..<imageCount {
-        // Acquire buffer from pool
-        let buffer = sharedBufferPool.acquire(type: .contextArrays, size: 365)
-        
-        // Process image (simplified example)
-        let pixels = createTestImage(width: 512, height: 512)
-        let imageData = try MultiComponentImageData.grayscale(
-            pixels: pixels,
-            bitsPerSample: 8
-        )
-        
-        let encoder = JPEGLSEncoder()
-        _ = try encoder.encode(imageData)
-        
-        // Release buffer back to pool
-        sharedBufferPool.release(buffer, type: .contextArrays)
-        
-        if (i + 1) % 10 == 0 {
-            print("Processed \(i + 1) images...")
-        }
-    }
-    
-    // Check pool statistics
-    print("\nBuffer pool statistics:")
-    print("  Available buffers: \(sharedBufferPool.availableCount(for: .contextArrays))")
-}
-
-try efficientBatchProcessing(imageCount: 50)
-```
-
-### Cache-Friendly Data Layout
-
-Use cache-friendly buffers for better performance:
+Buffer pooling, cache-friendly data layout, and platform-specific SIMD
+acceleration are handled internally by the codec — there is no public API
+for them and no setup is required. For parallelising large frames across
+cores, use restart intervals:
 
 ```swift
 import JPEGLS
 
-func useCacheFriendlyBuffer() throws {
-    let width = 1024
-    let height = 1024
-    
-    // Create test image
-    let pixels = createTestImage(width: width, height: height)
-    
-    // Create cache-friendly buffer
-    let cacheFriendlyBuffer = JPEGLSCacheFriendlyBuffer(
-        width: width,
-        height: height,
-        initialValue: 0
-    )
-    
-    // Load image data into cache-friendly format
-    for y in 0..<height {
-        for x in 0..<width {
-            cacheFriendlyBuffer.setPixel(x: x, y: y, value: pixels[y][x])
-        }
-    }
-    
-    print("Cache-friendly buffer created:")
-    print("  Size: \(width)x\(height)")
-    print("  Memory layout: contiguous row-major order")
-    
-    // Access pixels efficiently
-    let topLeftPixel = cacheFriendlyBuffer.pixel(x: 0, y: 0)
-    print("  Top-left pixel: \(topLeftPixel)")
-    
-    // Get entire row for vectorized operations
-    let firstRow = cacheFriendlyBuffer.row(y: 0)
-    print("  First row has \(firstRow.count) pixels")
-    
-    // Get neighbor pixels (efficient for prediction)
-    if let neighbors = cacheFriendlyBuffer.getNeighbors(x: 10, y: 10) {
-        print("  Neighbor access at (10, 10):")
-        print("    West (a): \(neighbors.a)")
-        print("    North (b): \(neighbors.b)")
-        print("    NorthWest (c): \(neighbors.c)")
-        print("    NorthEast (d): \(neighbors.d)")
-    }
-}
-
-try useCacheFriendlyBuffer()
+// Large frames: parallelise a single image across cores with restart markers
+let config = try JPEGLSEncoder.Configuration(restartInterval: 256)
+let encoded = try JPEGLSEncoder().encode(imageData, configuration: config)
+// Decoding splits at the RST markers automatically and decodes intervals concurrently.
 ```
 
-### Platform-Specific Acceleration
-
-Leverage hardware acceleration automatically:
-
-```swift
-import JPEGLS
-
-func demonstratePlatformAcceleration() {
-    // Get the optimal accelerator for current platform
-    let accelerator = selectPlatformAccelerator()
-    
-    print("Platform Accelerator: \(type(of: accelerator).platformName)")
-    
-    // Example pixel values
-    let a = 100  // West
-    let b = 110  // North
-    let c = 105  // NorthWest
-    let d = 115  // NorthEast
-    
-    // 1. Compute gradients
-    let (d1, d2, d3) = accelerator.computeGradients(a: a, b: b, c: c)
-    print("\nGradient Computation:")
-    print("  D1 (horizontal): \(d1)")
-    print("  D2 (vertical): \(d2)")
-    print("  D3 (diagonal): \(d3)")
-    
-    // 2. MED prediction
-    let predicted = accelerator.medPredictor(a: a, b: b, c: c)
-    print("\nMED Prediction:")
-    print("  Predicted value: \(predicted)")
-    
-    // 3. Quantize gradients
-    let t1 = 3, t2 = 7, t3 = 21
-    let (q1, q2, q3) = accelerator.quantizeGradients(
-        d1: d1, d2: d2, d3: d3,
-        t1: t1, t2: t2, t3: t3
-    )
-    print("\nGradient Quantization:")
-    print("  Q1: \(q1), Q2: \(q2), Q3: \(q3)")
-    
-    // 4. Compute context
-    let context = accelerator.computeContext(q1: q1, q2: q2, q3: q3)
-    print("\nContext Computation:")
-    print("  Context index: \(context)")
-    
-    #if arch(arm64)
-    print("\nOptimizations: Using ARM NEON/SIMD instructions")
-    #elseif arch(x86_64)
-    print("\nOptimizations: Using SSE/AVX instructions")
-    #else
-    print("\nOptimizations: Using scalar operations")
-    #endif
-}
-
-demonstratePlatformAcceleration()
-```
-
-### GPU-Accelerated Processing on Apple Silicon
-
-Use Metal compute shaders on Apple Silicon (and other Metal-capable devices) to GPU-accelerate
-the per-pixel encoding and decoding preprocessing steps. `MetalAccelerator` automatically falls
-back to CPU for small batches where GPU dispatch overhead would outweigh the benefit.
-
-```swift
-#if canImport(Metal)
-import JPEGLS
-
-/// Demonstrates GPU-accelerated batch gradient computation and MED prediction
-/// using the Metal backend on Apple Silicon.
-func demonstrateMetalAcceleration() throws {
-    guard MetalAccelerator.isSupported else {
-        print("Metal is not available on this device — skipping GPU example")
-        return
-    }
-
-    let accelerator = try MetalAccelerator()
-
-    // ----------------------------------------------------------------
-    // 1. GPU-accelerated gradient computation for a large row of pixels
-    // ----------------------------------------------------------------
-    let pixelCount = 2048  // must exceed MetalAccelerator.gpuThreshold (1 024) to use GPU
-    let a = (0..<pixelCount).map { Int32($0 % 256) }        // north neighbours
-    let b = (0..<pixelCount).map { Int32(($0 + 10) % 256) } // west neighbours
-    let c = (0..<pixelCount).map { Int32(($0 + 5) % 256) }  // northwest neighbours
-
-    let (d1, d2, d3) = try accelerator.computeGradientsBatch(a: a, b: b, c: c)
-    print("GPU gradients (first pixel): D1=\(d1[0]), D2=\(d2[0]), D3=\(d3[0])")
-
-    // ----------------------------------------------------------------
-    // 2. GPU-accelerated MED prediction
-    // ----------------------------------------------------------------
-    let predictions = try accelerator.computeMEDPredictionBatch(a: a, b: b, c: c)
-    print("GPU MED prediction (first pixel): \(predictions[0])")
-
-    // ----------------------------------------------------------------
-    // 3. Combined encoding pipeline — gradient computation, quantisation,
-    //    MED prediction, and prediction-error computation in one dispatch
-    // ----------------------------------------------------------------
-    let x = (0..<pixelCount).map { Int32(($0 + 8) % 256) }  // current pixel row
-    let (preds, predErrors, q1, q2, q3) = try accelerator.computeEncodingPipelineBatch(
-        a: a, b: b, c: c, x: x,
-        near: 0,   // lossless
-        t1: 3, t2: 7, t3: 21
-    )
-    print("GPU encoding pipeline (first pixel): pred=\(preds[0]), err=\(predErrors[0])")
-    print("  quantised gradients: q1=\(q1[0]), q2=\(q2[0]), q3=\(q3[0])")
-
-    // ----------------------------------------------------------------
-    // 4. Combined decoding pipeline — MED prediction + error reconstruction
-    //    in one dispatch (mirrors step 3 in reverse)
-    // ----------------------------------------------------------------
-    let reconstructed = try accelerator.computeDecodingPipelineBatch(
-        a: a, b: b, c: c, errval: predErrors
-    )
-    print("GPU decoding pipeline (first pixel): reconstructed=\(reconstructed[0])")
-
-    // Verify lossless round-trip: reconstructed must exactly match the original pixels
-    let allMatch = zip(x, reconstructed).allSatisfy { $0 == $1 }
-    print("Lossless round-trip verified: \(allMatch)")
-
-    // ----------------------------------------------------------------
-    // 5. GPU-accelerated HP2 colour-space transformation (forward + inverse)
-    // ----------------------------------------------------------------
-    let r = (0..<pixelCount).map { Int32($0 % 200) }
-    let g = (0..<pixelCount).map { Int32(($0 + 50) % 200) }
-    let bComp = (0..<pixelCount).map { Int32(($0 + 100) % 200) }
-
-    let (rFwd, gFwd, bFwd) = try accelerator.applyColourTransformForwardBatch(
-        transform: .hp2, r: r, g: g, b: bComp)
-    print("GPU HP2 forward (first pixel): R'=\(rFwd[0]), G'=\(gFwd[0]), B'=\(bFwd[0])")
-
-    let (rInv, gInv, bInv) = try accelerator.applyColourTransformInverseBatch(
-        transform: .hp2, r: rFwd, g: gFwd, b: bFwd)
-    let colourMatch = zip(r, rInv).allSatisfy { $0 == $1 }
-                   && zip(g, gInv).allSatisfy { $0 == $1 }
-                   && zip(bComp, bInv).allSatisfy { $0 == $1 }
-    print("HP2 colour-transform round-trip verified: \(colourMatch)")
-}
-
-try demonstrateMetalAcceleration()
-#endif
-```
-
-**Notes on GPU threshold**: `MetalAccelerator.gpuThreshold` (default: 1 024 pixels) is the
-crossover point below which CPU execution is faster due to GPU dispatch overhead. For typical
-medical images (512×512 and above) the GPU path is always taken. For small test images, the
-CPU fallback is used transparently — callers do not need to choose.
-
-See [METAL_GPU_ACCELERATION.md](METAL_GPU_ACCELERATION.md) for a full description of the Metal
-pipeline architecture, shader details, and performance benchmarks.
+See "Large Image Processing with Restart Intervals" above and
+[PERFORMANCE_TUNING.md](PERFORMANCE_TUNING.md) for benchmarking guidance.
 
 ### Memory-Efficient Streaming
 
@@ -1024,7 +753,7 @@ func streamLargeImage() throws {
         let encoder = JPEGLSEncoder()
         let jpegLSData = try encoder.encode(imageData)
         
-        totalPixelsProcessed += tileWidth * currentChunkHeight
+        totalPixelsProcessed += totalWidth * currentChunkHeight
         
         print("  ✓ Processed \(jpegLSData.count) bytes")
         

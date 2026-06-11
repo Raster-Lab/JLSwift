@@ -302,85 +302,27 @@ let nearLosslessData = try JPEGLSEncoder().encode(imageData, configuration: conf
 
 ## Common Patterns
 
-### Pattern 1: Processing Large Images with Tiles
+### Pattern 1: Processing Large Images with Restart Intervals
 
-For memory-efficient processing of large images:
-
-```swift
-import JPEGLS
-
-// Create tile processor
-let processor = JPEGLSTileProcessor(
-    imageWidth: 8192,
-    imageHeight: 8192,
-    configuration: TileConfiguration(
-        tileWidth: 512,
-        tileHeight: 512,
-        overlap: 4
-    )
-)
-
-// Calculate tiles
-let tiles = processor.calculateTilesWithOverlap()
-
-// Process each tile
-for tile in tiles {
-    print("Processing tile: \(tile.x),\(tile.y) size: \(tile.width)×\(tile.height)")
-    // Load and process tile data...
-}
-
-// Estimate memory savings
-let savings = processor.estimateMemorySavings(bytesPerPixel: 2)
-print("Memory reduction: \(Int(savings * 100))%")
-```
-
-### Pattern 2: Buffer Pooling for Performance
-
-Reuse buffers to reduce allocation overhead:
+For large frames, parallelise a single image across cores with restart markers
+(ITU-T.87 DRI/RSTm). There is no tiling API — the codec decodes each scan into
+one flat pixel plane; restart intervals are the parallelism and
+error-resilience mechanism:
 
 ```swift
 import JPEGLS
 
-// Acquire buffer from pool
-let buffer = sharedBufferPool.acquire(
-    type: .contextArrays,
-    size: 365  // JPEG-LS uses 365 regular contexts
-)
-
-// Use the buffer...
-// (Your encoding/decoding code)
-
-// Release buffer back to pool when done
-defer {
-    sharedBufferPool.release(buffer, type: .contextArrays)
-}
+// Large frames: parallelise a single image across cores with restart markers
+let config = try JPEGLSEncoder.Configuration(restartInterval: 256)
+let encoded = try JPEGLSEncoder().encode(imageData, configuration: config)
+// Decoding splits at the RST markers automatically and decodes intervals concurrently.
 ```
 
-### Pattern 3: Platform-Optimised Operations
+Restart intervals are currently supported for lossless (NEAR = 0),
+non-interleaved scans. Buffer pooling and SIMD acceleration are handled
+internally by the codec — no setup is required.
 
-Automatically use hardware acceleration:
-
-```swift
-import JPEGLS
-
-// Get optimal accelerator for current platform
-let accelerator = selectPlatformAccelerator()
-print("Using: \(type(of: accelerator).platformName)")
-
-// Use for gradient computations
-let (d1, d2, d3) = accelerator.computeGradients(a: 100, b: 110, c: 105)
-
-// Use for prediction
-let predicted = accelerator.medPredictor(a: 100, b: 110, c: 105)
-
-// Use for quantization
-let (q1, q2, q3) = accelerator.quantizeGradients(
-    d1: d1, d2: d2, d3: d3,
-    t1: 3, t2: 7, t3: 21
-)
-```
-
-### Pattern 4: Error Handling
+### Pattern 2: Error Handling
 
 Handle JPEG-LS errors gracefully:
 

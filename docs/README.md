@@ -14,11 +14,9 @@ Documentation for the JLSwift JPEG-LS codec. For the project overview, see the
 - [SERVER_SIDE_EXAMPLES.md](SERVER_SIDE_EXAMPLES.md) — server-side Swift usage
 - [DICOMKIT_INTEGRATION.md](DICOMKIT_INTEGRATION.md) — DICOM/medical-imaging integration
 
-## Performance & acceleration
-- [PERFORMANCE_TUNING.md](PERFORMANCE_TUNING.md) — tuning guide
-- [METAL_GPU_ACCELERATION.md](METAL_GPU_ACCELERATION.md) — Metal GPU path
-- [VULKAN_GPU_ACCELERATION.md](VULKAN_GPU_ACCELERATION.md) — Vulkan GPU path
-- [X86_64_REMOVAL_GUIDE.md](X86_64_REMOVAL_GUIDE.md) — Apple-only consolidation notes
+## Performance
+- [PERFORMANCE_TUNING.md](PERFORMANCE_TUNING.md) — benchmarking, restart-interval parallelism, profiling
+- [OPTIMIZATION_PLAN.md](OPTIMIZATION_PLAN.md) — the measured analysis behind the 0.9 hot-path rewrite
 
 ## Standards & internals
 - [CONFORMANCE_MATRIX.md](CONFORMANCE_MATRIX.md) — ITU-T.87 conformance mapping

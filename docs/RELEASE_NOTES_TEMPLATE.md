@@ -201,7 +201,8 @@ let encoder = JPEGLSEncoder()
 import JPEGLS
 
 // Example showing how to use the performance optimization
-let processor = JPEGLSTileProcessor(/* ... */)
+let config = try JPEGLSEncoder.Configuration(restartInterval: 256)
+let encoded = try JPEGLSEncoder().encode(imageData, configuration: config)
 // ... code example
 ```
 
