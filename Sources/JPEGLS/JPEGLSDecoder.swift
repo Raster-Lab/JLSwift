@@ -878,15 +878,13 @@ public struct JPEGLSDecoder: Sendable {
         qbppBits: Int
     ) throws -> Int {
         // Get context, reusing the quantized gradients the scan loop already
-        // computed for the run-mode test.
+        // computed for the run-mode test. Bias C[Q], Golomb k, and the k=0
+        // error correction come from a single context-record load.
         let (contextIndex, sign) = context.computeContextIndexAndSign(q1: q1, q2: q2, q3: q3)
-        let k = context.computeGolombParameter(contextIndex: contextIndex)
+        let (biasC, k, errorCorrection) = context.pixelCodingState(contextIndex: contextIndex)
 
         // Read Golomb-Rice encoded error
         let mappedError = try readGolombCode(reader: reader, k: k, limit: limit, qbppBits: qbppBits)
-
-        // Compute error correction XOR per ITU-T.87 §A.4.1
-        let errorCorrection = context.getErrorCorrection(contextIndex: contextIndex, k: k)
 
         // Decode pixel using decoder
         let result = decoder.decodePixel(
@@ -894,7 +892,7 @@ public struct JPEGLSDecoder: Sendable {
             a: a, b: b, c: c,
             contextIndex: contextIndex,
             sign: sign,
-            context: context,
+            biasC: biasC,
             errorCorrection: errorCorrection
         )
 

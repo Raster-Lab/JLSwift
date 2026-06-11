@@ -347,17 +347,17 @@ public struct JPEGLSRegularModeDecoder: Sendable {
         return decodePixel(
             mappedError: mappedError, a: a, b: b, c: c,
             contextIndex: contextIndex, sign: sign,
-            context: context, errorCorrection: errorCorrection
+            biasC: context.getC(contextIndex: contextIndex),
+            errorCorrection: errorCorrection
         )
     }
 
     /// Decode a single pixel in regular mode with a precomputed context.
     ///
     /// Identical to `decodePixel(mappedError:a:b:c:d:context:errorCorrection:)`
-    /// from step 4 onward; the caller supplies the context index and sign it
-    /// already derived from the quantized gradients (the scan loop computes
-    /// them for the run-mode test, so recomputing here would quantize every
-    /// gradient twice per pixel).
+    /// from step 4 onward; the caller supplies the context index, sign, and
+    /// bias correction it already derived (the scan loop fetches the full
+    /// per-pixel coding state in one context-record load).
     public func decodePixel(
         mappedError: Int,
         a: Int,
@@ -365,14 +365,13 @@ public struct JPEGLSRegularModeDecoder: Sendable {
         c: Int,
         contextIndex: Int,
         sign: Int,
-        context: JPEGLSContextModel,
+        biasC: Int,
         errorCorrection: Int = 0
     ) -> DecodedPixel {
         // Step 4: Compute MED prediction
         let basePrediction = computeMEDPrediction(a: a, b: b, c: c)
-        
+
         // Step 5: Apply bias correction
-        let biasC = context.getC(contextIndex: contextIndex)
         let correctedPrediction = applyBiasCorrection(
             prediction: basePrediction,
             biasC: biasC,

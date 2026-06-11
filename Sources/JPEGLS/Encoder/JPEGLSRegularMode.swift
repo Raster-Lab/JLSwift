@@ -404,30 +404,29 @@ public struct JPEGLSRegularMode: Sendable {
         sign: Int,
         context: JPEGLSContextModel
     ) -> EncodedPixel {
+        // Steps 5/7/7a inputs: bias C[Q], Golomb k, and the k=0 error
+        // correction from a single context-record load.
+        let (biasC, k, errorCorrection) = context.pixelCodingState(contextIndex: contextIndex)
+
         // Step 4: Compute MED prediction
         let basePrediction = computeMEDPrediction(a: a, b: b, c: c)
-        
+
         // Step 5: Apply bias correction
-        let biasC = context.getC(contextIndex: contextIndex)
         let correctedPrediction = applyBiasCorrection(
             prediction: basePrediction,
             biasC: biasC,
             sign: sign
         )
-        
+
         // Step 6: Compute quantised (near-lossless) or exact (lossless) prediction error
         let quantisedError = computePredictionError(actual: actual, prediction: correctedPrediction)
-        
+
         // Step 6a: Apply sign to normalise the error per ITU-T.87 Section 4.3.3.
         // When the context sign is negative the error is negated so that the encoded
         // error is always relative to the normalised (positive-sign) context.
         let error = sign * quantisedError
-        
-        // Step 7: Get Golomb parameter k from context (needed for error correction)
-        let k = context.computeGolombParameter(contextIndex: contextIndex)
-        
+
         // Step 7a: Apply error correction XOR per ITU-T.87 §A.4.1
-        let errorCorrection = context.getErrorCorrection(contextIndex: contextIndex, k: k)
         let correctedError = error ^ errorCorrection
         
         // Step 8: Map to non-negative for Golomb coding

@@ -21,23 +21,22 @@ public struct JPEGLSContextModel: Sendable {
     /// Number of run-length contexts
     public static let runContextCount = 2
     
-    // MARK: - Context State Arrays
-    
-    /// Accumulated prediction error sum for each context.
-    /// Used to compute the bias correction term.
-    private var contextA: [Int]
-    
-    /// Context occurrence counter.
-    /// Tracks how many times each context has been used.
-    private var contextB: [Int]
-    
-    /// Bias correction value for each context.
-    /// Represents the accumulated bias in prediction errors.
-    private var contextC: [Int]
-    
-    /// Sample counter for reset operations.
-    /// When N reaches the RESET value, context statistics are halved.
-    private var contextN: [Int]
+    // MARK: - Context State
+
+    /// Per-context adaptive statistics (A = accumulated absolute error,
+    /// B = bias accumulator, C = bias correction, N = occurrence counter),
+    /// packed into one record so the per-pixel update is a single array
+    /// load and store (one bounds check, one copy-on-write uniqueness
+    /// check, one cache line) instead of up to ten accesses across four
+    /// parallel arrays.
+    private struct ContextRecord: Sendable {
+        var a: Int
+        var b: Int
+        var c: Int
+        var n: Int
+    }
+
+    private var contexts: [ContextRecord]
     
     // MARK: - Run-Length State
     
@@ -74,6 +73,11 @@ public struct JPEGLSContextModel: Sendable {
     
     /// A[i] initial value per ITU-T.87 Section 4.3: max(2, floor((RANGE + 32) / 64))
     private let aInit: Int
+
+    /// Hoisted per-pixel constants: RESET threshold and the B-update factor
+    /// (2·NEAR + 1), so the update loop does not reload them per sample.
+    private let resetThreshold: Int
+    private let bFactor: Int
     
     // MARK: - Initialization
     
@@ -103,12 +107,14 @@ public struct JPEGLSContextModel: Sendable {
         // Compute A initial value per ITU-T.87 Section 4.3:
         // A[i] = max(2, floor((RANGE + 32) / 64))
         self.aInit = max(2, (range + 32) / 64)
-        
-        // Initialize context arrays to default values per ITU-T.87 Section 4.3
-        self.contextA = Array(repeating: 0, count: Self.regularContextCount)
-        self.contextB = Array(repeating: 0, count: Self.regularContextCount)
-        self.contextC = Array(repeating: 0, count: Self.regularContextCount)
-        self.contextN = Array(repeating: 1, count: Self.regularContextCount)
+        self.resetThreshold = parameters.reset
+        self.bFactor = 2 * near + 1
+
+        // Initialize context records to default values per ITU-T.87 Section 4.3
+        self.contexts = Array(
+            repeating: ContextRecord(a: 0, b: 0, c: 0, n: 1),
+            count: Self.regularContextCount
+        )
         
         // Initialize run-length state
         self.runInterruptionIndex = Array(repeating: 0, count: Self.runContextCount)
@@ -134,10 +140,7 @@ public struct JPEGLSContextModel: Sendable {
     /// - N[i] = 1
     private mutating func initializeContexts() {
         for i in 0..<Self.regularContextCount {
-            contextA[i] = aInit
-            contextB[i] = 0
-            contextC[i] = 0
-            contextN[i] = 1
+            contexts[i] = ContextRecord(a: aInit, b: 0, c: 0, n: 1)
         }
     }
     
@@ -224,7 +227,7 @@ public struct JPEGLSContextModel: Sendable {
         guard contextIndex >= 0 && contextIndex < Self.regularContextCount else {
             return 0
         }
-        return contextA[contextIndex]
+        return contexts[contextIndex].a
     }
     
     /// Get the occurrence counter for a context.
@@ -235,7 +238,7 @@ public struct JPEGLSContextModel: Sendable {
         guard contextIndex >= 0 && contextIndex < Self.regularContextCount else {
             return 0
         }
-        return contextB[contextIndex]
+        return contexts[contextIndex].b
     }
     
     /// Get the bias correction for a context.
@@ -246,7 +249,7 @@ public struct JPEGLSContextModel: Sendable {
         guard contextIndex >= 0 && contextIndex < Self.regularContextCount else {
             return 0
         }
-        return contextC[contextIndex]
+        return contexts[contextIndex].c
     }
     
     /// Get the reset counter for a context.
@@ -257,7 +260,7 @@ public struct JPEGLSContextModel: Sendable {
         guard contextIndex >= 0 && contextIndex < Self.regularContextCount else {
             return 1
         }
-        return contextN[contextIndex]
+        return contexts[contextIndex].n
     }
     
     // MARK: - Context Update
@@ -276,41 +279,44 @@ public struct JPEGLSContextModel: Sendable {
         guard contextIndex >= 0 && contextIndex < Self.regularContextCount else {
             return
         }
-        
+
+        // Load the record once; all updates happen on locals and store back
+        // in a single write (one bounds + one CoW check per pixel).
+        var r = contexts[contextIndex]
+
         // Update A (accumulated absolute prediction error) per ITU-T.87
-        contextA[contextIndex] += abs(predictionError)
-        
+        r.a += abs(predictionError)
+
         // Update B per ITU-T.87 §A.6.2: B[Q] += Errval × (2·NEAR + 1)
         // The caller passes predictionError = sign × Errval (sign-denormalised),
         // so sign × predictionError = Errval (sign-normalised error per the standard).
         let errval = sign * predictionError
-        let bIncrement = errval * (2 * near + 1)
-        contextB[contextIndex] += bIncrement
-        
+        r.b += errval * bFactor
+
         // Reset when N reaches RESET value per ITU-T.87 Section A.6.2
         // Reset check happens BEFORE N is incremented (per standard and CharLS).
-        if contextN[contextIndex] >= parameters.reset {
-            contextA[contextIndex] >>= 1
-            contextB[contextIndex] >>= 1
+        if r.n >= resetThreshold {
+            r.a >>= 1
+            r.b >>= 1
             // Use max(..., 1) to ensure N doesn't become zero after the right-shift.
-            contextN[contextIndex] = max(contextN[contextIndex] >> 1, 1)
+            r.n = max(r.n >> 1, 1)
         }
-        
+
         // Increment N (after reset check, before bias correction)
-        contextN[contextIndex] += 1
-        
+        r.n += 1
+
         // Bias correction per ITU-T.87 Section A.6.3 (code segment A.13).
         // Inner clamping uses max/min instead of nested branches to reduce
         // branch-predictor pressure in the hot encoding loop.
-        let b = contextB[contextIndex]
-        let n = contextN[contextIndex]
-        if b + n <= 0 {
-            contextB[contextIndex] = max(b + n, 1 - n)
-            contextC[contextIndex] = max(contextC[contextIndex] - 1, -128)
-        } else if b > 0 {
-            contextB[contextIndex] = min(b - n, 0)
-            contextC[contextIndex] = min(contextC[contextIndex] + 1, 127)
+        if r.b + r.n <= 0 {
+            r.b = max(r.b + r.n, 1 - r.n)
+            r.c = max(r.c - 1, -128)
+        } else if r.b > 0 {
+            r.b = min(r.b - r.n, 0)
+            r.c = min(r.c + 1, 127)
         }
+
+        contexts[contextIndex] = r
     }
     
     // MARK: - Golomb Parameter Calculation
@@ -327,14 +333,18 @@ public struct JPEGLSContextModel: Sendable {
             return 0
         }
 
-        let a = contextA[contextIndex]
-        let n = contextN[contextIndex]  // Use N (occurrence counter), not B
+        let r = contexts[contextIndex]
+        return Self.golombParameter(a: r.a, n: r.n)
+    }
 
+    /// Golomb parameter from raw (A, N) statistics: smallest k ≥ 0 such
+    /// that n << k ≥ a, capped at 16.
+    @inline(__always)
+    private static func golombParameter(a: Int, n: Int) -> Int {
         guard n > 0 else { return 0 }
         guard a > n else { return 0 }
 
         // Fast computation using integer bit widths:
-        // find smallest k ≥ 0 such that n << k ≥ a.
         // floor(log2(a)) − floor(log2(n)) gives a lower bound on k;
         // at most one additional increment is ever needed.
         let logA = Int.bitWidth - 1 - a.leadingZeroBitCount  // floor(log2(a))
@@ -342,6 +352,20 @@ public struct JPEGLSContextModel: Sendable {
         var k = logA - logN
         if n << k < a { k += 1 }
         return min(k, 16)
+    }
+
+    /// Fetch the full per-pixel regular-mode coding state — bias correction
+    /// C[Q], Golomb parameter k, and the k = 0 error-correction term — from
+    /// a single context-record load. Identical results to calling `getC`,
+    /// `computeGolombParameter`, and `getErrorCorrection` separately.
+    public func pixelCodingState(contextIndex: Int) -> (biasC: Int, k: Int, errorCorrection: Int) {
+        guard contextIndex >= 0 && contextIndex < Self.regularContextCount else {
+            return (0, 0, 0)
+        }
+        let r = contexts[contextIndex]
+        let k = Self.golombParameter(a: r.a, n: r.n)
+        let errorCorrection = (k == 0 && near == 0 && (2 * r.b + r.n - 1) < 0) ? -1 : 0
+        return (r.c, k, errorCorrection)
     }
     
     /// Compute error correction for k=0 map swap per ITU-T.87 §A.5.2 / CharLS.
@@ -358,9 +382,8 @@ public struct JPEGLSContextModel: Sendable {
     public func getErrorCorrection(contextIndex: Int, k: Int) -> Int {
         guard k == 0 && near == 0 else { return 0 }
         guard contextIndex >= 0 && contextIndex < Self.regularContextCount else { return 0 }
-        let b = contextB[contextIndex]
-        let n = contextN[contextIndex]
-        return (2 * b + n - 1) < 0 ? -1 : 0
+        let r = contexts[contextIndex]
+        return (2 * r.b + r.n - 1) < 0 ? -1 : 0
     }
     
     // MARK: - Run-Length Context
