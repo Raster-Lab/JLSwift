@@ -6,6 +6,38 @@
 
 import Foundation
 
+/// Lock-protected accumulator for parallel restart-interval decoding:
+/// each worker stores its interval's decoded plane at its own index, and
+/// the first error (if any) wins.
+private final class IntervalDecodeResults: @unchecked Sendable {
+    private let lock = NSLock()
+    private var regions: [[UInt16]?]
+    private var firstError: Error?
+
+    init(count: Int) {
+        self.regions = Array(repeating: nil, count: count)
+    }
+
+    func set(_ region: [UInt16], at index: Int) {
+        lock.lock()
+        regions[index] = region
+        lock.unlock()
+    }
+
+    func fail(_ error: Error) {
+        lock.lock()
+        if firstError == nil { firstError = error }
+        lock.unlock()
+    }
+
+    func finish() throws -> [[UInt16]?] {
+        lock.lock()
+        defer { lock.unlock() }
+        if let firstError { throw firstError }
+        return regions
+    }
+}
+
 /// High-level JPEG-LS decoder
 ///
 /// Decodes JPEG-LS encoded data to multi-component image data per ITU-T.87.
@@ -94,7 +126,17 @@ public struct JPEGLSDecoder: Sendable {
         }
         
         var decodedComponents: [MultiComponentImageData.ComponentData]
-        
+
+        // Restart intervals (DRI) are supported for non-interleaved scans;
+        // reject interleaved streams that declare one rather than decoding
+        // them incorrectly.
+        let restartInterval = parseResult.restartInterval ?? 0
+        if restartInterval > 0 && firstScanHeader.interleaveMode != .none {
+            throw JPEGLSError.invalidBitstreamStructure(
+                reason: "Restart intervals are not supported with \(firstScanHeader.interleaveMode) interleave mode"
+            )
+        }
+
         switch firstScanHeader.interleaveMode {
         case .none:
             // Non-interleaved: one scan per component
@@ -103,7 +145,8 @@ public struct JPEGLSDecoder: Sendable {
                 scanHeaders: parseResult.scanHeaders,
                 scanDataList: scanDataList,
                 parameters: parameters,
-                mappingTables: parseResult.mappingTables
+                mappingTables: parseResult.mappingTables,
+                restartInterval: restartInterval
             )
             
         case .line:
@@ -226,11 +269,18 @@ public struct JPEGLSDecoder: Sendable {
                     
                     // Find end of scan data (next real marker, not stuffed byte).
                     // Per ISO 14495-1 §9.1: a byte following 0xFF with MSB = 0 (< 0x80)
-                    // is a stuffed byte; MSB = 1 (≥ 0x80) is a real marker.
+                    // is a stuffed byte; MSB = 1 (≥ 0x80) is a real marker — except
+                    // restart markers (FFD0–FFD7), which are part of the scan body.
                     var scanDataEnd = position
                     while scanDataEnd < data.count - 1 {
                         if data[scanDataEnd] == 0xFF {
                             let nextByte = data[scanDataEnd + 1]
+                            if nextByte >= JPEGLSMarker.restart0.rawValue
+                                && nextByte <= JPEGLSMarker.restart7.rawValue {
+                                // Restart marker inside the scan — keep walking.
+                                scanDataEnd += 2
+                                continue
+                            }
                             if nextByte >= 0x80 {
                                 // Real marker — scan data ends here
                                 break
@@ -273,22 +323,21 @@ public struct JPEGLSDecoder: Sendable {
         scanHeaders: [JPEGLSScanHeader],
         scanDataList: [Data],
         parameters: JPEGLSPresetParameters,
-        mappingTables: [UInt8: JPEGLSMappingTable] = [:]
+        mappingTables: [UInt8: JPEGLSMappingTable] = [:],
+        restartInterval: Int = 0
     ) throws -> [MultiComponentImageData.ComponentData] {
         var components: [MultiComponentImageData.ComponentData] = []
-        
+
         for (scanIndex, scanHeader) in scanHeaders.enumerated() {
-            let scanData = scanDataList[scanIndex]
-            let reader = JPEGLSBitstreamReader(data: scanData)
-            
             // Decode this component
             var pixels = try decodeComponent(
-                reader: reader,
+                scanData: scanDataList[scanIndex],
                 width: frameHeader.width,
                 height: frameHeader.height,
                 scanHeader: scanHeader,
                 parameters: parameters,
-                bitsPerSample: frameHeader.bitsPerSample
+                bitsPerSample: frameHeader.bitsPerSample,
+                restartInterval: restartInterval
             )
             
             // Apply mapping table lookup if the component references one
@@ -606,25 +655,147 @@ public struct JPEGLSDecoder: Sendable {
     
     /// Decode a single component (used for non-interleaved mode)
     private func decodeComponent(
-        reader: JPEGLSBitstreamReader,
+        scanData: Data,
         width: Int,
         height: Int,
         scanHeader: JPEGLSScanHeader,
         parameters: JPEGLSPresetParameters,
-        bitsPerSample: Int
+        bitsPerSample: Int,
+        restartInterval: Int = 0
     ) throws -> [[Int]] {
-        let decoder = try JPEGLSRegularModeDecoder(parameters: parameters, near: scanHeader.near)
-        let runDecoder = try JPEGLSRunModeDecoder(parameters: parameters, near: scanHeader.near)
-        var context = try JPEGLSContextModel(parameters: parameters, near: scanHeader.near)
         let (limit, qbppBits) = computeGolombLimit(parameters: parameters, near: scanHeader.near, bitsPerSample: bitsPerSample)
         let near = scanHeader.near
 
-        // Decode into a flat UInt16 plane (samples are clamped to
-        // MAXVAL ≤ 2^16 − 1 by the pipeline) accessed through one unsafe
-        // buffer scoped over the whole scan: no nested-array indirection,
-        // no per-access bounds checks, no copy-on-write uniqueness checks
-        // per row, and half the memory traffic of [[Int]].
-        var flat = [UInt16](repeating: 0, count: width * height)
+        if restartInterval > 0 && restartInterval < height {
+            // Restart intervals: split the scan body at its RSTm markers
+            // (validating the D0–D7 cycle) and decode the independent
+            // intervals concurrently — each restarts coding exactly as at
+            // scan start, so a fresh region decode per interval is correct
+            // by construction.
+            let segments = try splitScanDataAtRestartMarkers(scanData)
+            let intervalCount = (height + restartInterval - 1) / restartInterval
+            guard segments.count == intervalCount else {
+                throw JPEGLSError.invalidBitstreamStructure(
+                    reason: "Expected \(intervalCount) restart intervals for \(height) lines, found \(segments.count)"
+                )
+            }
+            let results = IntervalDecodeResults(count: intervalCount)
+            DispatchQueue.concurrentPerform(iterations: intervalCount) { idx in
+                do {
+                    let rows = min(restartInterval, height - idx * restartInterval)
+                    let region = try decodeFlatRegion(
+                        reader: JPEGLSBitstreamReader(data: segments[idx]),
+                        rows: rows, width: width,
+                        parameters: parameters, near: near,
+                        limit: limit, qbppBits: qbppBits
+                    )
+                    results.set(region, at: idx)
+                } catch {
+                    results.fail(error)
+                }
+            }
+            let regions = try results.finish()
+            var pixels: [[Int]] = []
+            pixels.reserveCapacity(height)
+            for (idx, region) in regions.enumerated() {
+                guard let region else {
+                    throw JPEGLSError.invalidBitstreamStructure(
+                        reason: "Restart interval \(idx) produced no rows"
+                    )
+                }
+                pixels.append(contentsOf: widenFlatRows(region, width: width))
+            }
+            return pixels
+        }
+
+        let flat = try decodeFlatRegion(
+            reader: JPEGLSBitstreamReader(data: scanData),
+            rows: height, width: width,
+            parameters: parameters, near: near,
+            limit: limit, qbppBits: qbppBits
+        )
+        return widenFlatRows(flat, width: width)
+    }
+
+    /// Split a scan body into its restart-interval segments, removing the
+    /// RSTm markers and validating that they cycle FFD0–FFD7. Stuffed bytes
+    /// (0xFF followed by < 0x80) are skipped as data; a lone 0xFF before a
+    /// non-restart marker byte is treated as data (the encoder's final flush
+    /// byte may legitimately be 0xFF).
+    private func splitScanDataAtRestartMarkers(_ data: Data) throws -> [Data] {
+        let bytes = [UInt8](data)
+        var segments: [Data] = []
+        var segmentStart = 0
+        var markerIndex = 0
+        var i = 0
+        while i + 1 < bytes.count {
+            if bytes[i] == 0xFF {
+                let next = bytes[i + 1]
+                if next >= JPEGLSMarker.restart0.rawValue && next <= JPEGLSMarker.restart7.rawValue {
+                    let expected = JPEGLSMarker.restart0.rawValue + UInt8(markerIndex % 8)
+                    guard next == expected else {
+                        throw JPEGLSError.invalidBitstreamStructure(
+                            reason: "Restart marker out of sequence: expected 0xFF\(String(expected, radix: 16, uppercase: true)), found 0xFF\(String(next, radix: 16, uppercase: true))"
+                        )
+                    }
+                    segments.append(Data(bytes[segmentStart..<i]))
+                    segmentStart = i + 2
+                    markerIndex += 1
+                    i += 2
+                    continue
+                }
+                if next < 0x80 {
+                    i += 2  // stuffed pair — data
+                    continue
+                }
+                i += 1  // data/fill 0xFF before a non-restart marker byte
+                continue
+            }
+            i += 1
+        }
+        segments.append(Data(bytes[segmentStart..<bytes.count]))
+        return segments
+    }
+
+    /// Widen a flat UInt16 plane back to the public [[Int]] row representation.
+    private func widenFlatRows(_ flat: [UInt16], width: Int) -> [[Int]] {
+        let rows = flat.count / width
+        return flat.withUnsafeBufferPointer { buf in
+            (0..<rows).map { row -> [Int] in
+                let base = row * width
+                return [Int](unsafeUninitializedCapacity: width) { out, count in
+                    for i in 0..<width {
+                        out[i] = Int(buf[base + i])
+                    }
+                    count = width
+                }
+            }
+        }
+    }
+
+    /// Decode `rows` scan lines as one independent coding region with
+    /// scan-start semantics (fresh contexts and run state; the first row
+    /// uses the zero previous-line boundary rule). A whole scan is one
+    /// region; with restart intervals, every interval is one region.
+    ///
+    /// Decodes into a flat UInt16 plane (samples are clamped to
+    /// MAXVAL ≤ 2^16 − 1 by the pipeline) accessed through one unsafe
+    /// buffer scoped over the whole region: no nested-array indirection,
+    /// no per-access bounds checks, no copy-on-write uniqueness checks
+    /// per row, and half the memory traffic of [[Int]].
+    private func decodeFlatRegion(
+        reader: JPEGLSBitstreamReader,
+        rows: Int,
+        width: Int,
+        parameters: JPEGLSPresetParameters,
+        near: Int,
+        limit: Int,
+        qbppBits: Int
+    ) throws -> [UInt16] {
+        let decoder = try JPEGLSRegularModeDecoder(parameters: parameters, near: near)
+        let runDecoder = try JPEGLSRunModeDecoder(parameters: parameters, near: near)
+        var context = try JPEGLSContextModel(parameters: parameters, near: near)
+        var flat = [UInt16](repeating: 0, count: width * rows)
 
         try flat.withUnsafeMutableBufferPointer { buf in
             // Track the left-edge value for boundary Rc at col=0.
@@ -633,11 +804,12 @@ public struct JPEGLSDecoder: Sendable {
             var prevRowEdge = 0
 
             // Decode pixels in raster order
-            for row in 0..<height {
+            for row in 0..<rows {
                 // Note: RUNindex is NOT reset per line. Per ITU-T.87 §A.7.1 and CharLS,
                 // RUNindex persists across scan lines; it is only initialised to 0 at scan start.
                 let rowBase = row * width
                 let prevBase = rowBase - width
+
                 // Capture the edge value before this row updates it.
                 let edgeForThisRow = prevRowEdge
                 if row > 0 {
@@ -743,18 +915,7 @@ public struct JPEGLSDecoder: Sendable {
             }
         }
 
-        // Widen back to the public [[Int]] representation once per scan.
-        return flat.withUnsafeBufferPointer { buf in
-            (0..<height).map { row -> [Int] in
-                let base = row * width
-                return [Int](unsafeUninitializedCapacity: width) { out, count in
-                    for i in 0..<width {
-                        out[i] = Int(buf[base + i])
-                    }
-                    count = width
-                }
-            }
-        }
+        return flat
     }
     
     /// Decode a single line for a component (used for line-interleaved mode)

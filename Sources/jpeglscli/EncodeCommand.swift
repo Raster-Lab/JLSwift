@@ -62,6 +62,9 @@ extension JPEGLSCLITool {
         
         @Option(name: .long, help: "NEAR parameter for near-lossless encoding (0=lossless, 1-255=lossy, default: 0)")
         var near: Int = 0
+
+        @Option(name: .long, help: "Restart interval in lines (0=off, default). Emits DRI + RSTm markers so intervals decode independently; lossless non-interleaved only")
+        var restartInterval: Int = 0
         
         @Option(name: .long, help: "Interleave mode: none, line, sample (default: none)")
         var interleave: String = "none"
@@ -303,7 +306,8 @@ extension JPEGLSCLITool {
                 interleaveMode: actualInterleaveMode,
                 presetParameters: resolvedPresetParameters,
                 colorTransformation: colorTransformValue,
-                mappingTable: resolvedMappingTable
+                mappingTable: resolvedMappingTable,
+                restartInterval: restartInterval
             )
             
             if verbose {

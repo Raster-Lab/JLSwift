@@ -29,6 +29,38 @@ import Foundation
 ///     interleaveMode: .none
 /// )
 /// ```
+/// Lock-protected accumulator for parallel restart-interval encoding:
+/// each worker stores its interval's bytes at its own index, and the first
+/// error (if any) wins.
+private final class IntervalEncodeResults: @unchecked Sendable {
+    private let lock = NSLock()
+    private var data: [Data?]
+    private var firstError: Error?
+
+    init(count: Int) {
+        self.data = Array(repeating: nil, count: count)
+    }
+
+    func set(_ chunk: Data, at index: Int) {
+        lock.lock()
+        data[index] = chunk
+        lock.unlock()
+    }
+
+    func fail(_ error: Error) {
+        lock.lock()
+        if firstError == nil { firstError = error }
+        lock.unlock()
+    }
+
+    func finish() throws -> [Data?] {
+        lock.lock()
+        defer { lock.unlock() }
+        if let firstError { throw firstError }
+        return data
+    }
+}
+
 public struct JPEGLSEncoder: Sendable {
     /// Configuration for encoding
     public struct Configuration: Sendable {
@@ -60,6 +92,19 @@ public struct JPEGLSEncoder: Sendable {
         /// will reference the same mapping table.
         public let mappingTable: JPEGLSMappingTable?
 
+        /// Restart interval in sample lines (0 = no restart markers, the default).
+        ///
+        /// When > 0 the encoder writes a DRI marker segment and emits an RSTm
+        /// marker (cycling FFD0–FFD7) after every `restartInterval` lines of
+        /// each scan.  Per ITU-T.87, the coding state — contexts, run state,
+        /// bit alignment, and the previous-line prediction — resets at every
+        /// interval boundary, which makes intervals independently decodable
+        /// (and lets the encoder process them in parallel) at a small
+        /// compression-ratio cost.
+        ///
+        /// Currently supported for lossless (NEAR = 0), non-interleaved scans.
+        public let restartInterval: Int
+
         /// Initialize encoding configuration
         ///
         /// ```swift
@@ -89,16 +134,37 @@ public struct JPEGLSEncoder: Sendable {
         ///   - presetParameters: Optional custom preset parameters (uses defaults if nil)
         ///   - colorTransformation: Colour transform to apply before encoding (default: .none)
         ///   - mappingTable: Optional mapping table for palettised encoding (default: nil)
-        /// - Throws: `JPEGLSError.invalidNearParameter` if NEAR is out of range
+        ///   - restartInterval: Restart interval in lines (0 = off; lossless non-interleaved only)
+        /// - Throws: `JPEGLSError.invalidNearParameter` if NEAR is out of range,
+        ///   `JPEGLSError.encodingFailed` if the restart interval is invalid or
+        ///   combined with an unsupported mode
         public init(
             near: Int = 0,
             interleaveMode: JPEGLSInterleaveMode = .none,
             presetParameters: JPEGLSPresetParameters? = nil,
             colorTransformation: JPEGLSColorTransformation = .none,
-            mappingTable: JPEGLSMappingTable? = nil
+            mappingTable: JPEGLSMappingTable? = nil,
+            restartInterval: Int = 0
         ) throws {
             guard near >= 0 && near <= 255 else {
                 throw JPEGLSError.invalidNearParameter(near: near)
+            }
+            guard (0...65535).contains(restartInterval) else {
+                throw JPEGLSError.encodingFailed(
+                    reason: "Restart interval must be in 0...65535 lines, got \(restartInterval)"
+                )
+            }
+            if restartInterval > 0 {
+                guard near == 0 else {
+                    throw JPEGLSError.encodingFailed(
+                        reason: "Restart intervals are currently supported for lossless (NEAR = 0) encoding only"
+                    )
+                }
+                guard interleaveMode == .none else {
+                    throw JPEGLSError.encodingFailed(
+                        reason: "Restart intervals are currently supported for non-interleaved scans only"
+                    )
+                }
             }
 
             self.near = near
@@ -106,6 +172,7 @@ public struct JPEGLSEncoder: Sendable {
             self.presetParameters = presetParameters
             self.colorTransformation = colorTransformation
             self.mappingTable = mappingTable
+            self.restartInterval = restartInterval
         }
     }
     
@@ -192,6 +259,13 @@ public struct JPEGLSEncoder: Sendable {
         let mappingTableID: UInt8 = configuration.mappingTable?.id ?? 0
         if let table = configuration.mappingTable {
             writeMappingTable(table, to: writer)
+        }
+
+        // Write DRI (define restart interval) when restart markers are enabled.
+        if configuration.restartInterval > 0 {
+            writer.writeMarker(.defineRestartInterval)
+            writer.writeUInt16(4)  // segment length including the length field
+            writer.writeUInt16(UInt16(configuration.restartInterval))
         }
 
         // Encode scan(s) based on interleave mode
@@ -506,13 +580,14 @@ public struct JPEGLSEncoder: Sendable {
         
         // Write scan header (SOS)
         try writeScanHeader(scanHeader, to: writer)
-        
+
         // Encode scan data
         try encodeScanData(
             imageData: imageData,
             scanHeader: scanHeader,
             parameters: parameters,
-            writer: writer
+            writer: writer,
+            restartInterval: configuration.restartInterval
         )
     }
     
@@ -557,7 +632,8 @@ public struct JPEGLSEncoder: Sendable {
         imageData: MultiComponentImageData,
         scanHeader: JPEGLSScanHeader,
         parameters: JPEGLSPresetParameters,
-        writer: JPEGLSBitstreamWriter
+        writer: JPEGLSBitstreamWriter,
+        restartInterval: Int = 0
     ) throws {
         // Create pixel buffer
         let buffer = JPEGLSPixelBuffer(imageData: imageData)
@@ -591,7 +667,8 @@ public struct JPEGLSEncoder: Sendable {
                 context: &context,
                 writer: writer,
                 limit: limit,
-                qbppBits: qbppBits
+                qbppBits: qbppBits,
+                restartInterval: restartInterval
             )
             
         case .line:
@@ -694,7 +771,8 @@ public struct JPEGLSEncoder: Sendable {
         context: inout JPEGLSContextModel,
         writer: JPEGLSBitstreamWriter,
         limit: Int,
-        qbppBits: Int
+        qbppBits: Int,
+        restartInterval: Int = 0
     ) throws {
         guard scanHeader.componentCount == 1 else {
             throw JPEGLSError.encodingFailed(
@@ -725,7 +803,8 @@ public struct JPEGLSEncoder: Sendable {
                 context: &context,
                 writer: writer,
                 limit: limit,
-                qbppBits: qbppBits
+                qbppBits: qbppBits,
+                restartInterval: restartInterval
             )
             return
         }
@@ -905,7 +984,8 @@ public struct JPEGLSEncoder: Sendable {
         context: inout JPEGLSContextModel,
         writer: JPEGLSBitstreamWriter,
         limit: Int,
-        qbppBits: Int
+        qbppBits: Int,
+        restartInterval: Int = 0
     ) throws {
         // Flatten once per scan.
         var flat = [UInt16](repeating: 0, count: width * height)
@@ -920,24 +1000,98 @@ public struct JPEGLSEncoder: Sendable {
             }
         }
 
-        try flat.withUnsafeBufferPointer { buf in
+        if restartInterval > 0 && restartInterval < height {
+            // Restart intervals: every interval restarts coding exactly as at
+            // scan start (fresh contexts, run state, bit alignment, zero
+            // previous line), so the intervals are independent and can encode
+            // in parallel into per-interval buffers concatenated with RSTm
+            // markers (cycling FFD0–FFD7) between them.
+            let chunkCount = (height + restartInterval - 1) / restartInterval
+            let presetParameters = regularMode.presetParameters
+            let plane = flat
+            let results = IntervalEncodeResults(count: chunkCount)
+            DispatchQueue.concurrentPerform(iterations: chunkCount) { idx in
+                do {
+                    let lo = idx * restartInterval
+                    let hi = min(lo + restartInterval, height)
+                    var chunkContext = try JPEGLSContextModel(
+                        parameters: presetParameters, near: 0
+                    )
+                    let chunkWriter = JPEGLSBitstreamWriter(
+                        capacity: (hi - lo) * width * 2 + 64
+                    )
+                    encodeFlatRowsLossless(
+                        flat: plane, rowRange: lo..<hi, width: width,
+                        regularMode: regularMode, runMode: runMode,
+                        context: &chunkContext, writer: chunkWriter,
+                        limit: limit, qbppBits: qbppBits
+                    )
+                    chunkWriter.flush()
+                    results.set(try chunkWriter.getData(), at: idx)
+                } catch {
+                    results.fail(error)
+                }
+            }
+            let chunkData = try results.finish()
+            for (idx, data) in chunkData.enumerated() {
+                guard let data else {
+                    throw JPEGLSError.encodingFailed(reason: "Restart interval \(idx) produced no data")
+                }
+                writer.writeBytes(data)
+                if idx < chunkCount - 1 {
+                    let marker = JPEGLSMarker(
+                        rawValue: JPEGLSMarker.restart0.rawValue + UInt8(idx % 8)
+                    )!
+                    writer.writeMarker(marker)
+                }
+            }
+            return
+        }
+
+        encodeFlatRowsLossless(
+            flat: flat, rowRange: 0..<height, width: width,
+            regularMode: regularMode, runMode: runMode,
+            context: &context, writer: writer,
+            limit: limit, qbppBits: qbppBits
+        )
+    }
+
+    /// Encode a contiguous range of rows of a flat UInt16 plane as one
+    /// independent coding region: the first row of the range uses row-0
+    /// boundary semantics (zero previous line), exactly as at scan start.
+    /// For a whole-image range this is the plain lossless scan; for restart
+    /// encoding each interval is one such range.
+    private func encodeFlatRowsLossless(
+        flat: [UInt16],
+        rowRange: Range<Int>,
+        width: Int,
+        regularMode: JPEGLSRegularMode,
+        runMode: JPEGLSRunMode,
+        context: inout JPEGLSContextModel,
+        writer: JPEGLSBitstreamWriter,
+        limit: Int,
+        qbppBits: Int
+    ) {
+        flat.withUnsafeBufferPointer { buf in
             var prevRowEdge = 0
-            for row in 0..<height {
+            let firstRow = rowRange.lowerBound
+            for row in rowRange {
                 // Note: RUNindex is NOT reset per line. Per ITU-T.87 §A.7.1 and CharLS,
                 // RUNindex persists across scan lines; it is only initialised to 0 at scan start.
                 let rowBase = row * width
                 let prevBase = rowBase - width
                 let edgeForThisRow = prevRowEdge
-                if row > 0 {
+                if row > firstRow {
                     prevRowEdge = Int(buf[prevBase])
                 }
                 var col = 0
                 while col < width {
                     // Causal neighbours per ITU-T.87 §3.2 (same boundary
-                    // semantics as the general path).
+                    // semantics as the general path). The first row of the
+                    // range uses row-0 semantics (zero previous line).
                     let actual = Int(buf[rowBase + col])
                     let a: Int, b: Int, c: Int, d: Int
-                    if row == 0 {
+                    if row == firstRow {
                         a = col == 0 ? 0 : Int(buf[rowBase + col - 1])
                         b = 0; c = 0; d = 0
                     } else if col == 0 {
@@ -999,7 +1153,7 @@ public struct JPEGLSEncoder: Sendable {
 
                             let interruptionCol = col + actualRunLength
                             let interruptionActual = Int(buf[rowBase + interruptionCol])
-                            let encRb = row > 0 ? Int(buf[prevBase + interruptionCol]) : 0
+                            let encRb = row > firstRow ? Int(buf[prevBase + interruptionCol]) : 0
 
                             // Per ITU-T.87 / CharLS: use finalRunIndex (post-continuation)
                             // for J when computing adjustedLimit in the interruption pixel.

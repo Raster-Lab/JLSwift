@@ -95,24 +95,30 @@ extension JPEGLSCLITool {
             // Write output based on format
             switch format.lowercased() {
             case "raw":
-                // Write raw pixel data
-                var outputData = Data()
+                // Write raw pixel data. Accumulate in [UInt8] and convert to
+                // Data once — per-byte Data.append is ~70x slower.
+                let wide = imageData.frameHeader.bitsPerSample > 8
+                var bytes = [UInt8]()
+                bytes.reserveCapacity(
+                    imageData.components.reduce(0) { $0 + $1.pixels.count * ($1.pixels.first?.count ?? 0) }
+                        * (wide ? 2 : 1)
+                )
                 for component in imageData.components {
                     for row in component.pixels {
                         for pixel in row {
-                            // Write pixel value in appropriate byte size
-                            if imageData.frameHeader.bitsPerSample <= 8 {
-                                outputData.append(UInt8(clamping: pixel))
-                            } else {
+                            if wide {
                                 // Write as 16-bit big-endian
                                 let value = UInt16(clamping: pixel)
-                                outputData.append(UInt8((value >> 8) & 0xFF))
-                                outputData.append(UInt8(value & 0xFF))
+                                bytes.append(UInt8((value >> 8) & 0xFF))
+                                bytes.append(UInt8(value & 0xFF))
+                            } else {
+                                bytes.append(UInt8(clamping: pixel))
                             }
                         }
                     }
                 }
-                
+                let outputData = Data(bytes)
+
                 try outputData.write(to: URL(fileURLWithPath: output))
                 
                 if !quiet {

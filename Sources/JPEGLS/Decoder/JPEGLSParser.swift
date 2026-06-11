@@ -222,6 +222,14 @@ public final class JPEGLSParser {
                     if byte == JPEGLSMarker.markerPrefix {
                         // Check next byte to determine if it's stuffing or a real marker
                         if let nextByte = reader.peekByte() {
+                            if nextByte >= JPEGLSMarker.restart0.rawValue
+                                && nextByte <= JPEGLSMarker.restart7.rawValue {
+                                // Restart marker (FFD0–FFD7) inside the scan
+                                // body: part of the entropy-coded segment, not
+                                // a scan terminator. Consume and continue.
+                                _ = try reader.readByte()
+                                continue
+                            }
                             if nextByte >= 0x80 {
                                 // Real marker — back up to re-read the FF byte in the outer loop
                                 try reader.seek(to: reader.currentPosition - 1)

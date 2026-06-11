@@ -468,8 +468,9 @@ struct BatchProcessor: Sendable {
         let imageData = try JPEGLSDecoder().decode(inputData)
 
         let wide = imageData.frameHeader.bitsPerSample > 8
-        var outputData = Data(
-            capacity: imageData.frameHeader.width * imageData.frameHeader.height
+        var bytes = [UInt8]()
+        bytes.reserveCapacity(
+            imageData.frameHeader.width * imageData.frameHeader.height
                 * imageData.components.count * (wide ? 2 : 1)
         )
         for component in imageData.components {
@@ -477,15 +478,15 @@ struct BatchProcessor: Sendable {
                 for pixel in row {
                     if wide {
                         let value = UInt16(clamping: pixel)
-                        outputData.append(UInt8((value >> 8) & 0xFF))
-                        outputData.append(UInt8(value & 0xFF))
+                        bytes.append(UInt8((value >> 8) & 0xFF))
+                        bytes.append(UInt8(value & 0xFF))
                     } else {
-                        outputData.append(UInt8(clamping: pixel))
+                        bytes.append(UInt8(clamping: pixel))
                     }
                 }
             }
         }
-        try outputData.write(to: URL(fileURLWithPath: output))
+        try Data(bytes).write(to: URL(fileURLWithPath: output))
     }
     
     private func processInfo(input: String) throws {
