@@ -8,20 +8,28 @@ import Foundation
 /// Bitstream writer for JPEG-LS
 ///
 /// Writes bytes and bits to a buffer, handling marker stuffing automatically.
+///
+/// Internally the writer accumulates bits in a 64-bit buffer and stores bytes
+/// in a contiguous `[UInt8]`, converting to `Data` only once in `getData()`.
+/// The 64-bit accumulator means a worst-case 7-bit residual plus a full 32-bit
+/// `writeBits` call (39 bits, plus transient stuff bits) always fits without
+/// overflow — unlike a 32-bit accumulator, which silently drops high bits when
+/// `bitsInBuffer + count > 32`.
 public final class JPEGLSBitstreamWriter {
-    private var data: Data
-    private var bitBuffer: UInt32
+    private var bytes: [UInt8]
+    private var bitBuffer: UInt64
     private var bitsInBuffer: Int
-    
+
     /// Initialize writer with optional initial capacity
     ///
     /// - Parameter capacity: Initial buffer capacity in bytes
     public init(capacity: Int = 4096) {
-        self.data = Data(capacity: capacity)
+        self.bytes = []
+        self.bytes.reserveCapacity(capacity)
         self.bitBuffer = 0
         self.bitsInBuffer = 0
     }
-    
+
     /// Get the written data
     ///
     /// - Returns: The complete bitstream data
@@ -32,7 +40,7 @@ public final class JPEGLSBitstreamWriter {
                 reason: "Bit buffer not flushed, \(bitsInBuffer) bits remaining"
             )
         }
-        return data
+        return Data(bytes)
     }
 
     /// Access the accumulated data without copying via a closure.
@@ -55,14 +63,14 @@ public final class JPEGLSBitstreamWriter {
                 reason: "Bit buffer not flushed, \(bitsInBuffer) bits remaining"
             )
         }
-        return try data.withUnsafeBytes(body)
+        return try bytes.withUnsafeBytes(body)
     }
 
     /// Current write position in bytes
     public var currentPosition: Int {
-        return data.count
+        return bytes.count
     }
-    
+
     /// Write a single byte to the stream (no stuffing).
     ///
     /// This method writes raw bytes for structured data (marker segments, headers).
@@ -70,45 +78,43 @@ public final class JPEGLSBitstreamWriter {
     ///
     /// - Parameter byte: The byte to write
     public func writeByte(_ byte: UInt8) {
-        data.append(byte)
+        bytes.append(byte)
     }
-    
+
     /// Write multiple bytes to the stream (no stuffing).
     ///
     /// - Parameter bytes: The bytes to write
-    public func writeBytes(_ bytes: Data) {
-        data.append(contentsOf: bytes)
+    public func writeBytes(_ data: Data) {
+        bytes.append(contentsOf: data)
     }
-    
+
     /// Write bytes from a raw buffer pointer without copying, for
     /// zero-copy bulk transfer of pre-encoded data.
     ///
     /// - Parameter buffer: Raw buffer whose bytes are appended verbatim.
     ///   No JPEG-LS bit-stuffing is applied; use only for pre-encoded data.
     public func writeBytesNoCopy(_ buffer: UnsafeRawBufferPointer) {
-        data.append(contentsOf: buffer)
+        bytes.append(contentsOf: buffer)
     }
-    
+
     /// Write a 16-bit big-endian value
     ///
     /// - Parameter value: The 16-bit value
     public func writeUInt16(_ value: UInt16) {
-        let byte1 = UInt8((value >> 8) & 0xFF)
-        let byte2 = UInt8(value & 0xFF)
-        data.append(byte1)
-        data.append(byte2)
+        bytes.append(UInt8((value >> 8) & 0xFF))
+        bytes.append(UInt8(value & 0xFF))
     }
-    
+
     /// Write a marker (2-byte sequence)
     ///
     /// Does NOT perform marker stuffing for marker bytes
     ///
     /// - Parameter marker: The marker to write
     public func writeMarker(_ marker: JPEGLSMarker) {
-        data.append(JPEGLSMarker.markerPrefix)
-        data.append(marker.rawValue)
+        bytes.append(JPEGLSMarker.markerPrefix)
+        bytes.append(marker.rawValue)
     }
-    
+
     /// Write bits to the bitstream with JPEG-LS bit-level stuffing.
     ///
     /// Accumulates bits in a buffer and flushes complete bytes. Implements bit-level
@@ -131,28 +137,29 @@ public final class JPEGLSBitstreamWriter {
         let mask: UInt32 = count < 32 ? ((1 << count) - 1) : UInt32.max
         let maskedBits = bits & mask
 
-        // Add bits to buffer
-        bitBuffer = (bitBuffer << count) | maskedBits
+        // Add bits to buffer. Invariant: bits at positions >= bitsInBuffer are 0,
+        // and bitsInBuffer never exceeds 7 on entry, so 7 + 32 = 39 bits fit.
+        bitBuffer = (bitBuffer << UInt64(count)) | UInt64(maskedBits)
         bitsInBuffer += count
 
         // Write complete bytes with bit-level stuffing
         while bitsInBuffer >= 8 {
             let shift = bitsInBuffer - 8
-            let byte = UInt8((bitBuffer >> shift) & 0xFF)
-            data.append(byte)
+            let byte = UInt8(truncatingIfNeeded: bitBuffer >> UInt64(shift))
+            bytes.append(byte)
             bitsInBuffer -= 8
 
             // Bit-level stuffing per ISO 14495-1 §9.1:
             // After emitting a byte of 0xFF, insert a 0 stuff bit at the next bit position.
-            // The UInt32 buffer already has 0 in unused positions; we clear the specific bit
+            // The buffer already has 0 in unused positions; we clear the specific bit
             // at position `bitsInBuffer` (the new MSB of the valid range) to make it 0.
             if byte == 0xFF {
-                bitBuffer &= ~(UInt32(1) << UInt32(bitsInBuffer))
+                bitBuffer &= ~(UInt64(1) << UInt64(bitsInBuffer))
                 bitsInBuffer += 1
             }
         }
     }
-    
+
     /// Flush remaining bits in buffer
     ///
     /// Pads with zeros to complete the final byte. No stuffing is applied to the
@@ -161,13 +168,13 @@ public final class JPEGLSBitstreamWriter {
     public func flush() {
         if bitsInBuffer > 0 {
             let shift = 8 - bitsInBuffer
-            let byte = UInt8((bitBuffer << shift) & 0xFF)
-            data.append(byte)
+            let byte = UInt8(truncatingIfNeeded: (bitBuffer << UInt64(shift)) & 0xFF)
+            bytes.append(byte)
             bitBuffer = 0
             bitsInBuffer = 0
         }
     }
-    
+
     /// Reset the bit buffer (typically called at scan boundaries)
     public func resetBitBuffer() {
         flush()
@@ -176,45 +183,37 @@ public final class JPEGLSBitstreamWriter {
     /// Write a unary code: n zero bits followed by a single 1 bit.
     ///
     /// This is a performance-optimised alternative to calling `writeBits(0, count: 1)` in a loop
-    /// followed by `writeBits(1, count: 1)`.  Writing in batches of up to 24 bits reduces
+    /// followed by `writeBits(1, count: 1)`.  Writing in batches of up to 32 bits reduces
     /// function-call overhead significantly in the Golomb-Rice coding hot path.
-    ///
-    /// The batch size is capped at 24 because the internal `bitBuffer` is 32 bits wide and may
-    /// already hold up to 7 bits from the previous call.  Adding 25 bits (24 zeros + 1 terminator)
-    /// to a 7-bit residual gives exactly 32 bits, which fits without overflow.
     ///
     /// - Parameter n: Number of leading zero bits (must be ≥ 0)
     public func writeUnaryCode(_ n: Int) {
         var remaining = n
-        // Write up to 24 zeros at a time.  Combined with a worst-case 7-bit residual in
-        // the buffer, the total (7 + 24 = 31) safely fits in the 32-bit UInt32 bitBuffer.
-        while remaining >= 24 {
-            writeBits(0, count: 24)
-            remaining -= 24
+        while remaining >= 32 {
+            writeBits(0, count: 32)
+            remaining -= 32
         }
-        // Write the remaining zeros and the terminating 1 in one call (max count = 24
-        // when remaining == 23, giving 7 + 24 = 31 bits total — within UInt32 range).
+        // Write the remaining zeros and the terminating 1 in one call
+        // (max count = 32 when remaining == 31).
         writeBits(1, count: remaining + 1)
     }
 
     /// Write n consecutive 1 bits (used for Golomb run-length continuation codes).
     ///
     /// This is a performance-optimised alternative to calling `writeBits(1, count: 1)` in a loop.
-    /// The batch size is capped at 24 for the same UInt32 overflow reason as `writeUnaryCode`.
     ///
     /// - Parameter n: Number of 1 bits to write (must be ≥ 0)
     public func writeOnes(_ n: Int) {
         var remaining = n
-        // (1 << 24) - 1 = 0x00FF_FFFF fits in UInt32 with room to spare.
-        while remaining >= 24 {
-            writeBits(0x00FFFFFF, count: 24)
-            remaining -= 24
+        while remaining >= 32 {
+            writeBits(UInt32.max, count: 32)
+            remaining -= 32
         }
         if remaining > 0 {
             writeBits(UInt32((1 << remaining) - 1), count: remaining)
         }
     }
-    
+
     /// Write a marker segment with length field
     ///
     /// - Parameters:
@@ -222,15 +221,15 @@ public final class JPEGLSBitstreamWriter {
     ///   - payload: The segment payload data
     public func writeMarkerSegment(marker: JPEGLSMarker, payload: Data) {
         writeMarker(marker)
-        
+
         // Length includes the 2 bytes for length field itself
         let length = UInt16(payload.count + 2)
         writeUInt16(length)
-        
+
         // Write payload without stuffing (it's not compressed data)
-        data.append(payload)
+        bytes.append(contentsOf: payload)
     }
-    
+
     /// Reserve space for a marker segment and return position
     ///
     /// Useful for writing segments where length is not known upfront
@@ -239,22 +238,20 @@ public final class JPEGLSBitstreamWriter {
     /// - Returns: Position where length field starts
     public func beginMarkerSegment(marker: JPEGLSMarker) -> Int {
         writeMarker(marker)
-        let lengthPos = data.count
+        let lengthPos = bytes.count
         writeUInt16(0)  // Placeholder for length
         return lengthPos
     }
-    
+
     /// Finalize a marker segment by updating its length
     ///
     /// - Parameter lengthPosition: Position returned by beginMarkerSegment
     public func endMarkerSegment(lengthPosition: Int) {
-        let currentPos = data.count
+        let currentPos = bytes.count
         let length = UInt16(currentPos - lengthPosition)
-        
+
         // Update length field
-        let byte1 = UInt8((length >> 8) & 0xFF)
-        let byte2 = UInt8(length & 0xFF)
-        data[lengthPosition] = byte1
-        data[lengthPosition + 1] = byte2
+        bytes[lengthPosition] = UInt8((length >> 8) & 0xFF)
+        bytes[lengthPosition + 1] = UInt8(length & 0xFF)
     }
 }
