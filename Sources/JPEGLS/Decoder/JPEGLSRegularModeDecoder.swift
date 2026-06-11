@@ -34,7 +34,13 @@ public struct JPEGLSRegularModeDecoder: Sendable {
     
     /// Quantization factor: qbpp = (NEAR == 0) ? 0 : ((NEAR << 1) | 1)
     private let qbpp: Int
-    
+
+    /// Gradient quantisation lookup table for the inner range (−T3, T3),
+    /// indexed by `gradient + gradientTableOffset`. Built in `init` by
+    /// evaluating the reference branch chain, so it is bit-identical to it.
+    private let gradientTable: [Int]
+    private let gradientTableOffset: Int
+
     // MARK: - Initialization
     
     /// Initialize regular mode decoder with preset parameters.
@@ -61,6 +67,39 @@ public struct JPEGLSRegularModeDecoder: Sendable {
         } else {
             self.range = (parameters.maxValue + 2 * near) / qbpp + 1
         }
+
+        // Build the gradient quantisation table for the inner range from the
+        // reference branch chain (values at/beyond ±T3 are handled by the
+        // early exits in `quantizeGradient`).
+        let t3 = parameters.threshold3
+        self.gradientTableOffset = t3
+        var table = [Int](repeating: 0, count: 2 * t3 + 1)
+        for i in 0..<table.count {
+            table[i] = Self.quantizeGradientReference(
+                i - t3,
+                t1: parameters.threshold1, t2: parameters.threshold2,
+                t3: t3, near: near
+            )
+        }
+        self.gradientTable = table
+    }
+
+    /// Reference gradient quantisation per ITU-T.87 Table A.7 /
+    /// CharLS `quantize_gradient_org` (strict less-than upper boundaries).
+    /// Used to build `gradientTable`; kept as the single source of truth
+    /// for the boundary semantics.
+    private static func quantizeGradientReference(
+        _ gradient: Int, t1: Int, t2: Int, t3: Int, near: Int
+    ) -> Int {
+        if gradient <= -t3 { return -4 }
+        if gradient <= -t2 { return -3 }
+        if gradient <= -t1 { return -2 }
+        if gradient < -near { return -1 }
+        if gradient <= near { return 0 }
+        if gradient < t1 { return 1 }
+        if gradient < t2 { return 2 }
+        if gradient < t3 { return 3 }
+        return 4
     }
     
     // MARK: - Gradient Computation
@@ -101,17 +140,11 @@ public struct JPEGLSRegularModeDecoder: Sendable {
     /// - Parameter gradient: Raw gradient value
     /// - Returns: Quantized gradient in range [-4, 4]
     public func quantizeGradient(_ gradient: Int) -> Int {
-        // Quantization per ITU-T.87 Table A.7 / CharLS quantize_gradient_org.
-        // Uses strict less-than for upper threshold boundaries.
+        // Gradients at/beyond ±T3 always map to ±4; the inner range uses the
+        // pre-computed table (built from the reference branch chain).
         if gradient <= -parameters.threshold3 { return -4 }
-        if gradient <= -parameters.threshold2 { return -3 }
-        if gradient <= -parameters.threshold1 { return -2 }
-        if gradient < -near { return -1 }
-        if gradient <= near { return 0 }
-        if gradient < parameters.threshold1 { return 1 }
-        if gradient < parameters.threshold2 { return 2 }
-        if gradient < parameters.threshold3 { return 3 }
-        return 4
+        if gradient >= parameters.threshold3 { return 4 }
+        return gradientTable[gradient + gradientTableOffset]
     }
     
     // MARK: - MED Prediction
@@ -302,16 +335,39 @@ public struct JPEGLSRegularModeDecoder: Sendable {
     ) -> DecodedPixel {
         // Step 1: Compute local gradients
         let (d1, d2, d3) = computeGradients(a: a, b: b, c: c, d: d)
-        
+
         // Step 2: Quantize gradients
         let q1 = quantizeGradient(d1)
         let q2 = quantizeGradient(d2)
         let q3 = quantizeGradient(d3)
-        
+
         // Step 3: Compute context index and sign
-        let contextIndex = context.computeContextIndex(q1: q1, q2: q2, q3: q3)
-        let sign = context.computeContextSign(q1: q1, q2: q2, q3: q3)
-        
+        let (contextIndex, sign) = context.computeContextIndexAndSign(q1: q1, q2: q2, q3: q3)
+
+        return decodePixel(
+            mappedError: mappedError, a: a, b: b, c: c,
+            contextIndex: contextIndex, sign: sign,
+            context: context, errorCorrection: errorCorrection
+        )
+    }
+
+    /// Decode a single pixel in regular mode with a precomputed context.
+    ///
+    /// Identical to `decodePixel(mappedError:a:b:c:d:context:errorCorrection:)`
+    /// from step 4 onward; the caller supplies the context index and sign it
+    /// already derived from the quantized gradients (the scan loop computes
+    /// them for the run-mode test, so recomputing here would quantize every
+    /// gradient twice per pixel).
+    public func decodePixel(
+        mappedError: Int,
+        a: Int,
+        b: Int,
+        c: Int,
+        contextIndex: Int,
+        sign: Int,
+        context: JPEGLSContextModel,
+        errorCorrection: Int = 0
+    ) -> DecodedPixel {
         // Step 4: Compute MED prediction
         let basePrediction = computeMEDPrediction(a: a, b: b, c: c)
         

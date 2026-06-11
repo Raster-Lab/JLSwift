@@ -535,12 +535,16 @@ public struct JPEGLSDecoder: Sendable {
                             row: row, col: col, width: frameHeader.width,
                             prevRowEdge: edgesForThisRow[componentIndex]
                         )
+                        let (d1, d2, d3) = decoder.computeGradients(a: a, b: b, c: c, d: d)
                         let pixel = try decodeSinglePixel(
                             reader: reader,
                             decoder: decoder,
                             runDecoder: runDecoder,
                             context: &context,
-                            a: a, b: b, c: c, d: d,
+                            a: a, b: b, c: c,
+                            q1: decoder.quantizeGradient(d1),
+                            q2: decoder.quantizeGradient(d2),
+                            q3: decoder.quantizeGradient(d3),
                             parameters: parameters,
                             near: scanHeader.near,
                             limit: limit,
@@ -646,7 +650,8 @@ public struct JPEGLSDecoder: Sendable {
                         decoder: decoder,
                         runDecoder: runDecoder,
                         context: &context,
-                        a: a, b: b, c: c, d: d,
+                        a: a, b: b, c: c,
+                        q1: q1, q2: q2, q3: q3,
                         parameters: parameters,
                         near: scanHeader.near,
                         limit: limit,
@@ -657,7 +662,7 @@ public struct JPEGLSDecoder: Sendable {
                 }
             }
         }
-        
+
         return pixels
     }
     
@@ -722,13 +727,14 @@ public struct JPEGLSDecoder: Sendable {
                     decoder: decoder,
                     runDecoder: runDecoder,
                     context: &context,
-                    a: a, b: b, c: c, d: d,
+                    a: a, b: b, c: c,
+                    q1: q1, q2: q2, q3: q3,
                     parameters: parameters,
                     near: scanHeader.near,
                     limit: limit,
                     qbppBits: qbppBits
                 )
-                
+
                 pixels[row][col] = pixel
                 col += 1
             }
@@ -773,45 +779,41 @@ public struct JPEGLSDecoder: Sendable {
         decoder: JPEGLSRegularModeDecoder,
         runDecoder: JPEGLSRunModeDecoder,
         context: inout JPEGLSContextModel,
-        a: Int, b: Int, c: Int, d: Int,
+        a: Int, b: Int, c: Int,
+        q1: Int, q2: Int, q3: Int,
         parameters: JPEGLSPresetParameters,
         near: Int,
         limit: Int,
         qbppBits: Int
     ) throws -> Int {
-        // Compute gradients
-        let (d1, d2, d3) = decoder.computeGradients(a: a, b: b, c: c, d: d)
-        
-        // Quantize gradients
-        let q1 = decoder.quantizeGradient(d1)
-        let q2 = decoder.quantizeGradient(d2)
-        let q3 = decoder.quantizeGradient(d3)
-        
-        // Get context
-        let contextIndex = context.computeContextIndex(q1: q1, q2: q2, q3: q3)
+        // Get context, reusing the quantized gradients the scan loop already
+        // computed for the run-mode test.
+        let (contextIndex, sign) = context.computeContextIndexAndSign(q1: q1, q2: q2, q3: q3)
         let k = context.computeGolombParameter(contextIndex: contextIndex)
-        
+
         // Read Golomb-Rice encoded error
         let mappedError = try readGolombCode(reader: reader, k: k, limit: limit, qbppBits: qbppBits)
-        
+
         // Compute error correction XOR per ITU-T.87 §A.4.1
         let errorCorrection = context.getErrorCorrection(contextIndex: contextIndex, k: k)
-        
+
         // Decode pixel using decoder
         let result = decoder.decodePixel(
             mappedError: mappedError,
-            a: a, b: b, c: c, d: d,
+            a: a, b: b, c: c,
+            contextIndex: contextIndex,
+            sign: sign,
             context: context,
             errorCorrection: errorCorrection
         )
-        
+
         // Update context
         context.updateContext(
             contextIndex: contextIndex,
             predictionError: result.error,
             sign: result.sign
         )
-        
+
         return result.sample
     }
     
