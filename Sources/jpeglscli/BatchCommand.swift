@@ -18,30 +18,21 @@ struct Batch: ParsableCommand {
     @Argument(help: "Operation to perform: encode, decode, info, verify")
     var operation: String
     
-    @Argument(help: "Input glob pattern (e.g., '*.jls', 'images/*.raw') or directory path")
+    @Argument(help: "Input glob pattern (e.g., '*.jls', 'scans/*.pgm') or directory path")
     var inputPattern: String
-    
+
     @Option(name: .shortAndLong, help: "Output directory for processed files")
     var outputDir: String?
-    
+
     // MARK: - Encoding Options
-    
-    @Option(name: .shortAndLong, help: "Image width in pixels (required for encode)")
-    var width: Int?
-    
-    @Option(name: .shortAndLong, help: "Image height in pixels (required for encode)")
-    var height: Int?
-    
-    @Option(name: .shortAndLong, help: "Bits per sample, 2-16 (default: 8)")
-    var bitsPerSample: Int = 8
-    
-    @Option(name: .shortAndLong, help: "Number of components - 1 (greyscale) or 3 (RGB) (default: 1)")
-    var components: Int = 1
-    
+    //
+    // Image geometry and bit depth are auto-detected from the input files
+    // (PGM/PPM, PNG, or TIFF); raw pixel input is not supported in batch mode.
+
     @Option(help: "NEAR parameter, 0=lossless, 1-255=lossy (default: 0)")
     var near: Int = 0
-    
-    @Option(help: "Interleave mode: none, line, sample (default: none)")
+
+    @Option(help: "Interleave mode for colour inputs: none, line, sample (default: none)")
     var interleave: String = "none"
     
     @Option(
@@ -92,10 +83,16 @@ struct Batch: ParsableCommand {
         
         // Validate encode-specific requirements. Image geometry and bit depth
         // are auto-detected from the input files (PGM/PPM/PNG/TIFF), so only
-        // the coding parameter needs validation here.
+        // the coding parameters need validation here.
         if operation.lowercased() == "encode" {
             guard (0...255).contains(near) else {
                 throw ValidationError("--near must be between 0 and 255")
+            }
+            guard ["none", "line", "sample"].contains(interleave.lowercased()) else {
+                throw ValidationError("--interleave must be one of: none, line, sample")
+            }
+            guard ["none", "hp1", "hp2", "hp3"].contains(colorTransform.lowercased()) else {
+                throw ValidationError("--color-transform must be one of: none, hp1, hp2, hp3")
             }
         }
         
@@ -120,10 +117,6 @@ struct Batch: ParsableCommand {
             inputPattern: inputPattern,
             outputDir: outputDir,
             encodeOptions: EncodeOptions(
-                width: width ?? 0,
-                height: height ?? 0,
-                bitsPerSample: bitsPerSample,
-                components: components,
                 near: near,
                 interleave: interleave,
                 colorTransform: colorTransform
@@ -143,10 +136,6 @@ struct Batch: ParsableCommand {
 // MARK: - Encode Options
 
 struct EncodeOptions: Sendable {
-    let width: Int
-    let height: Int
-    let bitsPerSample: Int
-    let components: Int
     let near: Int
     let interleave: String
     let colorTransform: String
@@ -456,7 +445,27 @@ struct BatchProcessor: Sendable {
             throw ValidationError("Batch encode requires 1 or 3 components; got \(componentPixels.count)")
         }
 
-        let config = try JPEGLSEncoder.Configuration(near: encodeOptions.near)
+        let interleaveMode: JPEGLSInterleaveMode
+        switch encodeOptions.interleave.lowercased() {
+        case "line": interleaveMode = .line
+        case "sample": interleaveMode = .sample
+        default: interleaveMode = .none
+        }
+        let colorTransformation: JPEGLSColorTransformation
+        switch encodeOptions.colorTransform.lowercased() {
+        case "hp1": colorTransformation = .hp1
+        case "hp2": colorTransformation = .hp2
+        case "hp3": colorTransformation = .hp3
+        default: colorTransformation = .none
+        }
+        // Greyscale inputs always use a single non-interleaved scan; the
+        // interleave/colour-transform options only apply to colour inputs.
+        let isColour = componentPixels.count == 3
+        let config = try JPEGLSEncoder.Configuration(
+            near: encodeOptions.near,
+            interleaveMode: isColour ? interleaveMode : .none,
+            colorTransformation: isColour ? colorTransformation : .none
+        )
         let encoded = try JPEGLSEncoder().encode(imageData, configuration: config)
         try encoded.write(to: URL(fileURLWithPath: output))
     }

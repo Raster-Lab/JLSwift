@@ -137,8 +137,10 @@ public final class JPEGLSBitstreamWriter {
         let mask: UInt32 = count < 32 ? ((1 << count) - 1) : UInt32.max
         let maskedBits = bits & mask
 
-        // Add bits to buffer. Invariant: bits at positions >= bitsInBuffer are 0,
-        // and bitsInBuffer never exceeds 7 on entry, so 7 + 32 = 39 bits fit.
+        // Add bits to buffer. bitsInBuffer never exceeds 7 on entry, so
+        // 7 + 32 = 39 bits always fit in the 64-bit accumulator. Bits above
+        // position `bitsInBuffer` are stale garbage from earlier shifts —
+        // extraction below masks them out; do not assume they are zero.
         bitBuffer = (bitBuffer << UInt64(count)) | UInt64(maskedBits)
         bitsInBuffer += count
 
@@ -151,8 +153,9 @@ public final class JPEGLSBitstreamWriter {
 
             // Bit-level stuffing per ISO 14495-1 §9.1:
             // After emitting a byte of 0xFF, insert a 0 stuff bit at the next bit position.
-            // The buffer already has 0 in unused positions; we clear the specific bit
-            // at position `bitsInBuffer` (the new MSB of the valid range) to make it 0.
+            // This clear is REQUIRED: the bit at position `bitsInBuffer` is the
+            // just-emitted 0xFF's least-significant bit (a 1); clearing it turns
+            // that position into the 0 stuff bit when bitsInBuffer grows past it.
             if byte == 0xFF {
                 bitBuffer &= ~(UInt64(1) << UInt64(bitsInBuffer))
                 bitsInBuffer += 1

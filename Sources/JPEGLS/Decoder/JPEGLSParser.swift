@@ -55,6 +55,13 @@ public struct JPEGLSParseResult: Sendable {
     /// without parsing (the decoder then falls back to its own walk).
     public let scanDataRanges: [Range<Int>]
 
+    /// The restart interval (DRI value) in effect at each scan's SOS marker,
+    /// one per scan header, in scan order (0 = none).  Per T.81 B.2.4.4 a
+    /// DRI segment between scans applies to following scans only, so a
+    /// single file-global value cannot represent multi-scan streams that
+    /// (re)define it.  Empty when the result was constructed without parsing.
+    public let scanRestartIntervals: [Int]
+
     /// Initialize parse result
     ///
     /// - Parameters:
@@ -67,6 +74,7 @@ public struct JPEGLSParseResult: Sendable {
     ///   - comments: Comment data
     ///   - colorTransformation: Colour transform from APP8 "mrfx" marker (default: .none)
     ///   - scanDataRanges: Byte ranges of each scan body (default: empty)
+    ///   - scanRestartIntervals: Restart interval in effect at each SOS (default: empty)
     public init(
         frameHeader: JPEGLSFrameHeader,
         scanHeaders: [JPEGLSScanHeader],
@@ -76,7 +84,8 @@ public struct JPEGLSParseResult: Sendable {
         applicationMarkers: [(marker: JPEGLSMarker, data: Data)] = [],
         comments: [Data] = [],
         colorTransformation: JPEGLSColorTransformation = .none,
-        scanDataRanges: [Range<Int>] = []
+        scanDataRanges: [Range<Int>] = [],
+        scanRestartIntervals: [Int] = []
     ) {
         self.frameHeader = frameHeader
         self.scanHeaders = scanHeaders
@@ -87,6 +96,7 @@ public struct JPEGLSParseResult: Sendable {
         self.comments = comments
         self.colorTransformation = colorTransformation
         self.scanDataRanges = scanDataRanges
+        self.scanRestartIntervals = scanRestartIntervals
     }
 }
 
@@ -128,6 +138,7 @@ public final class JPEGLSParser {
         var extendedHeight: Int?
         var colorTransformation: JPEGLSColorTransformation = .none
         var scanDataRanges: [Range<Int>] = []
+        var scanRestartIntervals: [Int] = []
 
         // Parse marker segments until EOI
         while !reader.isAtEnd {
@@ -188,7 +199,8 @@ public final class JPEGLSParser {
                     applicationMarkers: applicationMarkers,
                     comments: comments,
                     colorTransformation: colorTransformation,
-                    scanDataRanges: scanDataRanges
+                    scanDataRanges: scanDataRanges,
+                    scanRestartIntervals: scanRestartIntervals
                 )
                 
             case .startOfFrameJPEGLS:
@@ -209,6 +221,9 @@ public final class JPEGLSParser {
                 }
                 let scanHeader = try parseScanHeader(frameHeader: frame)
                 scanHeaders.append(scanHeader)
+                // Record the restart interval in effect at this SOS (a DRI
+                // between scans applies to following scans only, T.81 B.2.4.4).
+                scanRestartIntervals.append(restartInterval ?? 0)
 
                 // Skip scan data until we hit a marker, recording the body's
                 // byte range so the decoder can slice it without a second
@@ -454,7 +469,15 @@ public final class JPEGLSParser {
         extendedHeight: inout Int?
     ) throws {
         let length = try reader.readUInt16()
-        
+        // Length includes the 2-byte length field and the 1-byte type that
+        // follows; anything shorter is structurally invalid (and would make
+        // the skip count below negative).
+        guard length >= 3 else {
+            throw JPEGLSError.invalidBitstreamStructure(
+                reason: "LSE segment length \(length) is shorter than its own header"
+            )
+        }
+
         // Read extension type
         let extensionTypeByte = try reader.readByte()
         guard let extensionType = JPEGLSExtensionType(rawValue: extensionTypeByte) else {

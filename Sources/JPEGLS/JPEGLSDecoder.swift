@@ -81,10 +81,16 @@ public struct JPEGLSDecoder: Sendable {
     /// - Returns: Decoded multi-component image data
     /// - Throws: `JPEGLSError` if decoding fails
     public func decode(_ data: Data) throws -> MultiComponentImageData {
+        // Rebase slices: all offset bookkeeping below (parser scan ranges,
+        // the fallback marker walk) is zero-based, but a Data slice keeps
+        // its parent's indices — subscripting it with zero-based ranges
+        // would silently read the wrong bytes or trap.
+        let data = data.startIndex == 0 ? data : Data(data)
+
         // Parse JPEG-LS structure
         let parser = JPEGLSParser(data: data)
         let parseResult = try parser.parse()
-        
+
         // Get preset parameters (default or custom).  The NEAR parameter affects
         // the default thresholds per ITU-T.87 Table C.2, so it must be supplied.
         let near = parseResult.scanHeaders.first?.near ?? 0
@@ -103,6 +109,15 @@ public struct JPEGLSDecoder: Sendable {
             )
         }
 
+        // Reject dimension products that overflow before any buffer sizing
+        // arithmetic runs on them (a crafted LSE type-4 segment can declare
+        // axes up to 2^32 − 1 each).
+        let frameHeader = parseResult.frameHeader
+        let (_, dimensionOverflow) = frameHeader.width.multipliedReportingOverflow(by: frameHeader.height)
+        guard !dimensionOverflow else {
+            throw JPEGLSError.invalidDimensions(width: frameHeader.width, height: frameHeader.height)
+        }
+
         // Slice scan data using the ranges the parser recorded during its
         // walk; fall back to a marker walk only for externally-constructed
         // parse results without ranges.
@@ -119,22 +134,56 @@ public struct JPEGLSDecoder: Sendable {
                 reason: "Scan data count (\(scanDataList.count)) doesn't match scan header count (\(parseResult.scanHeaders.count))"
             )
         }
-        
+
         // Decode based on interleave mode
         guard let firstScanHeader = parseResult.scanHeaders.first else {
             throw JPEGLSError.invalidBitstreamStructure(reason: "No scan headers found")
         }
-        
+
         var decodedComponents: [MultiComponentImageData.ComponentData]
 
+        // Per-scan restart intervals: the DRI value in effect at each SOS
+        // (T.81 B.2.4.4 — a DRI between scans applies to following scans
+        // only). Fall back to the file-global value for externally-built
+        // parse results.
+        let scanRestartIntervals: [Int]
+        if parseResult.scanRestartIntervals.count == parseResult.scanHeaders.count {
+            scanRestartIntervals = parseResult.scanRestartIntervals
+        } else {
+            scanRestartIntervals = Array(
+                repeating: parseResult.restartInterval ?? 0,
+                count: parseResult.scanHeaders.count
+            )
+        }
+
+        // An interval only takes effect when it is shorter than the frame
+        // (DRI ≥ height produces zero RST markers — the scan body is
+        // identical to a no-DRI stream).
+        func restartActive(_ interval: Int) -> Bool {
+            interval > 0 && interval < frameHeader.height
+        }
+
         // Restart intervals (DRI) are supported for non-interleaved scans;
-        // reject interleaved streams that declare one rather than decoding
-        // them incorrectly.
-        let restartInterval = parseResult.restartInterval ?? 0
-        if restartInterval > 0 && firstScanHeader.interleaveMode != .none {
+        // reject interleaved streams whose scans would actually contain
+        // restart markers rather than decoding them incorrectly.
+        if firstScanHeader.interleaveMode != .none,
+           let interval = scanRestartIntervals.first, restartActive(interval) {
             throw JPEGLSError.invalidBitstreamStructure(
                 reason: "Restart intervals are not supported with \(firstScanHeader.interleaveMode) interleave mode"
             )
+        }
+
+        // Scans without an active restart interval must not contain RSTm
+        // markers: the bit reader would otherwise absorb them as entropy
+        // data and decode garbage silently (e.g. a corrupted stuffed byte).
+        for (index, scanData) in scanDataList.enumerated() {
+            let interval = index < scanRestartIntervals.count ? scanRestartIntervals[index] : 0
+            let active = restartActive(interval) && firstScanHeader.interleaveMode == .none
+            if !active && Self.scanBodyContainsRestartMarker(scanData) {
+                throw JPEGLSError.invalidBitstreamStructure(
+                    reason: "Restart marker found in scan \(index) without an active restart interval"
+                )
+            }
         }
 
         switch firstScanHeader.interleaveMode {
@@ -146,7 +195,7 @@ public struct JPEGLSDecoder: Sendable {
                 scanDataList: scanDataList,
                 parameters: parameters,
                 mappingTables: parseResult.mappingTables,
-                restartInterval: restartInterval
+                restartIntervals: scanRestartIntervals
             )
             
         case .line:
@@ -184,6 +233,15 @@ public struct JPEGLSDecoder: Sendable {
             )
         }
         
+        // Every frame component must have been decoded (the parser accepts
+        // EOI after any number of scans; a short non-interleaved stream
+        // would otherwise yield fewer components than the frame declares).
+        guard decodedComponents.count == parseResult.frameHeader.componentCount else {
+            throw JPEGLSError.invalidBitstreamStructure(
+                reason: "Decoded \(decodedComponents.count) component(s) but the frame header declares \(parseResult.frameHeader.componentCount)"
+            )
+        }
+
         // Create result. The decode pipeline clamps every sample to
         // [0, MAXVAL ≤ 2^P−1] by construction and builds rows at exact scan
         // dimensions, so the O(W·H) re-validation in the public initializer
@@ -324,12 +382,13 @@ public struct JPEGLSDecoder: Sendable {
         scanDataList: [Data],
         parameters: JPEGLSPresetParameters,
         mappingTables: [UInt8: JPEGLSMappingTable] = [:],
-        restartInterval: Int = 0
+        restartIntervals: [Int] = []
     ) throws -> [MultiComponentImageData.ComponentData] {
         var components: [MultiComponentImageData.ComponentData] = []
 
         for (scanIndex, scanHeader) in scanHeaders.enumerated() {
-            // Decode this component
+            // Decode this component, with the restart interval in effect at
+            // this scan's SOS (a DRI between scans applies to later scans only)
             var pixels = try decodeComponent(
                 scanData: scanDataList[scanIndex],
                 width: frameHeader.width,
@@ -337,7 +396,7 @@ public struct JPEGLSDecoder: Sendable {
                 scanHeader: scanHeader,
                 parameters: parameters,
                 bitsPerSample: frameHeader.bitsPerSample,
-                restartInterval: restartInterval
+                restartInterval: scanIndex < restartIntervals.count ? restartIntervals[scanIndex] : 0
             )
             
             // Apply mapping table lookup if the component references one
@@ -510,7 +569,7 @@ public struct JPEGLSDecoder: Sendable {
             // Note: RUNindex is NOT reset per line. Per ITU-T.87 §A.7.1 and CharLS,
             // RUNindex persists across scan lines; it is only initialised to 0 at scan start.
             // Capture and advance edge values per component.
-            var edgesForThisRow = prevRowEdges
+            let edgesForThisRow = prevRowEdges
             for ci in 0..<componentCount {
                 if row > 0 { prevRowEdges[ci] = componentPixels[ci][row - 1][0] }
             }
@@ -715,6 +774,29 @@ public struct JPEGLSDecoder: Sendable {
             limit: limit, qbppBits: qbppBits
         )
         return widenFlatRows(flat, width: width)
+    }
+
+    /// Whether a scan body contains an RSTm marker (0xFF followed by
+    /// 0xD0–0xD7, skipping stuffed pairs). Used to reject stray restart
+    /// markers in scans that have no active restart interval.
+    private static func scanBodyContainsRestartMarker(_ data: Data) -> Bool {
+        data.withUnsafeBytes { (raw: UnsafeRawBufferPointer) -> Bool in
+            var i = 0
+            while i + 1 < raw.count {
+                if raw[i] == 0xFF {
+                    let next = raw[i + 1]
+                    if next >= 0xD0 && next <= 0xD7 {
+                        return true
+                    }
+                    if next < 0x80 {
+                        i += 2  // stuffed pair — data
+                        continue
+                    }
+                }
+                i += 1
+            }
+            return false
+        }
     }
 
     /// Split a scan body into its restart-interval segments, removing the

@@ -54,6 +54,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Encoder no longer allocates and zeroes a full-frame reconstruction buffer
   for lossless scans (it is only read for near-lossless); ~32 MB transient
   saved per 2048² scan, ~136 MB for a 17 MP mammography frame
+- Robustness fixes from the branch security/correctness review:
+  - `decode(_:)` rebases `Data` slices with non-zero `startIndex` (slices
+    previously mis-sliced scan ranges — silent wrong pixels or a trap)
+  - Encoder rejects sub-sampled component planes up front (previously an
+    out-of-bounds read in release builds) and preset MAXVAL > 2^P−1
+    (previously a trap or an unparseable stream)
+  - Decoder requires every frame component to have a scan, applies the DRI
+    in effect at each SOS (T.81 B.2.4.4 per-scan semantics), accepts
+    interleaved streams whose DRI ≥ height (no actual markers), and rejects
+    stray RSTm markers in scans without an active restart interval
+    (previously absorbed silently as entropy data)
+  - Parser rejects undersized LSE segments and dimension products that
+    overflow (crafted LSE type-4), both previously uncatchable traps
 
 ### Removed
 - **The entire `Platform/` acceleration layer** (Metal, Vulkan, Accelerate,

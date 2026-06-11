@@ -235,22 +235,45 @@ public struct JPEGLSEncoder: Sendable {
             ? try applyForwardColorTransform(imageData, transformation: colorTransformation, maxValue: maxValue)
             : imageData
         
-        // Write LSE type 4 (extended dimensions) before SOF when either dimension > 65535
-        // per ITU-T.87 §5.1.1.4.
+        // The scan encoders iterate every component plane at the full frame
+        // dimensions through unsafe buffers; sub-sampled (narrower/shorter)
+        // planes would read out of bounds, so reject them up front.
         let frame = encodingData.frameHeader
-        if frame.width > 65535 || frame.height > 65535 {
-            writeExtendedDimensions(frame, to: writer)
+        for component in encodingData.components {
+            guard component.pixels.count == frame.height,
+                  component.pixels.allSatisfy({ $0.count == frame.width }) else {
+                throw JPEGLSError.encodingFailed(
+                    reason: "Sub-sampled component planes are not supported by the encoder (component \(component.id) is not \(frame.width)×\(frame.height))"
+                )
+            }
         }
-        
-        // Write frame header (SOF55)
-        try writeFrameHeader(encodingData.frameHeader, to: writer)
-        
-        // Write preset parameters if custom or near-lossless
+
+        // Resolve preset parameters (custom or default) and validate
+        // MAXVAL ≤ 2^P − 1 (ITU-T.87 C.2.4.1.1): LIMIT is derived from the
+        // frame's bits-per-sample while qbpp comes from MAXVAL, and a larger
+        // MAXVAL makes the limited-code threshold negative (trapping, or
+        // emitting a stream no decoder can parse).
         let parameters = try configuration.presetParameters ?? JPEGLSPresetParameters.defaultParameters(
             bitsPerSample: encodingData.frameHeader.bitsPerSample,
             near: configuration.near
         )
-        
+        let frameSampleCap = (1 << frame.bitsPerSample) - 1
+        guard parameters.maxValue <= frameSampleCap else {
+            throw JPEGLSError.invalidPresetParameters(
+                reason: "MAXVAL \(parameters.maxValue) exceeds 2^P−1 = \(frameSampleCap) for \(frame.bitsPerSample)-bit samples"
+            )
+        }
+
+        // Write LSE type 4 (extended dimensions) before SOF when either dimension > 65535
+        // per ITU-T.87 §5.1.1.4.
+        if frame.width > 65535 || frame.height > 65535 {
+            writeExtendedDimensions(frame, to: writer)
+        }
+
+        // Write frame header (SOF55)
+        try writeFrameHeader(encodingData.frameHeader, to: writer)
+
+        // Write preset parameters if custom or near-lossless
         if configuration.presetParameters != nil || configuration.near > 0 {
             try writePresetParameters(parameters, to: writer)
         }

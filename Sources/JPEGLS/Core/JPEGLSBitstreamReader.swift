@@ -14,6 +14,14 @@ import Foundation
 /// time (applying the ISO 14495-1 §9.1 stuff-bit rule per refilled byte),
 /// so per-bit work is a shift and a counter update instead of a byte fetch.
 /// Unary prefixes are decoded with `leadingZeroBitCount` over the window.
+///
+/// - Important: The eager refill advances the byte position ahead of bit
+///   consumption. After any bit-level read, call `resetBitBuffer()` before
+///   using the byte-level API (`readByte`, `peekByte`, `readBytes`,
+///   `readUInt16`, `findNextMarker`, `currentPosition`, `bytesRemaining`) —
+///   it realigns the position to the byte boundary after the last consumed
+///   bit. Mixing the two modes without a reset reads ahead of the logical
+///   position.
 public final class JPEGLSBitstreamReader {
     private let bytes: [UInt8]
     /// Index of the next byte to load (bit reads) or read directly (byte reads).
@@ -78,7 +86,7 @@ public final class JPEGLSBitstreamReader {
     /// - Returns: Data containing the bytes
     /// - Throws: `JPEGLSError.prematureEndOfStream` if not enough data
     public func readBytes(_ count: Int) throws -> Data {
-        guard position + count <= bytes.count else {
+        guard count >= 0, position + count <= bytes.count else {
             throw JPEGLSError.prematureEndOfStream
         }
         let result = Data(bytes[position..<position + count])
