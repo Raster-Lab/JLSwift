@@ -116,7 +116,18 @@ public struct MultiComponentImageData: Sendable {
         self.components = components
         self.frameHeader = frameHeader
     }
-    
+
+    /// Trusted initializer for decoder-produced components.
+    ///
+    /// Skips the O(W·H) dimension and range validation of the public
+    /// initializer: the decode pipeline clamps every sample to [0, MAXVAL]
+    /// by construction and allocates rows at exact scan dimensions. Internal
+    /// only — public API always goes through the validating initializer.
+    internal init(uncheckedComponents components: [ComponentData], frameHeader: JPEGLSFrameHeader) {
+        self.components = components
+        self.frameHeader = frameHeader
+    }
+
     /// Create grayscale image data
     ///
     /// ```swift

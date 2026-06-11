@@ -60,10 +60,27 @@ public struct JPEGLSDecoder: Sendable {
             bitsPerSample: parseResult.frameHeader.bitsPerSample,
             near: near
         )
-        
-        // Extract scan data from bitstream
-        let scanDataList = try extractScanData(from: data, parseResult: parseResult)
-        
+
+        // MAXVAL must satisfy 0 < MAXVAL ≤ 2^P − 1 (ITU-T.87 C.2.4.1.1).
+        // A larger value would let the decode pipeline's clamps produce
+        // samples outside the frame's sample range.
+        let sampleCap = (1 << parseResult.frameHeader.bitsPerSample) - 1
+        guard parameters.maxValue <= sampleCap else {
+            throw JPEGLSError.invalidBitstreamStructure(
+                reason: "MAXVAL \(parameters.maxValue) exceeds 2^P−1 = \(sampleCap) for \(parseResult.frameHeader.bitsPerSample)-bit samples"
+            )
+        }
+
+        // Slice scan data using the ranges the parser recorded during its
+        // walk; fall back to a marker walk only for externally-constructed
+        // parse results without ranges.
+        let scanDataList: [Data]
+        if parseResult.scanDataRanges.count == parseResult.scanHeaders.count {
+            scanDataList = parseResult.scanDataRanges.map { Data(data[$0]) }
+        } else {
+            scanDataList = try extractScanData(from: data, parseResult: parseResult)
+        }
+
         // Validate we have the expected number of scans
         guard scanDataList.count == parseResult.scanHeaders.count else {
             throw JPEGLSError.invalidBitstreamStructure(
@@ -124,7 +141,21 @@ public struct JPEGLSDecoder: Sendable {
             )
         }
         
-        // Create result
+        // Create result. The decode pipeline clamps every sample to
+        // [0, MAXVAL ≤ 2^P−1] by construction and builds rows at exact scan
+        // dimensions, so the O(W·H) re-validation in the public initializer
+        // adds no information — skip it unless a post-processing step with
+        // unbounded outputs ran (mapping tables, colour transform) or the
+        // frame is sub-sampled (which the scan decoders do not handle).
+        let uniformSampling = parseResult.frameHeader.components.allSatisfy {
+            $0.horizontalSamplingFactor == 1 && $0.verticalSamplingFactor == 1
+        }
+        if uniformSampling && parseResult.mappingTables.isEmpty && colorTransformation == .none {
+            return MultiComponentImageData(
+                uncheckedComponents: decodedComponents,
+                frameHeader: parseResult.frameHeader
+            )
+        }
         return try MultiComponentImageData(
             components: decodedComponents,
             frameHeader: parseResult.frameHeader

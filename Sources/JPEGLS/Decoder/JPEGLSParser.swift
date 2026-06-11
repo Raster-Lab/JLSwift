@@ -46,7 +46,15 @@ public struct JPEGLSParseResult: Sendable {
     /// followed by a single byte containing the transform ID.  The decoder reads
     /// this marker and applies the corresponding inverse transform after decoding.
     public let colorTransformation: JPEGLSColorTransformation
-    
+
+    /// Byte ranges of each scan's entropy-coded body within the parsed data,
+    /// one per scan header, in scan order.  The parser already walks every
+    /// scan body to find the terminating marker; recording the offsets here
+    /// lets the decoder slice the original data directly instead of doing a
+    /// second full-file marker walk.  Empty when the result was constructed
+    /// without parsing (the decoder then falls back to its own walk).
+    public let scanDataRanges: [Range<Int>]
+
     /// Initialize parse result
     ///
     /// - Parameters:
@@ -58,6 +66,7 @@ public struct JPEGLSParseResult: Sendable {
     ///   - applicationMarkers: Application markers
     ///   - comments: Comment data
     ///   - colorTransformation: Colour transform from APP8 "mrfx" marker (default: .none)
+    ///   - scanDataRanges: Byte ranges of each scan body (default: empty)
     public init(
         frameHeader: JPEGLSFrameHeader,
         scanHeaders: [JPEGLSScanHeader],
@@ -66,7 +75,8 @@ public struct JPEGLSParseResult: Sendable {
         mappingTables: [UInt8: JPEGLSMappingTable] = [:],
         applicationMarkers: [(marker: JPEGLSMarker, data: Data)] = [],
         comments: [Data] = [],
-        colorTransformation: JPEGLSColorTransformation = .none
+        colorTransformation: JPEGLSColorTransformation = .none,
+        scanDataRanges: [Range<Int>] = []
     ) {
         self.frameHeader = frameHeader
         self.scanHeaders = scanHeaders
@@ -76,6 +86,7 @@ public struct JPEGLSParseResult: Sendable {
         self.applicationMarkers = applicationMarkers
         self.comments = comments
         self.colorTransformation = colorTransformation
+        self.scanDataRanges = scanDataRanges
     }
 }
 
@@ -116,7 +127,8 @@ public final class JPEGLSParser {
         var extendedWidth: Int?
         var extendedHeight: Int?
         var colorTransformation: JPEGLSColorTransformation = .none
-        
+        var scanDataRanges: [Range<Int>] = []
+
         // Parse marker segments until EOI
         while !reader.isAtEnd {
             // Read marker bytes manually to handle unknown markers
@@ -175,7 +187,8 @@ public final class JPEGLSParser {
                     mappingTables: mappingTables,
                     applicationMarkers: applicationMarkers,
                     comments: comments,
-                    colorTransformation: colorTransformation
+                    colorTransformation: colorTransformation,
+                    scanDataRanges: scanDataRanges
                 )
                 
             case .startOfFrameJPEGLS:
@@ -196,10 +209,14 @@ public final class JPEGLSParser {
                 }
                 let scanHeader = try parseScanHeader(frameHeader: frame)
                 scanHeaders.append(scanHeader)
-                
-                // Skip scan data until we hit a marker.
+
+                // Skip scan data until we hit a marker, recording the body's
+                // byte range so the decoder can slice it without a second
+                // full-file walk.
                 // Per ISO 14495-1 §9.1, a byte following 0xFF with MSB = 0 (value < 0x80)
                 // is a stuffed byte; with MSB = 1 (value ≥ 0x80) it is a real marker.
+                let scanStart = reader.currentPosition
+                var scanEnd: Int? = nil
                 while !reader.isAtEnd {
                     let byte = try reader.readByte()
                     if byte == JPEGLSMarker.markerPrefix {
@@ -208,16 +225,19 @@ public final class JPEGLSParser {
                             if nextByte >= 0x80 {
                                 // Real marker — back up to re-read the FF byte in the outer loop
                                 try reader.seek(to: reader.currentPosition - 1)
+                                scanEnd = reader.currentPosition
                                 break
                             }
                             // nextByte < 0x80: stuffed byte — consume it and continue
                             _ = try reader.readByte()
                         } else {
-                            // End of stream
+                            // End of stream: a trailing lone 0xFF is not scan data
+                            scanEnd = reader.currentPosition - 1
                             break
                         }
                     }
                 }
+                scanDataRanges.append(scanStart..<(scanEnd ?? reader.currentPosition))
                 
             case .jpegLSExtension:
                 // Parse JPEG-LS extension

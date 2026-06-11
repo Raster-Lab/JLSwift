@@ -713,13 +713,12 @@ public struct JPEGLSEncoder: Sendable {
         }
 
         // Track reconstructed values for near-lossless neighbour computation.
-        // For lossless (NEAR = 0) this array is never read; for near-lossless it
-        // stores what the decoder will reconstruct so that subsequent pixels use
-        // the same context as the decoder.
-        var reconstructed = Array(
-            repeating: Array(repeating: 0, count: buffer.width),
-            count: buffer.height
-        )
+        // For lossless (NEAR = 0) this array is never read — every access below
+        // is guarded by `near > 0` — so skip the full-frame allocation entirely
+        // (a 2048^2 scan would otherwise allocate and zero 32 MB for nothing).
+        var reconstructed: [[Int]] = near > 0
+            ? Array(repeating: Array(repeating: 0, count: buffer.width), count: buffer.height)
+            : []
         
         // Encode pixels in raster order with run mode support
         var prevRowEdge = 0
