@@ -535,22 +535,25 @@ struct JPEGLSPerformanceBenchmarks {
             scanHeader: scanHeader
         )
         
-        _ = try encoder.encodeScan(buffer: buffer)
-        
+        let encoded = try encoder.encodeScan(buffer: buffer)
+
         let peakMemory = getCurrentMemoryUsage()
         let memoryUsedMB = Double(peakMemory - initialMemory) / (1024 * 1024)
-        
+
         let width = imageData.frameHeader.width
         let height = imageData.frameHeader.height
         let bitsPerSample = imageData.frameHeader.bitsPerSample
         let imageDataSizeMB = Double(width * height * bitsPerSample / 8) / (1024 * 1024)
-        
+
         print("Memory usage during 2048x2048 8-bit grayscale encoding:")
         print("  Image size:     \(String(format: "%.2f", imageDataSizeMB)) MB")
         print("  Memory used:    \(String(format: "%.2f", memoryUsedMB)) MB")
         print("  Memory ratio:   \(String(format: "%.2f", memoryUsedMB / imageDataSizeMB))x")
-        
-        #expect(memoryUsedMB > 0)
+
+        // The RSS delta is diagnostic only: with tests running in parallel
+        // and the encoder reusing allocator pages, the delta can legitimately
+        // be zero or negative, so asserting `> 0` is flaky by construction.
+        #expect(encoded.pixelsEncoded == width * height)
     }
     
     // MARK: - Helper Methods

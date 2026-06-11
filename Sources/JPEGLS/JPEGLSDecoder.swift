@@ -998,14 +998,7 @@ public struct JPEGLSDecoder: Sendable {
     ) throws -> Int {
         let limitThreshold = limit - qbppBits - 1
         // Read unary prefix (count zeros until first '1')
-        var unaryCount = 0
-        while true {
-            let bit = try reader.readBits(1)
-            if bit == 1 {
-                break
-            }
-            unaryCount += 1
-        }
+        let unaryCount = try reader.readUnaryCount()
         // Per ITU-T.87 §6.1.2: when unaryCount >= limitThreshold the encoder used
         // the limited binary code — read qbppBits bits for MErrval − 1.
         if unaryCount >= limitThreshold {
