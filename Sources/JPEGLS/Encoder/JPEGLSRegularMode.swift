@@ -373,16 +373,37 @@ public struct JPEGLSRegularMode: Sendable {
     ) -> EncodedPixel {
         // Step 1: Compute local gradients
         let (d1, d2, d3) = computeGradients(a: a, b: b, c: c, d: d)
-        
+
         // Step 2: Quantize gradients
         let q1 = quantizeGradient(d1)
         let q2 = quantizeGradient(d2)
         let q3 = quantizeGradient(d3)
-        
+
         // Step 3: Compute context index and sign
-        let contextIndex = context.computeContextIndex(q1: q1, q2: q2, q3: q3)
-        let sign = context.computeContextSign(q1: q1, q2: q2, q3: q3)
-        
+        let (contextIndex, sign) = context.computeContextIndexAndSign(q1: q1, q2: q2, q3: q3)
+
+        return encodePixel(
+            actual: actual, a: a, b: b, c: c,
+            contextIndex: contextIndex, sign: sign, context: context
+        )
+    }
+
+    /// Encode a single pixel in regular mode with a precomputed context.
+    ///
+    /// Identical to `encodePixel(actual:a:b:c:d:context:)` from step 4
+    /// onward; the caller supplies the context index and sign it already
+    /// derived from the quantized gradients (the scan loop computes them
+    /// for the run-mode test, so recomputing here would quantize every
+    /// gradient twice per pixel).
+    public func encodePixel(
+        actual: Int,
+        a: Int,
+        b: Int,
+        c: Int,
+        contextIndex: Int,
+        sign: Int,
+        context: JPEGLSContextModel
+    ) -> EncodedPixel {
         // Step 4: Compute MED prediction
         let basePrediction = computeMEDPrediction(a: a, b: b, c: c)
         

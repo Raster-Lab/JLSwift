@@ -854,7 +854,8 @@ public struct JPEGLSEncoder: Sendable {
                     // Regular mode
                     let rv = encodePixel(
                         actual: neighbors.actual,
-                        a: a, b: b, c: c, d: d,
+                        a: a, b: b, c: c,
+                        q1: q1, q2: q2, q3: q3,
                         regularMode: regularMode,
                         context: &context,
                         writer: writer,
@@ -1029,7 +1030,7 @@ public struct JPEGLSEncoder: Sendable {
                             a: a,
                             b: b,
                             c: c,
-                            d: d,
+                            q1: q1, q2: q2, q3: q3,
                             regularMode: regularMode,
                             context: &context,
                             writer: writer,
@@ -1268,12 +1269,15 @@ public struct JPEGLSEncoder: Sendable {
                             (compA, compB, compC, compD) = (n.a, n.b, n.c, n.d)
                             actual = n.actual
                         }
+                        let (sd1, sd2, sd3) = regularMode.computeGradients(a: compA, b: compB, c: compC, d: compD)
                         let rv = encodePixel(
                             actual: actual,
                             a: compA,
                             b: compB,
                             c: compC,
-                            d: compD,
+                            q1: regularMode.quantizeGradient(sd1),
+                            q2: regularMode.quantizeGradient(sd2),
+                            q3: regularMode.quantizeGradient(sd3),
                             regularMode: regularMode,
                             context: &context,
                             writer: writer,
@@ -1344,20 +1348,25 @@ public struct JPEGLSEncoder: Sendable {
         a: Int,
         b: Int,
         c: Int,
-        d: Int,
+        q1: Int,
+        q2: Int,
+        q3: Int,
         regularMode: JPEGLSRegularMode,
         context: inout JPEGLSContextModel,
         writer: JPEGLSBitstreamWriter,
         limit: Int,
         qbppBits: Int
     ) -> Int {
-        // Regular mode encoding
+        // Regular mode encoding, reusing the quantized gradients the scan
+        // loop already computed for the run-mode test.
+        let (contextIndex, sign) = context.computeContextIndexAndSign(q1: q1, q2: q2, q3: q3)
         let encodedPixel = regularMode.encodePixel(
             actual: actual,
             a: a,
             b: b,
             c: c,
-            d: d,
+            contextIndex: contextIndex,
+            sign: sign,
             context: context
         )
         

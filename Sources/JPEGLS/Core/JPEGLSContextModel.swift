@@ -192,6 +192,27 @@ public struct JPEGLSContextModel: Sendable {
         }
         return 1
     }
+
+    /// Compute the context index and sign in a single call.
+    ///
+    /// Identical results to calling `computeContextIndex` and
+    /// `computeContextSign` separately, but evaluates the sign chain once
+    /// instead of twice — this pair is needed together for every
+    /// regular-mode pixel.
+    ///
+    /// - Parameters:
+    ///   - q1: First quantized gradient (range: -4 to 4)
+    ///   - q2: Second quantized gradient (range: -4 to 4)
+    ///   - q3: Third quantized gradient (range: -4 to 4)
+    /// - Returns: Tuple of (context index in [0, 364], sign of +1 or -1)
+    @inline(__always)
+    public func computeContextIndexAndSign(q1: Int, q2: Int, q3: Int) -> (index: Int, sign: Int) {
+        let sign = computeContextSign(q1: q1, q2: q2, q3: q3)
+        // Qt = 81 × Q1 + 9 × Q2 + Q3 over sign-normalised gradients
+        // (ITU-T.87 Section 4.3.1).
+        let index = 81 * (q1 * sign) + 9 * (q2 * sign) + (q3 * sign)
+        return (max(0, min(index, Self.regularContextCount - 1)), sign)
+    }
     
     // MARK: - Context State Access
     
