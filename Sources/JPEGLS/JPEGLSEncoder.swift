@@ -655,6 +655,36 @@ public struct JPEGLSEncoder: Sendable {
         return (limit, qbppBits)
     }
     
+    /// Compute causal neighbours (Ra, Rb, Rc, Rd) for a pixel directly from
+    /// hoisted row arrays, replicating `JPEGLSPixelBuffer.getNeighbors`
+    /// boundary semantics (ITU-T.87 §3.2 / CharLS edge handling) without the
+    /// per-pixel Dictionary lookup that method performs.
+    ///
+    /// - `previousRow == nil` means row 0: top/topLeft/topRight are 0.
+    /// - At column 0: Ra = Rb = top, Rc = prevRowEdge, Rd = top-right (or top
+    ///   when width == 1).
+    @inline(__always)
+    private func neighbors(
+        currentRow: [Int],
+        previousRow: [Int]?,
+        col: Int,
+        width: Int,
+        prevRowEdge: Int
+    ) -> (actual: Int, a: Int, b: Int, c: Int, d: Int) {
+        let actual = currentRow[col]
+        guard let prev = previousRow else {
+            return (actual, col == 0 ? 0 : currentRow[col - 1], 0, 0, 0)
+        }
+        if col == 0 {
+            let top = prev[0]
+            let d = width > 1 ? prev[1] : top
+            return (actual, top, top, prevRowEdge, d)
+        }
+        let b = prev[col]
+        let d = col + 1 < width ? prev[col + 1] : b
+        return (actual, currentRow[col - 1], b, prev[col - 1], d)
+    }
+
     /// Encode non-interleaved scan (component by component)
     private func encodeNoneInterleaved(
         buffer: JPEGLSPixelBuffer,
@@ -674,7 +704,14 @@ public struct JPEGLSEncoder: Sendable {
         
         let componentId = scanHeader.components[0].id
         let near = scanHeader.near
-        
+
+        // Resolve the component's pixel array once per scan: the component is
+        // fixed for the whole scan, so the Dictionary lookup must not sit on
+        // the per-pixel path.
+        guard let componentPixels = buffer.getComponentPixels(componentId: componentId) else {
+            throw JPEGLSError.encodingFailed(reason: "Failed to get component pixels")
+        }
+
         // Track reconstructed values for near-lossless neighbour computation.
         // For lossless (NEAR = 0) this array is never read; for near-lossless it
         // stores what the decoder will reconstruct so that subsequent pixels use
@@ -690,22 +727,18 @@ public struct JPEGLSEncoder: Sendable {
             // Note: RUNindex is NOT reset per line. Per ITU-T.87 §A.7.1 and CharLS,
             // RUNindex persists across scan lines; it is only initialised to 0 at scan start.
             let edgeForThisRow = prevRowEdge
-            if row > 0 {
-                prevRowEdge = buffer.getPixel(componentId: componentId, row: row - 1, column: 0) ?? 0
+            let currentRow = componentPixels[row]
+            let previousRow: [Int]? = row > 0 ? componentPixels[row - 1] : nil
+            if let previousRow {
+                prevRowEdge = previousRow[0]
             }
             var col = 0
             while col < buffer.width {
-                guard let neighbors = buffer.getNeighbors(
-                    componentId: componentId,
-                    row: row,
-                    column: col,
-                    prevRowEdge: edgeForThisRow
-                ) else {
-                    throw JPEGLSError.encodingFailed(
-                        reason: "Failed to get neighbors for pixel at (\(row), \(col))"
-                    )
-                }
-                
+                let neighbors = self.neighbors(
+                    currentRow: currentRow, previousRow: previousRow,
+                    col: col, width: buffer.width, prevRowEdge: edgeForThisRow
+                )
+
                 // Use reconstructed neighbours for near-lossless; originals for lossless.
                 let (a, b, c, d): (Int, Int, Int, Int)
                 if near > 0 {
@@ -714,7 +747,7 @@ public struct JPEGLSEncoder: Sendable {
                         width: buffer.width, height: buffer.height
                     )
                 } else {
-                    (a, b, c, d) = (neighbors.left, neighbors.top, neighbors.topLeft, neighbors.topRight)
+                    (a, b, c, d) = (neighbors.a, neighbors.b, neighbors.c, neighbors.d)
                 }
                 
                 // Check for run mode: all quantized gradients are zero
@@ -727,12 +760,8 @@ public struct JPEGLSEncoder: Sendable {
                     // Run mode: scan ahead for matching pixels.
                     // The run value is the reconstructed left neighbour (a).
                     let runValue = a
-                    guard let componentPixels = buffer.getComponentPixels(componentId: componentId) else {
-                        throw JPEGLSError.encodingFailed(reason: "Failed to get component pixels")
-                    }
-                    let linePixels = componentPixels[row]
                     let runLength = runMode.detectRunLength(
-                        pixels: linePixels,
+                        pixels: currentRow,
                         startIndex: col,
                         runValue: runValue
                     )
@@ -768,25 +797,12 @@ public struct JPEGLSEncoder: Sendable {
                         // Encode the interruption pixel
                         let interruptionCol = col + actualRunLength
                         if interruptionCol < buffer.width {
-                            guard let interruptionNeighbors = buffer.getNeighbors(
-                                componentId: componentId,
-                                row: row,
-                                column: interruptionCol,
-                                prevRowEdge: edgeForThisRow
-                            ) else {
-                                throw JPEGLSError.encodingFailed(
-                                    reason: "Failed to get neighbors for interruption pixel at (\(row), \(interruptionCol))"
-                                )
-                            }
-                            
+                            let interruptionActual = currentRow[interruptionCol]
+
                             // Compute Rb at the interruption position
                             let encRb: Int
-                            if row > 0 {
-                                if let compPixels = buffer.getComponentPixels(componentId: componentId) {
-                                    encRb = near > 0 ? reconstructed[row - 1][interruptionCol] : compPixels[row - 1][interruptionCol]
-                                } else {
-                                    encRb = 0
-                                }
+                            if let previousRow {
+                                encRb = near > 0 ? reconstructed[row - 1][interruptionCol] : previousRow[interruptionCol]
                             } else {
                                 encRb = 0
                             }
@@ -796,7 +812,7 @@ public struct JPEGLSEncoder: Sendable {
                             // The decoder also uses finalRunIndex at this point.
                             context.setRunIndex(finalRunIndex)
                             let rv = writeRunInterruptionBits(
-                                interruptionValue: interruptionNeighbors.actual,
+                                interruptionValue: interruptionActual,
                                 runValue: runValue,
                                 rb: encRb,
                                 near: near,
@@ -872,6 +888,15 @@ public struct JPEGLSEncoder: Sendable {
         // Per-component RUNindex per CharLS: each component line preserves its own run index.
         var componentRunIndex: [UInt8: Int] = [:]
         for component in scanHeader.components { componentRunIndex[component.id] = 0 }
+        // Resolve each component's pixel array once per scan so the Dictionary
+        // lookup never sits on the per-pixel path.
+        var componentPixelsById: [UInt8: [[Int]]] = [:]
+        for component in scanHeader.components {
+            guard let pixels = buffer.getComponentPixels(componentId: component.id) else {
+                throw JPEGLSError.encodingFailed(reason: "Failed to get component pixels")
+            }
+            componentPixelsById[component.id] = pixels
+        }
         // Track reconstructed values per component for near-lossless neighbour computation.
         var reconstructedPerComponent: [UInt8: [[Int]]] = [:]
         if near > 0 {
@@ -888,23 +913,20 @@ public struct JPEGLSEncoder: Sendable {
             for component in scanHeader.components {
                 // Restore this component's run index
                 context.setRunIndex(componentRunIndex[component.id] ?? 0)
+                let componentPixels = componentPixelsById[component.id]!
+                let currentRow = componentPixels[row]
+                let previousRow: [Int]? = row > 0 ? componentPixels[row - 1] : nil
                 let edgeForThisRow = prevRowEdges[component.id] ?? 0
-                if row > 0 {
-                    prevRowEdges[component.id] = buffer.getPixel(componentId: component.id, row: row - 1, column: 0) ?? 0
+                if let previousRow {
+                    prevRowEdges[component.id] = previousRow[0]
                 }
                 var col = 0
                 while col < buffer.width {
-                    guard let neighbors = buffer.getNeighbors(
-                        componentId: component.id,
-                        row: row,
-                        column: col,
-                        prevRowEdge: edgeForThisRow
-                    ) else {
-                        throw JPEGLSError.encodingFailed(
-                            reason: "Failed to get neighbors for pixel at (\(row), \(col))"
-                        )
-                    }
-                    
+                    let neighbors = self.neighbors(
+                        currentRow: currentRow, previousRow: previousRow,
+                        col: col, width: buffer.width, prevRowEdge: edgeForThisRow
+                    )
+
                     // Use reconstructed neighbours for near-lossless; originals for lossless.
                     let (a, b, c, d): (Int, Int, Int, Int)
                     if near > 0, let recArray = reconstructedPerComponent[component.id] {
@@ -913,7 +935,7 @@ public struct JPEGLSEncoder: Sendable {
                             width: buffer.width, height: buffer.height
                         )
                     } else {
-                        (a, b, c, d) = (neighbors.left, neighbors.top, neighbors.topLeft, neighbors.topRight)
+                        (a, b, c, d) = (neighbors.a, neighbors.b, neighbors.c, neighbors.d)
                     }
                     
                     // Check for run mode
@@ -925,12 +947,8 @@ public struct JPEGLSEncoder: Sendable {
                     if q1 == 0 && q2 == 0 && q3 == 0 {
                         // Run mode: the run value is the reconstructed left neighbour.
                         let runValue = a
-                        guard let componentPixels = buffer.getComponentPixels(componentId: component.id) else {
-                            throw JPEGLSError.encodingFailed(reason: "Failed to get component pixels")
-                        }
-                        let linePixels = componentPixels[row]
                         let runLength = runMode.detectRunLength(
-                            pixels: linePixels,
+                            pixels: currentRow,
                             startIndex: col,
                             runValue: runValue
                         )
@@ -959,34 +977,23 @@ public struct JPEGLSEncoder: Sendable {
                             
                             let interruptionCol = col + actualRunLength
                             if interruptionCol < buffer.width {
-                                guard let interruptionNeighbors = buffer.getNeighbors(
-                                    componentId: component.id,
-                                    row: row,
-                                    column: interruptionCol,
-                                    prevRowEdge: edgeForThisRow
-                                ) else {
-                                    throw JPEGLSError.encodingFailed(
-                                        reason: "Failed to get neighbors for interruption pixel"
-                                    )
-                                }
-                                
+                                let interruptionActual = currentRow[interruptionCol]
+
                                 // Compute Rb at the interruption position (use reconstructed for near-lossless)
                                 let encRb2: Int
-                                if row > 0 {
+                                if let previousRow {
                                     if near > 0, let recArray = reconstructedPerComponent[component.id] {
                                         encRb2 = recArray[row - 1][interruptionCol]
-                                    } else if let compPixels = buffer.getComponentPixels(componentId: component.id) {
-                                        encRb2 = compPixels[row - 1][interruptionCol]
                                     } else {
-                                        encRb2 = 0
+                                        encRb2 = previousRow[interruptionCol]
                                     }
                                 } else {
                                     encRb2 = 0
                                 }
-                                
+
                                 context.setRunIndex(finalRunIndex)
                                 let rv = writeRunInterruptionBits(
-                                    interruptionValue: interruptionNeighbors.actual,
+                                    interruptionValue: interruptionActual,
                                     runValue: runValue,
                                     rb: encRb2,
                                     near: near,
@@ -1060,6 +1067,18 @@ public struct JPEGLSEncoder: Sendable {
         let near = scanHeader.near
         let components = scanHeader.components
 
+        // Resolve every component's pixel array once per scan, aligned with
+        // the `components` ordering, so the Dictionary lookup never sits on
+        // the per-pixel path.
+        var componentPixelArrays: [[[Int]]] = []
+        componentPixelArrays.reserveCapacity(components.count)
+        for component in components {
+            guard let pixels = buffer.getComponentPixels(componentId: component.id) else {
+                throw JPEGLSError.encodingFailed(reason: "Failed to get component pixels")
+            }
+            componentPixelArrays.append(pixels)
+        }
+
         // Track left-edge values per component for boundary Rc at col=0.
         var prevRowEdges: [UInt8: Int] = [:]
         for component in components { prevRowEdges[component.id] = 0 }
@@ -1079,11 +1098,13 @@ public struct JPEGLSEncoder: Sendable {
         for row in 0..<buffer.height {
             // Note: RUNindex is NOT reset per line. Per ITU-T.87 §A.7.1 and CharLS,
             // RUNindex persists across scan lines; it is only initialised to 0 at scan start.
-            var edgesForThisRow: [UInt8: Int] = [:]
-            for component in components {
-                edgesForThisRow[component.id] = prevRowEdges[component.id] ?? 0
-                if row > 0 {
-                    prevRowEdges[component.id] = buffer.getPixel(componentId: component.id, row: row - 1, column: 0) ?? 0
+            let currentRows = componentPixelArrays.map { $0[row] }
+            let previousRows: [[Int]]? = row > 0 ? componentPixelArrays.map { $0[row - 1] } : nil
+            var edgesForThisRow = [Int](repeating: 0, count: components.count)
+            for (cIdx, component) in components.enumerated() {
+                edgesForThisRow[cIdx] = prevRowEdges[component.id] ?? 0
+                if let previousRows {
+                    prevRowEdges[component.id] = previousRows[cIdx][0]
                 }
             }
             var col = 0
@@ -1091,7 +1112,7 @@ public struct JPEGLSEncoder: Sendable {
                 // Check if ALL components have zero quantised gradients at (row, col)
                 // using reconstructed neighbours for near-lossless.
                 var allGradientsZero = true
-                for component in components {
+                for (cIdx, component) in components.enumerated() {
                     let compA: Int
                     let compB: Int
                     let compC: Int
@@ -1102,15 +1123,11 @@ public struct JPEGLSEncoder: Sendable {
                             width: buffer.width, height: buffer.height
                         )
                     } else {
-                        guard let neighbors = buffer.getNeighbors(
-                            componentId: component.id, row: row, column: col,
-                            prevRowEdge: edgesForThisRow[component.id] ?? 0
-                        ) else {
-                            throw JPEGLSError.encodingFailed(
-                                reason: "Failed to get neighbors for pixel at (\(row), \(col))"
-                            )
-                        }
-                        (compA, compB, compC, compD) = (neighbors.left, neighbors.top, neighbors.topLeft, neighbors.topRight)
+                        let n = self.neighbors(
+                            currentRow: currentRows[cIdx], previousRow: previousRows?[cIdx],
+                            col: col, width: buffer.width, prevRowEdge: edgesForThisRow[cIdx]
+                        )
+                        (compA, compB, compC, compD) = (n.a, n.b, n.c, n.d)
                     }
                     let (d1, d2, d3) = regularMode.computeGradients(a: compA, b: compB, c: compC, d: compD)
                     if regularMode.quantizeGradient(d1) != 0 ||
@@ -1126,8 +1143,7 @@ public struct JPEGLSEncoder: Sendable {
                     // The run continues while every component's pixel equals its run value.
                     // The run value is the reconstructed left neighbour of each component.
                     var runValue: [Int] = []
-                    var componentLinePixels: [[Int]] = []
-                    for component in components {
+                    for (cIdx, component) in components.enumerated() {
                         let rv: Int
                         if near > 0, let recArray = reconstructedPerComponent[component.id] {
                             let (a, _, _, _) = computeReconstructedNeighbors(
@@ -1136,22 +1152,15 @@ public struct JPEGLSEncoder: Sendable {
                             )
                             rv = a
                         } else {
-                            guard let neighbors = buffer.getNeighbors(
-                                componentId: component.id, row: row, column: col,
-                                prevRowEdge: edgesForThisRow[component.id] ?? 0
-                            ) else {
-                                throw JPEGLSError.encodingFailed(
-                                    reason: "Failed to get neighbors for run at (\(row), \(col))"
-                                )
-                            }
-                            rv = neighbors.left
+                            let n = self.neighbors(
+                                currentRow: currentRows[cIdx], previousRow: previousRows?[cIdx],
+                                col: col, width: buffer.width, prevRowEdge: edgesForThisRow[cIdx]
+                            )
+                            rv = n.a
                         }
                         runValue.append(rv)
-                        guard let allPixels = buffer.getComponentPixels(componentId: component.id) else {
-                            throw JPEGLSError.encodingFailed(reason: "Failed to get component pixels")
-                        }
-                        componentLinePixels.append(allPixels[row])
                     }
+                    let componentLinePixels = currentRows
 
                     // Detect run: the minimum run length across all components
                     let remainingInLine = buffer.width - col
@@ -1193,30 +1202,20 @@ public struct JPEGLSEncoder: Sendable {
                         if interruptionCol < buffer.width {
                             context.setRunIndex(finalRunIndex)
                             for (cIdx, component) in components.enumerated() {
-                                guard let intNeighbors = buffer.getNeighbors(
-                                    componentId: component.id,
-                                    row: row, column: interruptionCol,
-                                    prevRowEdge: edgesForThisRow[component.id] ?? 0
-                                ) else {
-                                    throw JPEGLSError.encodingFailed(
-                                        reason: "Failed to get interruption neighbors"
-                                    )
-                                }
+                                let interruptionActual = currentRows[cIdx][interruptionCol]
                                 // Compute Rb at the interruption position (use reconstructed for near-lossless)
                                 let encRb3: Int
-                                if row > 0 {
+                                if let previousRows {
                                     if near > 0, let recArray = reconstructedPerComponent[component.id] {
                                         encRb3 = recArray[row - 1][interruptionCol]
-                                    } else if let compPixels = buffer.getComponentPixels(componentId: component.id) {
-                                        encRb3 = compPixels[row - 1][interruptionCol]
                                     } else {
-                                        encRb3 = 0
+                                        encRb3 = previousRows[cIdx][interruptionCol]
                                     }
                                 } else {
                                     encRb3 = 0
                                 }
                                 let rv3 = writeRunInterruptionBits(
-                                    interruptionValue: intNeighbors.actual,
+                                    interruptionValue: interruptionActual,
                                     runValue: runValue[cIdx],
                                     rb: encRb3,
                                     near: near,
@@ -1249,7 +1248,7 @@ public struct JPEGLSEncoder: Sendable {
                     }
                 } else {
                     // Regular mode: encode each component at (row, col)
-                    for component in components {
+                    for (cIdx, component) in components.enumerated() {
                         let compA: Int
                         let compB: Int
                         let compC: Int
@@ -1260,18 +1259,14 @@ public struct JPEGLSEncoder: Sendable {
                                 from: recArray, row: row, col: col,
                                 width: buffer.width, height: buffer.height
                             )
-                            actual = buffer.getPixel(componentId: component.id, row: row, column: col) ?? 0
+                            actual = currentRows[cIdx][col]
                         } else {
-                            guard let neighbors = buffer.getNeighbors(
-                                componentId: component.id, row: row, column: col,
-                                prevRowEdge: edgesForThisRow[component.id] ?? 0
-                            ) else {
-                                throw JPEGLSError.encodingFailed(
-                                    reason: "Failed to get neighbors for pixel at (\(row), \(col))"
-                                )
-                            }
-                            (compA, compB, compC, compD) = (neighbors.left, neighbors.top, neighbors.topLeft, neighbors.topRight)
-                            actual = neighbors.actual
+                            let n = self.neighbors(
+                                currentRow: currentRows[cIdx], previousRow: previousRows?[cIdx],
+                                col: col, width: buffer.width, prevRowEdge: edgesForThisRow[cIdx]
+                            )
+                            (compA, compB, compC, compD) = (n.a, n.b, n.c, n.d)
+                            actual = n.actual
                         }
                         let rv = encodePixel(
                             actual: actual,
