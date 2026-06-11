@@ -220,7 +220,7 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 
 **Implementation Details:**
 - Created `JPEGLSBufferPool` for reusable buffer management with thread-safe operations
-- Implemented `JPEGLSTileProcessor` for dividing large images into manageable tiles
+- Implemented `JPEGLSTileProcessor` for dividing large images into manageable tiles (removed in 0.9.0 — superseded by restart-interval parallelism)
 - Developed `JPEGLSCacheFriendlyBuffer` with contiguous memory layout for better cache performance
 - All implementations include comprehensive test suites with 49 total tests
 - Buffer pooling reduces allocation overhead for context arrays and pixel data

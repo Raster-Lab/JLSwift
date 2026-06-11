@@ -51,15 +51,14 @@ swift --version
 **Problem**: `error: no such module 'Accelerate'` on non-Apple platforms.
 
 **Solution**:
-The Accelerate framework is Apple-only. The library will fall back to scalar or x86-64 accelerators on Linux/Windows:
+The Accelerate framework is Apple-only. JLSwift imports it conditionally and
+falls back to portable code on Linux — no configuration is needed. If the
+error comes from your own code, guard the import:
 
 ```swift
 // Conditional import - safe on all platforms
 #if canImport(Accelerate)
 import Accelerate
-let accel = AccelerateFrameworkAccelerator()
-#else
-let accel = selectPlatformAccelerator()  // Uses ARM64 or x86-64 or scalar
 #endif
 ```
 
@@ -265,15 +264,12 @@ swift build
 swift build -c release
 ```
 
-2. **Check hardware acceleration**:
+2. **Parallelise large frames with restart intervals**:
 ```swift
-let accelerator = selectPlatformAccelerator()
-print("Using: \(type(of: accelerator).platformName)")
-
-// Should be:
-// - "ARM64" on Apple Silicon
-// - "x86-64" on Intel
-// - "Scalar" as fallback
+// Large frames: parallelise a single image across cores with restart markers
+let config = try JPEGLSEncoder.Configuration(restartInterval: 256)
+let encoded = try JPEGLSEncoder().encode(imageData, configuration: config)
+// Decoding splits at the RST markers automatically and decodes intervals concurrently.
 ```
 
 3. **Use appropriate interleaving**:
@@ -323,55 +319,39 @@ swift test -c release --filter JPEGLSPerformanceBenchmarks
 
 **Problem**: Encoding/decoding large images causes memory exhaustion.
 
-**Solution**: Use tile-based processing:
+**Solution**: The codec decodes each scan into a single flat `UInt16` pixel
+plane — there is no tiling API, so peak memory scales with
+width × height × components (roughly 2 bytes per sample for the decoded
+output, plus the compressed input). If a frame is too large for available
+memory, split it into separate JPEG-LS images at the application level.
+
+For throughput (not memory) on large frames, use restart-interval
+parallelism (ITU-T.87 DRI/RSTm markers):
 
 ```swift
 import JPEGLS
 
-// Instead of loading entire image
-// let allPixels = loadEntireImage()  // ✗
-
-// Load and process in tiles ✓
-let processor = JPEGLSTileProcessor(
-    imageWidth: 8192,
-    imageHeight: 8192,
-    configuration: TileConfiguration(
-        tileWidth: 512,
-        tileHeight: 512,
-        overlap: 4
-    )
-)
-
-let tiles = processor.calculateTilesWithOverlap()
-
-for tile in tiles {
-    let tilePixels = loadTileData(tile)
-    processTile(tilePixels)
-}
+// Large frames: parallelise a single image across cores with restart markers
+let config = try JPEGLSEncoder.Configuration(restartInterval: 256)
+let encoded = try JPEGLSEncoder().encode(imageData, configuration: config)
+// Decoding splits at the RST markers automatically and decodes intervals concurrently.
 ```
-
-**Memory savings**:
-- 4096×4096 with 512×512 tiles: 94% reduction
-- 8192×8192 with 512×512 tiles: 97% reduction
 
 ### Memory Leaks
 
 **Problem**: Memory usage grows over time when processing many images.
 
-**Solution**: Use buffer pooling:
+**Solution**: Internal working buffers are pooled and reused automatically by
+the codec — no manual buffer management is needed. If memory still grows
+across a batch loop on Apple platforms, wrap each iteration in an
+autorelease pool:
 
 ```swift
-// Reuse buffers instead of allocating new ones
 for imageData in imageBatch {
-    let buffer = sharedBufferPool.acquire(
-        type: .contextArrays,
-        size: 365
-    )
-    defer {
-        sharedBufferPool.release(buffer, type: .contextArrays)
+    try autoreleasepool {
+        let encoded = try JPEGLSEncoder().encode(imageData, configuration: config)
+        // Process encoded data...
     }
-    
-    // Use buffer for encoding/decoding
 }
 ```
 
@@ -381,7 +361,7 @@ for imageData in imageBatch {
 
 **Solution**:
 
-1. **Pre-allocate buffers**:
+**Pre-allocate buffers**:
 ```swift
 // Pre-allocate with correct capacity
 var pixels = [[Int]]()
@@ -392,16 +372,6 @@ for _ in 0..<height {
     row.reserveCapacity(width)
     pixels.append(row)
 }
-```
-
-2. **Use cache-friendly buffers**:
-```swift
-// Contiguous memory layout
-let cacheFriendlyBuffer = JPEGLSCacheFriendlyBuffer(
-    pixelData: [1: pixels],
-    width: width,
-    height: height
-)
 ```
 
 ## File Format Issues
@@ -493,18 +463,13 @@ swift build --arch arm64   # Apple Silicon simulator
 
 ### Linux
 
-**Problem**: Platform accelerator not found on Linux.
+**Problem**: Hardware acceleration on Linux.
 
 **Solution**:
-Linux uses x86-64 or scalar accelerator (Accelerate is Apple-only):
-
-```swift
-// This works on all platforms
-let accelerator = selectPlatformAccelerator()
-// Linux x86-64: Returns X86_64Accelerator
-// Linux ARM64: Returns ARM64Accelerator  
-// Linux other: Returns ScalarAccelerator
-```
+Platform-specific optimisations are selected internally at compile time —
+there is no public accelerator API. The library builds and runs on Linux
+x86-64 and ARM64 using portable Swift SIMD, falling back to scalar code on
+other architectures. No configuration is needed.
 
 **Problem**: Build fails with Swift 6.2 on Ubuntu.
 

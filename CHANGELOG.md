@@ -7,6 +7,63 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Restart-interval support (DRI/RSTm)**: opt-in `Configuration.restartInterval`
+  (and `jpegls encode --restart-interval N`) writes a DRI segment and emits
+  RSTm markers every N lines for lossless non-interleaved scans. Per
+  ITU-T.87, every interval restarts coding as at scan start, so intervals
+  encode **and** decode in parallel across cores (4096×4096 16-bit: encode
+  0.84 s → 0.31 s, decode 0.69 s → 0.24 s wall, ~+0.03 % size)
+- `jpegls batch encode`/`batch decode` implemented (they were
+  "not yet implemented" stubs on top of the existing worker pool); batch
+  encode output is byte-identical to serial encodes
+- Restart-interval test suite (round-trips, marker cycling, DRI parsing,
+  determinism, multi-component scans, configuration validation)
+
+### Changed
+- **Hot-path performance rewrite** (encoded bitstreams remain byte-identical;
+  verified against a 44-artifact golden gate and the full conformance suite):
+  - Bitstream writer: `[UInt8]` backing with a 64-bit accumulator (was
+    per-byte Foundation `Data` appends with a 32-bit accumulator)
+  - Bitstream reader: 64-bit window over `[UInt8]` with multi-byte refill and
+    `leadingZeroBitCount` unary decode (was per-bit reads via `Data`
+    subscripts)
+  - Encoder scan loops: per-pixel `Dictionary` neighbour lookups hoisted out;
+    gradients quantised once per pixel; lossless non-interleaved scans run
+    over a flat contiguous `UInt16` plane through unsafe buffers
+  - Decoder scan loops: same flat-plane treatment; decoder gained the
+    encoder's init-time gradient quantisation table
+  - Context model: A/B/C/N packed into one record array (one load + one store
+    per pixel); bias C, Golomb k, and the k = 0 correction come from a single
+    record read
+  - Run detection: unrolled exact-equality scan for lossless
+  - Parser records scan-body byte ranges, removing the decoder's second
+    full-file marker walk; decoder results skip the redundant O(W·H)
+    re-validation pass (with the ITU-T.87 C.2.4.1.1 MAXVAL ≤ 2^P−1 check
+    added at parse time)
+  - Measured on real radiology DICOM (107 frames, 6 modalities, lossless):
+    encode 27 → 80 MB/s, decode 41 → 84 MB/s aggregate; synthetic 16-bit
+    2048²: encode 37 → 98 MB/s, decode 57 → 104 MB/s
+- CLI raw output accumulates in `[UInt8]` instead of per-byte `Data.append`
+  (33 MB decode-to-raw: 2.0 s → 0.7 s)
+
+### Fixed
+- **Restart-marker streams decode correctly**: the parser and scan extractor
+  previously treated RST markers (FFD0–FFD7) as scan terminators, truncating
+  conformant streams at the first restart marker
+- Encoder no longer allocates and zeroes a full-frame reconstruction buffer
+  for lossless scans (it is only read for near-lossless); ~32 MB transient
+  saved per 2048² scan, ~136 MB for a 17 MP mammography frame
+
+### Removed
+- **The entire `Platform/` acceleration layer** (Metal, Vulkan, Accelerate,
+  ARM64/x86-64 SIMD wrappers, ~4,400 lines), plus `JPEGLSBufferPool`,
+  `JPEGLSCacheFriendlyBuffer`, and `JPEGLSTileProcessor`: profiling showed
+  none of it was invoked on the codec hot path, and the GPU kernels could not
+  produce conformant streams (JPEG-LS entropy coding is sequential by
+  construction). Restart intervals are the supported parallelism mechanism.
+  Docs and README updated to describe only what ships.
+
 ## [0.8.0] - 2026-05-30
 
 ### Added

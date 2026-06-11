@@ -1,532 +1,152 @@
-# Performance Tuning Guide
+# Performance Tuning
 
-Optimise JPEG-LS encoding and decoding performance with JLSwift.
+How to get the most out of JLSwift, how to benchmark it honestly, and what the
+codec does under the hood. Everything in this document describes shipping
+code; measured numbers come from real radiology DICOM data (CT/DX/MG/MR/PX/XA)
+and the built-in synthetic benchmark on Apple Silicon.
 
-## Table of Contents
+## TL;DR
 
-- [Overview](#overview)
-- [Hardware Acceleration](#hardware-acceleration)
-- [Memory Optimisation](#memory-optimisation)
-- [Encoding Optimisation](#encoding-optimisation)
-- [Decoding Optimisation](#decoding-optimisation)
-- [Profiling and Benchmarking](#profiling-and-benchmarking)
-- [Best Practices](#best-practices)
+- The codec is fast by default — there is nothing to enable for single-image
+  encode/decode.
+- For **large frames** (e.g. 17 MP mammography), set
+  `Configuration.restartInterval` to parallelise a single image across cores.
+- For **many files**, use `jpegls batch` (or your own task pool — the encoder
+  and decoder are `Sendable` value types, safe to use concurrently).
+- Always benchmark release builds: `swift build -c release`.
 
-## Overview
+## What makes the hot path fast
 
-JLSwift is designed for high performance on Apple Silicon while maintaining compatibility with x86-64. Performance characteristics vary significantly based on hardware, image characteristics, and encoding parameters.
+These are the structural properties of the codec, useful to know when
+profiling an integration:
 
-### Performance Factors
+1. **Flat scan planes.** Each scan converts to one contiguous `UInt16` plane
+   and the whole scan loop runs over an unsafe buffer — no nested-array
+   indirection, per-access bounds checks, or copy-on-write traffic per pixel,
+   and half the memory bandwidth of boxed `[[Int]]` rows.
+2. **64-bit bitstream I/O.** The writer packs bits into a `UInt64` accumulator
+   over a pre-reserved `[UInt8]`; the reader refills a 64-bit window several
+   bytes at a time (applying the ISO 14495-1 §9.1 stuff-bit rule per byte) and
+   decodes Golomb unary prefixes with `leadingZeroBitCount` instead of one
+   call per bit.
+3. **Init-time gradient tables.** Gradient quantisation (ITU-T.87 Table A.7)
+   is a table lookup built once per scan, on both the encode and decode side,
+   and each pixel's gradients are quantised exactly once.
+4. **Packed context records.** The 365 per-context adaptation statistics
+   (A/B/C/N) live in a single record array: one load and one store per pixel,
+   with bias correction, Golomb-k, and the k = 0 error-correction term all
+   derived from one record read.
+5. **Run scanning.** Lossless run detection is an exact-equality scan over the
+   row, 4-way unrolled, with no per-element `abs()`.
 
-| Factor | Impact | Optimisation |
-|--------|---------|--------------|
-| **Hardware** | High | Use ARM64 on Apple Silicon |
-| **Image Size** | High | Consider tile-based processing for large images |
-| **Bit Depth** | Medium | Higher bit depths require more processing |
-| **Interleaving** | Medium | Sample-interleaved is fastest for RGB |
-| **NEAR Parameter** | Low | Near-lossless slightly faster than lossless |
-| **Image Content** | Medium | Flat regions compress faster (run mode) |
+The public API is unchanged by all of this: pixels in and out are `[[Int]]`,
+and encoded streams are byte-identical to previous releases (verified by a
+golden-bitstream gate during development).
 
-## Hardware Acceleration
+## Restart-interval parallelism (single large image)
 
-### Platform Selection
-
-JLSwift automatically selects the best accelerator for your platform:
+JPEG-LS entropy coding is inherently sequential — each pixel's coding state
+depends on every pixel before it — so a single scan cannot be parallelised
+without help from the bitstream. Restart markers (DRI/RSTm, ITU-T.87 §C.2.5)
+are the standards-compliant way to provide that help: at every interval
+boundary the coding state resets exactly as at scan start, which makes the
+intervals independently codable.
 
 ```swift
-import JPEGLS
+// Encode a large frame with one restart interval every 256 lines.
+let config = try JPEGLSEncoder.Configuration(restartInterval: 256)
+let encoded = try JPEGLSEncoder().encode(imageData, configuration: config)
 
-let accelerator = selectPlatformAccelerator()
-print("Using: \(type(of: accelerator).platformName)")
+// Decoding needs no configuration: the DRI segment is in the stream, and the
+// decoder splits at the RST markers and decodes the intervals concurrently.
+let decoded = try JPEGLSDecoder().decode(encoded)
 ```
 
-**Platform Priority:**
-1. **ARM64**: Fastest on Apple Silicon (M1/M2/M3)
-2. **x86-64**: Optimised for Intel processors
-3. **Scalar**: Fallback for all platforms
-
-### ARM64 / Apple Silicon (Best Performance)
-
-- **NEON SIMD**: Vectorised gradient computation and prediction
-- **Hardware**: M1, M2, M3, ARM64 processors
-- **Speedup**: ~2-3x over scalar implementation
-
-**Optimisation Tips:**
-- Build with `-c release` for full optimisation
-- Use Swift 6.2+ for best SIMD codegen
-- Run on Apple Silicon devices for maximum benefit
+CLI equivalent:
 
 ```bash
-# Build optimized for Apple Silicon
-swift build -c release --arch arm64
+jpegls encode huge.pgm huge.jls --restart-interval 256
 ```
 
-### x86-64 / Intel (Good Performance)
+Measured on a 4096×4096 16-bit image (Apple Silicon, interval 256, wall
+clock including file I/O): encode 0.84 s → 0.31 s, decode 0.69 s → 0.24 s,
+at a size cost of about **+0.03 %**.
 
-- **SSE/AVX**: Vectorised operations on Intel processors
-- **Hardware**: Intel Core, Xeon processors
-- **Speedup**: ~1.5-2x over scalar implementation
+Notes and trade-offs:
+
+- Each interval restarts the adaptive contexts, so compression ratio drops
+  slightly; the cost shrinks as the interval grows. Intervals of 64–512 lines
+  are a good range for multi-megapixel frames.
+- Currently supported for lossless (NEAR = 0), non-interleaved scans — the
+  DICOM grayscale case. The configuration initializer rejects unsupported
+  combinations rather than producing a non-parallel stream silently.
+- Streams with restart markers are valid JPEG-LS and decode in any conformant
+  decoder; conversely JLSwift decodes restart streams produced by other
+  encoders (intervals are validated to cycle FFD0–FFD7).
+- A side benefit is error resilience: a corrupted interval cannot corrupt the
+  decode of subsequent intervals.
+
+## Batch throughput (many files)
+
+`jpegls batch` runs encode/decode/info/verify over a glob or directory with a
+worker pool sized to the machine:
 
 ```bash
-# Build optimized for x86-64
-swift build -c release --arch x86_64
+jpegls batch encode "scans/*.pgm" --output-dir encoded/ --parallelism 8
+jpegls batch decode "encoded/*.jls" --output-dir decoded/
 ```
 
-### Accelerate Framework (Batch Operations)
+Batch encode output is byte-identical to serial `jpegls encode` of the same
+files. In library code, the same effect is one `withTaskGroup` away —
+`JPEGLSEncoder` and `JPEGLSDecoder` are stateless `Sendable` structs, so one
+instance per task or a shared instance are both safe.
 
-For batch processing on Apple platforms:
+## Benchmarking
 
-```swift
-import JPEGLS
-
-#if canImport(Accelerate)
-let accelerateAccel = AccelerateFrameworkAccelerator()
-
-// Batch gradient computation for multiple pixels
-let (d1Array, d2Array, d3Array) = accelerateAccel.computeBatchGradients(
-    a: leftPixels,
-    b: topPixels,
-    c: topLeftPixels
-)
-
-// Statistical analysis
-let stats = accelerateAccel.computeStatistics(pixelValues)
-print("Mean: \(stats.mean), StdDev: \(stats.standardDeviation)")
-#endif
-```
-
-**When to Use:**
-- Processing large image regions (>1000 pixels)
-- Preprocessing or statistical analysis
-- Histogram computation
-
-**When Not to Use:**
-- Single-pixel operations (overhead outweighs benefits)
-- Tight encoding/decoding loops
-
-## Memory Optimisation
-
-### Tile-Based Processing
-
-For large images, tile-based processing reduces memory footprint:
-
-```swift
-import JPEGLS
-
-// Configure tile processor
-let processor = JPEGLSTileProcessor(
-    imageWidth: 8192,
-    imageHeight: 8192,
-    configuration: TileConfiguration(
-        tileWidth: 512,      // Adjust based on available memory
-        tileHeight: 512,
-        overlap: 4           // For boundary continuity
-    )
-)
-
-// Estimate memory savings
-let bytesPerPixel = 2  // 16-bit image
-let savings = processor.estimateMemorySavings(bytesPerPixel: bytesPerPixel)
-print("Memory reduction: \(Int(savings * 100))%")
-
-// Calculate tiles
-let tiles = processor.calculateTilesWithOverlap()
-
-// Process tiles sequentially or in parallel
-for tile in tiles {
-    // Load only this tile's data
-    let tileData = loadTileData(tile)
-    
-    // Process tile
-    processTile(tileData)
-}
-```
-
-**Tile Size Guidelines:**
-- **Small tiles (256×256)**: Lower memory, more overhead
-- **Medium tiles (512×512)**: Good balance ✓ Recommended
-- **Large tiles (1024×1024)**: Higher memory, less overhead
-
-**Memory Savings:**
-- 8192×8192 image with 512×512 tiles: ~97% memory reduction
-- 4096×4096 image with 512×512 tiles: ~94% memory reduction
-
-### Buffer Pooling
-
-Reuse buffers to reduce allocation overhead:
-
-```swift
-import JPEGLS
-
-// Use global shared pool
-let contextBuffer = sharedBufferPool.acquire(
-    type: .contextArrays,
-    size: 365
-)
-defer {
-    sharedBufferPool.release(contextBuffer, type: .contextArrays)
-}
-
-// Or create a custom pool
-let customPool = JPEGLSBufferPool()
-let pixelBuffer = customPool.acquire(type: .pixelData, size: width * height)
-defer {
-    customPool.release(pixelBuffer, type: .pixelData)
-}
-```
-
-**Buffer Types:**
-- `.contextArrays`: 365 Int arrays for context states
-- `.pixelData`: Large pixel data buffers
-- `.bitstreamData`: Encoded bitstream buffers
-
-**Performance Impact:**
-- First allocation: Standard speed
-- Reused allocations: ~5-10x faster
-- Best for: Encoding/decoding many images in sequence
-
-### Cache-Friendly Data Layout
-
-Use contiguous memory for better cache locality:
-
-```swift
-import JPEGLS
-
-// Convert 2D arrays to cache-friendly format
-let cacheFriendlyBuffer = JPEGLSCacheFriendlyBuffer(
-    pixelData: [
-        1: pixels  // Component 1 (grayscale or red)
-    ],
-    width: width,
-    height: height
-)
-
-// Access patterns optimized for CPU cache
-let row = cacheFriendlyBuffer.getRow(componentId: 1, row: rowIndex)
-let rows = cacheFriendlyBuffer.getRows(componentId: 1, rowStart: 0, rowEnd: 10)
-```
-
-**Benefits:**
-- ~10-20% faster neighbour access
-- Better prefetching from memory
-- Reduced cache misses in tight loops
-
-## Encoding Optimisation
-
-### Interleaving Mode Selection
-
-Choose interleaving based on image type:
-
-```swift
-// Greyscale: Always use .none
-let greyscaleConfig = try JPEGLSEncoder.Configuration(
-    near: 0,
-    interleaveMode: .none  // Required for single component
-)
-
-// RGB: Use .sample for best performance
-let rgbConfig = try JPEGLSEncoder.Configuration(
-    near: 0,
-    interleaveMode: .sample  // Best cache locality
-)
-
-// Alternative: Line-interleaved (slightly slower)
-let lineConfig = try JPEGLSEncoder.Configuration(
-    near: 0,
-    interleaveMode: .line
-)
-```
-
-**Performance Comparison:**
-- Sample-interleaved: Fastest (best cache locality) ✓
-- Line-interleaved: ~5-10% slower
-- None (separate scans): ~10-15% slower
-
-### Near-Lossless vs Lossless
-
-Near-lossless encoding can be slightly faster:
-
-```swift
-// Lossless (NEAR=0)
-let losslessData = try JPEGLSEncoder().encode(imageData)
-
-// Near-lossless (NEAR=3)
-let config = try JPEGLSEncoder.Configuration(near: 3)  // Allows ±3 error
-let nearLosslessData = try JPEGLSEncoder().encode(imageData, configuration: config)
-```
-
-**Performance Impact:**
-- Near-lossless: ~5-10% faster
-- Compression ratio: ~10-30% better
-- Use when: Perfect reconstruction not required
-
-### Image Content Characteristics
-
-Different content types compress at different speeds:
-
-| Content Type | Relative Speed | Why |
-|--------------|----------------|-----|
-| Flat regions | Fastest (100%) | Run mode dominates |
-| Gradients | Medium (70%) | Regular mode with smooth transitions |
-| High-frequency | Slowest (50%) | Regular mode with many context switches |
-| Medical images | Medium (65%) | Mix of flat and textured regions |
-
-**Optimisation:**
-- Pre-process images to increase flat regions (lossy only)
-- Consider tiling to isolate different content types
-- Use profiling to identify bottlenecks
-
-## Decoding Optimisation
-
-### Parser Optimisation
-
-The parser reads and validates JPEG-LS file structure:
-
-```swift
-import JPEGLS
-
-// Parse file
-let data = try Data(contentsOf: fileURL)
-let parser = JPEGLSParser(data: data)
-let result = try parser.parse()
-
-// Cache parsed results for multiple operations
-let frameHeader = result.frameHeader
-let scanHeaders = result.scanHeaders
-let presetParams = result.presetParameters
-```
-
-**Tips:**
-- Parse once, decode multiple times if needed
-- Validate file structure before decoding
-- Cache frame and scan headers
-
-### Bitstream Reading
-
-Efficient bitstream reading is critical:
-
-```swift
-import JPEGLS
-
-let reader = JPEGLSBitstreamReader(data: encodedData)
-
-// Reset bit buffer at scan boundaries
-reader.resetBitBuffer()
-
-// Seek to specific positions when needed
-try reader.seek(to: scanDataOffset)
-```
-
-**Performance Tips:**
-- Minimise bit buffer resets
-- Use seek() sparingly (resets bit buffer)
-- Read in larger chunks when possible
-
-## Profiling and Benchmarking
-
-### Built-in Benchmarks
-
-Run comprehensive benchmarks:
+Use the built-in benchmark for CPU-bound numbers without file-I/O noise:
 
 ```bash
-# Run all performance benchmarks
-swift test --filter JPEGLSPerformanceBenchmarks
+# 16-bit synthetic benchmark (the trustworthy one — see note below)
+jpegls benchmark --size 2048 --bits-per-sample 16 --iterations 10 --warmup 3 --json
 
-# Run specific benchmark
-swift test --filter "benchmarkEncode512x512"
+# Real-data round-trip over a DICOM corpus, grouped by modality
+jpegls bench-dicom /path/to/corpus --limit 20
 ```
 
-**Benchmark Categories:**
-1. **Encoding by size**: 256×256 to 4096×4096
-2. **Encoding by bit depth**: 8-bit, 12-bit, 16-bit
-3. **Encoding by component**: Greyscale, RGB
-4. **Near-lossless**: NEAR=3, NEAR=10
-5. **Interleaving modes**: none, line, sample
-6. **Content types**: flat, gradient, medical-like
+Caveats that will save you from misleading numbers:
 
-### Custom Benchmarking
+- **Prefer the 16-bit synthetic benchmark.** The 8-bit gradient image
+  compresses ~59:1 and spends most of its time in run mode, which flatters
+  run-path changes and hides regular-mode regressions. Real medical data sits
+  around 2–6:1.
+- `bench-dicom` measures codec time only, but reads files inside the loop —
+  run it from a local disk, not cloud-synced storage.
+- Benchmark release builds on AC power, and A/B alternate binaries within one
+  session to cancel thermal drift.
 
-```swift
-import JPEGLS
-import Foundation
+## Profiling
 
-// Measure encoding time
-let startTime = Date()
-
-let encoder = JPEGLSEncoder()
-let jpegLSData = try encoder.encode(imageData)
-
-let elapsed = Date().timeIntervalSince(startTime)
-
-// Calculate throughput
-let pixelCount = imageData.frameHeader.width * imageData.frameHeader.height
-let throughputPixels = Double(pixelCount) / elapsed / 1_000_000.0  // Mpixels/s
-let throughputBytes = Double(pixelCount) / elapsed / 1_000_000.0   // MB/s
-
-print("Encoded \(pixelCount) pixels in \(elapsed) seconds")
-print("Throughput: \(throughputPixels) Mpixels/s, \(throughputBytes) MB/s")
-```
-
-### Profiling Tools
-
-**macOS / Xcode:**
-```bash
-# Use Instruments for detailed profiling
-xcodebuild -scheme JPEGLS -configuration Release
-# Open in Instruments: Time Profiler, Allocations, System Trace
-```
-
-**Linux:**
-```bash
-# Use perf for CPU profiling
-swift build -c release
-perf record --call-graph=dwarf .build/release/YourApp
-perf report
-```
-
-### Platform Benchmarks
-
-Compare performance across accelerators:
+On macOS, `sample` against a long benchmark run gives a quick hot-function
+picture:
 
 ```bash
-# Run platform benchmark tests
-swift test --filter PlatformBenchmarks
+jpegls benchmark --size 2048 --bits-per-sample 16 --iterations 200 &
+sample $! 10 -file /tmp/jls-profile.txt
 ```
 
-**Expected Results (relative to scalar):**
-- ARM64: 2-3x faster
-- x86-64: 1.5-2x faster
-- Accelerate (batch): 3-5x faster for large batches
+For allocation work, Instruments' Allocations template on the same invocation
+shows per-scan transients; the codec performs no per-pixel allocations, so
+anything hot there is in the integration layer (e.g. converting pixel
+formats).
 
-## Best Practices
+## A note on GPU / SIMD acceleration layers
 
-### Build Configuration
-
-Always use release builds for production:
-
-```bash
-# Release build with optimizations
-swift build -c release
-
-# Debug build for development (slower)
-swift build -c debug
-```
-
-**Optimisation flags:**
-- `-c release`: Full optimisations, no debug symbols
-- `-c debug`: No optimisations, full debug info
-
-### Concurrency
-
-Process multiple images in parallel:
-
-```swift
-import JPEGLS
-import Foundation
-
-// Process images concurrently
-await withTaskGroup(of: Data.self) { group in
-    for imageData in imageBatch {
-        group.addTask {
-            let encoder = JPEGLSEncoder()
-            return try encoder.encode(imageData)
-        }
-    }
-    
-    for await encoded in group {
-        print("Encoded \(encoded.count) bytes")
-    }
-}
-```
-
-**Scaling:**
-- CPU-bound: Use processor count parallel tasks
-- I/O-bound: Use 2-4x processor count
-- Memory-limited: Use fewer parallel tasks
-
-### Image Size Guidelines
-
-| Image Size | Processing Strategy | Memory | Speed |
-|------------|-------------------|---------|-------|
-| < 512×512 | Direct encoding | Low | Fastest |
-| 512-2048 | Direct or tiled | Medium | Fast |
-| 2048-4096 | Tiled recommended | Medium | Medium |
-| > 4096 | Tiled required | High | Slower |
-
-### Memory Usage Estimates
-
-| Image | Uncompressed | Tiled (512×512) | Savings |
-|-------|--------------|-----------------|---------|
-| 2048×2048, 8-bit | 4 MB | 256 KB | 94% |
-| 4096×4096, 8-bit | 16 MB | 256 KB | 98% |
-| 8192×8192, 16-bit | 128 MB | 512 KB | 99.6% |
-
-### Monitoring Performance
-
-Track key metrics:
-
-```swift
-import JPEGLS
-
-// Monitor encoding statistics
-let statistics = try encoder.encodeScan(buffer: buffer)
-
-print("Pixels encoded: \(statistics.pixelsEncoded)")
-print("Components: \(statistics.componentCount)")
-print("Interleave mode: \(statistics.interleaveMode)")
-
-// Calculate compression ratio (when bitstream I/O available)
-// let uncompressedSize = width * height * bytesPerSample
-// let compressedSize = encodedData.count
-// let ratio = Double(uncompressedSize) / Double(compressedSize)
-```
-
-### Common Pitfalls
-
-❌ **Avoid:**
-- Debug builds in production
-- Processing large images without tiling
-- Ignoring platform-specific optimisations
-- Frequent buffer allocations without pooling
-
-✅ **Prefer:**
-- Release builds with full optimisations
-- Tile-based processing for large images
-- Using `selectPlatformAccelerator()` for automatic optimisation
-- Buffer pooling for repeated operations
-- Cache-friendly data layouts for neighbour access
-
-## Summary
-
-### Quick Wins
-
-1. **Use release builds**: 2-5x faster than debug
-2. **Run on Apple Silicon**: 2-3x faster with ARM64
-3. **Use tile-based processing**: 90%+ memory savings for large images
-4. **Enable buffer pooling**: 5-10x faster allocations
-5. **Choose sample-interleaving**: Fastest for RGB images
-
-### Advanced Optimisations
-
-1. Cache-friendly buffers for neighbour access
-2. Accelerate framework for batch operations
-3. Parallel processing for multiple images
-4. Content-aware tile sizing
-5. Custom profiling and benchmarking
-
-### Measurement
-
-Before optimising, always:
-1. Profile your specific workload
-2. Run benchmarks on target hardware
-3. Measure memory usage patterns
-4. Validate compression ratios
-5. Test with representative images
-
----
-
-For questions or performance issues, please [open an issue](https://github.com/Raster-Lab/JLSwift/issues) with:
-- Hardware details (CPU, memory)
-- Image characteristics (size, bit depth, content type)
-- Benchmark results
-- Profiling data if available
+Earlier releases shipped a `Platform/` layer (Metal, Vulkan, Accelerate,
+ARM64/x86-64 SIMD wrappers) advertised as accelerating the codec. Profiling
+during the 0.9 optimisation effort showed none of it was invoked on the
+encode/decode hot path, and the GPU kernels could not produce conformant
+streams: JPEG-LS bias correction and context adaptation make the value being
+entropy-coded depend on all previously coded pixels, which is exactly what a
+data-parallel kernel cannot see. The layer was removed in favour of the
+measured CPU optimisations above; restart intervals are the supported (and
+standards-compliant) parallelism mechanism.

@@ -1,6 +1,6 @@
 # JLSwift
 
-A native Swift implementation of **JPEG-LS** (ISO/IEC 14495-1:1999 / ITU-T.87) compression. Usable as a standalone general-purpose codec and optimised for Apple Silicon with hardware acceleration support. Fully compatible with DICOM medical imaging workflows.
+A native Swift implementation of **JPEG-LS** (ISO/IEC 14495-1:1999 / ITU-T.87) compression with a heavily optimised pure-Swift hot path. Fully compatible with DICOM medical imaging workflows.
 
 [![CI](https://github.com/Raster-Lab/JLSwift/actions/workflows/ci.yml/badge.svg)](https://github.com/Raster-Lab/JLSwift/actions/workflows/ci.yml)
 
@@ -9,7 +9,7 @@ A native Swift implementation of **JPEG-LS** (ISO/IEC 14495-1:1999 / ITU-T.87) c
 JLSwift is a pure Swift JPEG-LS compression library with no DICOM dependencies. It can be used in any project that requires lossless or near-lossless image compression — no DICOM knowledge is needed. The library is also designed for seamless integration with DICOMkit and other medical-imaging frameworks. Key attributes:
 
 - **Type Safety**: Leverages Swift 6.2+ concurrency and type system
-- **Performance**: Optimised implementations with support for hardware acceleration
+- **Performance**: Flat-buffer scan loops, 64-bit bitstream I/O, packed context records, and optional restart-interval parallelism — measured, not aspirational (see [PERFORMANCE_TUNING.md](docs/PERFORMANCE_TUNING.md))
 - **Reliability**: Comprehensive test coverage exceeding 95% for all modules
 - **DICOM Aware, DICOM Independent**: Full support for DICOM transfer syntaxes; no DICOM runtime dependency
 
@@ -66,10 +66,7 @@ JPEG-LS is a lossless/near-lossless compression standard specifically designed f
 | 4.2 | Regular Mode Decoding | ✅ Complete | 96.90% |
 | 4.3 | Run Mode Decoding | ✅ Complete | 100.00% |
 | 4.4 | Multi-Component Decoding | ✅ Complete | 92.10% |
-| 5.1 | ARM NEON / SIMD Optimisation | ✅ Complete | 100.00% |
-| 5.2 | Apple Accelerate Integration | ✅ Complete | 100.00% |
-| 5.3 | Metal GPU Acceleration | ✅ Complete | 100.00% |
-| 5.4 | Memory Optimisation | ✅ Complete | 100.00% |
+| 5.1–5.4 | Platform acceleration layer (NEON/Accelerate/Metal) | 🗑 Removed | — |
 | 7.3 | CLI Argument Parsing Tests | ✅ Complete | N/A* |
 | 8.1 | CharLS Reference Integration | ⏳ In Progress | 100.00% |
 | 8.4 | Edge Cases & Robustness | ✅ Complete | 100.00% |
@@ -80,9 +77,7 @@ JPEG-LS is a lossless/near-lossless compression standard specifically designed f
 | 12.1 | CharLS Decode Interoperability | ⏳ In Progress | — |
 | 12.2 | CharLS Encode Interoperability | ✅ Complete | 100.00% |
 | 12.3 | Round-Trip Interoperability (JLSwift) | ⏳ In Progress | 100.00% |
-| 13.1 | ARM Neon Optimisation Audit & Enhancement | ✅ Complete | 100.00% |
-| 13.2 | Accelerate Framework Deep Integration | ✅ Complete | 100.00% |
-| 13.3 | Apple Silicon Memory Architecture Optimisation | ✅ Complete | 100.00% |
+| 13.1–13.3 | Platform-specific optimisation layers | 🗑 Removed | — |
 
 **Overall Project Coverage: 95.80%** (exceeds 95% threshold)
 
@@ -90,7 +85,7 @@ JPEG-LS is a lossless/near-lossless compression standard specifically designed f
 
 *CLI executable target not included in coverage metrics (Swift Package Manager limitation), but validation logic thoroughly tested with 60 comprehensive tests.
 
-**Note**: Coverage may vary slightly by platform due to conditional compilation of platform-specific optimisations (ARM64, Accelerate framework). The reported coverage is measured on Linux x86_64.
+**Note**: The platform acceleration layer (ARM NEON wrappers, Accelerate, Metal, Vulkan, x86-64) was removed in 0.9.0: profiling showed none of it was wired into the codec hot path, the GPU kernels could not produce conformant streams (the entropy stage is inherently sequential), and the pure-Swift hot path now outperforms what that layer ever measured. Phase rows above are kept for history.
 
 ### Key Features
 
@@ -98,11 +93,9 @@ JPEG-LS is a lossless/near-lossless compression standard specifically designed f
 |---------|-------------|
 | **Native Swift** | Pure Swift implementation with no external C dependencies |
 | **Swift 6.2 Concurrency** | Explicit `.swiftLanguageMode(.v6)` in Package.swift; all shared types are `Sendable`; batch processing uses `withTaskGroup` structured concurrency |
-| **Apple Silicon Optimised** | ARM NEON/SIMD acceleration using Swift SIMD types: SIMD8 run-length detection, SIMD8 byte-stuffing scan, and CLZ-based Golomb-Rice parameter computation |
-| **Intel x86-64 Optimised** | SSE/AVX SIMD acceleration: SIMD8 run-length detection, SIMD8 byte-stuffing scan, BSR/LZCNT-based Golomb-Rice parameter computation, Intel-tuned cache parameters, and tile-size optimisation |
-| **Hardware Acceleration** | Apple Accelerate framework (vDSP) for batch gradient computation, absolute prediction-error accumulation, context-state updates, vImage planar↔interleaved conversion, and vectorised HP1/HP2/HP3 colour transforms |
-| **Metal GPU Acceleration** | Optional GPU acceleration for large images (macOS 10.13+, iOS 11+) |
-| **Memory Optimised** | Cache-line–aligned context arrays, L1-cache–tuned tile sizes, `UnifiedMemoryBufferPool` for Apple Silicon unified memory, memory-mapped I/O via `mmap`, and prefetch hints for sequential access patterns |
+| **Optimised Hot Path** | Flat contiguous pixel planes scanned through unsafe buffers, init-time gradient quantisation tables, 64-bit bitstream reader/writer with `clz` unary decode, packed per-context statistics records, and unrolled exact-equality run scanning |
+| **Restart-Interval Parallelism** | Opt-in DRI/RSTm restart markers (`Configuration.restartInterval`): standards-compliant intra-image parallel encode *and* decode for large frames at a ~0.03 % size cost |
+| **Memory Optimised** | One UInt16 plane per scan (half the bandwidth of boxed rows), no per-pixel allocations, and lossless encode skips reconstruction tracking entirely |
 | **DICOM Compatible** | Full support for DICOM transfer syntaxes |
 | **Multi-Component Support** | Full RGB and greyscale encoding with all interleaving modes |
 | **Interleaving Modes** | None (separate scans), Line-interleaved, Sample-interleaved |
@@ -137,66 +130,32 @@ JPEGLS/
 │   ├── NearLosslessEncoder  # Near-lossless encoding with NEAR parameter
 │   ├── MultiComponentEncoder # Multi-component & interleaving orchestration
 │   └── PixelBuffer          # Component-aware pixel access with neighbors
-├── Platform/                # Platform-specific optimizations
-│   ├── Accelerate/          # Apple Accelerate framework (vDSP batch operations)
-│   ├── ARM64/               # Apple Silicon / ARM NEON code
-│   └── x86_64/              # x86-64 specific code (removable)
-│       ├── X86_64Accelerator       # SSE/AVX SIMD accelerator
-│       └── IntelMemoryOptimizer    # Intel cache/memory optimisation
-└── PlatformProtocols        # Protocol-based platform abstraction
+└── JPEGLS / JPEGLSEncoder / JPEGLSDecoder  # Public API surface
 ```
 
-### Memory Optimisation Features
+### Performance Architecture
 
-JLSwift includes comprehensive memory optimisation features for handling large medical images:
+The codec hot path is deliberately plain, fast Swift — measured against real
+radiology DICOM data rather than synthetic microbenchmarks:
 
-#### Buffer Pooling (`JPEGLSBufferPool`)
-- Thread-safe buffer reuse to reduce allocation overhead
-- Supports multiple buffer types (context arrays, pixel data, bitstream)
-- Automatic cleanup of expired buffers
-- Shared global pool available via `sharedBufferPool`
-
-#### Tile-Based Processing (`JPEGLSTileProcessor`)
-- Divides large images into manageable tiles
-- Configurable tile size and overlap for boundary handling
-- Memory savings estimation for large images
-- Enables processing of images larger than available memory
-
-#### Cache-Friendly Data Layout (`JPEGLSCacheFriendlyBuffer`)
-- Contiguous memory layout in row-major order
-- Optimised neighbour access patterns for CPU cache efficiency
-- Batch row access for vectorised operations
-- Compatible with existing encoder/decoder interfaces
-
-**Example Usage:**
-```swift
-// Create a tile processor for a large image
-let processor = JPEGLSTileProcessor(
-    imageWidth: 8192,
-    imageHeight: 8192,
-    configuration: TileConfiguration(tileWidth: 512, tileHeight: 512, overlap: 4)
-)
-
-// Calculate tiles with overlap for boundary handling
-let tiles = processor.calculateTilesWithOverlap()
-
-// Estimate memory savings
-let savings = processor.estimateMemorySavings(bytesPerPixel: 2)
-print("Memory reduction: \(savings * 100)%")
-
-// Use buffer pooling for context arrays
-let contextBuffer = sharedBufferPool.acquire(type: .contextArrays, size: 365)
-defer { sharedBufferPool.release(contextBuffer, type: .contextArrays) }
-```
+- **Flat scan planes**: each scan encodes/decodes over one contiguous
+  `UInt16` plane through an unsafe buffer scoped to the whole scan — no
+  nested-array indirection, bounds checks, or copy-on-write traffic per pixel.
+- **64-bit bitstream I/O**: the writer packs bits into a `UInt64` accumulator
+  over a `[UInt8]` buffer; the reader refills a 64-bit window several bytes at
+  a time and decodes unary prefixes with `leadingZeroBitCount`.
+- **Packed context records**: the 365 per-context statistics (A/B/C/N) live in
+  one record array — a single load and store per pixel.
+- **Restart-interval parallelism**: with `Configuration.restartInterval` set,
+  every interval is independently codable, so large frames encode and decode
+  across all cores (see [PERFORMANCE_TUNING.md](docs/PERFORMANCE_TUNING.md)).
 
 ### Design Principles
 
-1. **Platform Abstraction**: All platform-specific code behind protocols for clean separation
+1. **Measured Performance**: Optimisations must show up in benchmarks on real data and keep encoded output byte-identical (unless a new feature legitimately changes the stream)
 2. **Testability**: Every component designed for unit testing with >95% coverage
-3. **Performance First**: Optimised for Apple Silicon while maintaining correctness
-4. **x86-64 Removability**: Clear compilation boundaries for future x86-64 deprecation
-5. **Memory Efficiency**: Buffer pooling, tile-based processing, and cache-friendly layouts for large images
-6. **Standards Compliance**: Strict adherence to ISO/IEC 14495-1:1999 / ITU-T.87
+3. **Memory Efficiency**: Flat per-scan planes and allocation-free pixel loops for large images
+4. **Standards Compliance**: Strict adherence to ISO/IEC 14495-1:1999 / ITU-T.87
 
 ## Command-Line Tool
 
@@ -730,7 +689,6 @@ JLSwift/
 │   │   ├── Core/              # Core types and protocols
 │   │   ├── Decoder/           # Decoding implementation
 │   │   ├── Encoder/           # Encoding implementation
-│   │   ├── Platform/          # Platform-specific code
 │   │   └── JPEGLS.swift       # Module exports
 │   └── jpeglscli/              # Command-line tool
 ├── Tests/
@@ -759,12 +717,10 @@ JLSwift/
 | [SERVER_SIDE_EXAMPLES.md](docs/SERVER_SIDE_EXAMPLES.md) | Server-side Swift integration guide (Vapor, Hummingbird, NIO) |
 | [DICOMKIT_INTEGRATION.md](docs/DICOMKIT_INTEGRATION.md) | DICOMkit integration guide for DICOM imaging workflows |
 | [PERFORMANCE_TUNING.md](docs/PERFORMANCE_TUNING.md) | Performance optimisation and benchmarking guide |
-| [METAL_GPU_ACCELERATION.md](docs/METAL_GPU_ACCELERATION.md) | Metal GPU acceleration guide for large images |
 | [TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) | Common issues and solutions |
 | [VERSIONING.md](docs/VERSIONING.md) | Semantic versioning strategy and release guidelines |
 | [CHANGELOG.md](CHANGELOG.md) | Complete history of changes and releases |
 | [MILESTONES.md](docs/MILESTONES.md) | Project milestones and development roadmap |
-| [X86_64_REMOVAL_GUIDE.md](docs/X86_64_REMOVAL_GUIDE.md) | Step-by-step guide for removing x86-64 support |
 | [Copilot Instructions](.github/copilot-instructions.md) | Coding guidelines for contributors |
 
 ### API Documentation
@@ -779,7 +735,7 @@ swift package generate-documentation
 ### User Guides
 
 - **[Getting Started](docs/GETTING_STARTED.md)**: Installation, quick start, and basic usage examples
-- **[Performance Tuning](docs/PERFORMANCE_TUNING.md)**: Hardware acceleration, memory optimisation, and profiling
+- **[Performance Tuning](docs/PERFORMANCE_TUNING.md)**: Benchmarking, restart-interval parallelism, and profiling
 - **[Troubleshooting](docs/TROUBLESHOOTING.md)**: Solutions to common problems and debugging tips
 
 ## Contributing

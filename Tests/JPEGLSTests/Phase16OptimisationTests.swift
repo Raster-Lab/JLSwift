@@ -474,59 +474,6 @@ struct ModularReductionBoundsTests {
     }
 }
 
-// MARK: - Phase 16.3: Buffer Pool Optimisation
-
-@Suite("Phase 16.3: Buffer Pool Allocation Optimisation")
-struct BufferPoolOptimisationTests {
-
-    /// Verify that acquiring a pooled buffer returns a correctly zero-initialised
-    /// array of at least the requested size.
-    @Test("BufferPool: acquired buffer is zero-initialised")
-    func testAcquiredBufferZeroInitialised() {
-        let pool = JPEGLSBufferPool(maxPoolSize: 4)
-        // Prime the pool with a non-zero buffer.
-        var buf = pool.acquire(type: .pixelData, size: 64)
-        for i in 0..<buf.count { buf[i] = i + 1 }
-        pool.release(buf, type: .pixelData)
-        // Re-acquire and verify it is zeroed.
-        let buf2 = pool.acquire(type: .pixelData, size: 64)
-        #expect(buf2.count >= 64)
-        #expect(buf2[0..<64].allSatisfy { $0 == 0 }, "Pooled buffer not zeroed on re-acquire")
-    }
-
-    /// Verify that pool returns a buffer at least as large as requested when
-    /// only a larger buffer is pooled.
-    @Test("BufferPool: larger pooled buffer satisfies smaller request")
-    func testLargerPooledBufferSatisfiesSmallerRequest() {
-        let pool = JPEGLSBufferPool(maxPoolSize: 4)
-        let big = pool.acquire(type: .bitstreamData, size: 128)
-        pool.release(big, type: .bitstreamData)
-        let small = pool.acquire(type: .bitstreamData, size: 32)
-        #expect(small.count >= 32, "Re-used buffer should satisfy smaller request")
-    }
-
-    /// Verify that a fresh buffer is allocated when the pool is empty.
-    @Test("BufferPool: allocates new buffer when pool is empty")
-    func testAllocatesNewWhenEmpty() {
-        let pool = JPEGLSBufferPool(maxPoolSize: 4)
-        let buf = pool.acquire(type: .contextArrays, size: 365)
-        #expect(buf.count == 365)
-        #expect(buf.allSatisfy { $0 == 0 })
-    }
-
-    /// Verify that the pool does not overflow beyond maxPoolSize.
-    @Test("BufferPool: pool respects maxPoolSize")
-    func testPoolRespectsMaxSize() {
-        let pool = JPEGLSBufferPool(maxPoolSize: 3)
-        for _ in 0..<5 {
-            let b = pool.acquire(type: .pixelData, size: 10)
-            pool.release(b, type: .pixelData)
-        }
-        let stats = pool.statistics()
-        #expect((stats[.pixelData] ?? 0) <= 3, "Pool exceeded maxPoolSize")
-    }
-}
-
 // MARK: - Phase 16.3: Zero-Copy Bitstream Writer
 
 @Suite("Phase 16.3: Zero-Copy Bitstream Writer Paths")

@@ -26,7 +26,7 @@ This guide demonstrates how to integrate JLSwift JPEG-LS compression into DICOM 
   - [Transcoding Pipeline](#transcoding-pipeline)
 - [Performance Considerations](#performance-considerations)
   - [Buffer Pooling for Batch Processing](#buffer-pooling-for-batch-processing)
-  - [Tile-Based Processing for Large Images](#tile-based-processing-for-large-images)
+  - [Restart-Interval Parallelism for Large Images](#restart-interval-parallelism-for-large-images)
   - [Memory Management](#memory-management)
 - [Error Handling](#error-handling)
 - [Testing DICOM Integration](#testing-dicom-integration)
@@ -44,7 +44,7 @@ JLSwift implements the full JPEG-LS standard (ISO/IEC 14495-1:1999 / ITU-T.87) i
 
 - **No C dependencies** — simplifies deployment and auditing
 - **Apple Silicon optimised** — ARM NEON/SIMD acceleration
-- **Memory efficient** — buffer pooling and tile-based processing for large images
+- **Memory efficient** — internal buffer pooling; restart-interval parallelism for large images
 - **Standards compliant** — full support for all JPEG-LS interleaving modes and colour transforms
 
 ## Prerequisites
@@ -447,7 +447,7 @@ import JPEGLS
 /// Encode CR/DX pixel data with JPEG-LS
 ///
 /// CR/DX images are high-resolution (e.g., 3000x3000) with 10-14 bits stored.
-/// Tile-based processing is recommended for large images.
+/// Restart-interval parallelism is recommended for large images.
 func encodeCRImage(
     pixelData: [[Int]],
     rows: Int,
@@ -695,36 +695,35 @@ func processDICOMSeries(
 }
 ```
 
-### Tile-Based Processing for Large Images
+### Restart-Interval Parallelism for Large Images
 
-Use tile-based processing for very large images (e.g., digital pathology):
+For very large frames (e.g., digital pathology), parallelise a single image
+across cores with restart markers (ITU-T.87 DRI/RSTm). There is no tiling
+API — the codec decodes each scan into one flat pixel plane; restart
+intervals are the parallelism and error-resilience mechanism:
 
 ```swift
 import JPEGLS
 
-/// Process a large DICOM image using tile-based approach
+/// Encode a large DICOM frame with restart-interval parallelism
 ///
-/// Tile-based processing reduces peak memory usage by encoding
-/// the image in smaller tiles.
-func processLargeDICOMImage(
-    rows: Int,
-    columns: Int,
-    bytesPerPixel: Int
-) -> (tiles: [TileRegion], memorySavings: Double) {
-    let processor = JPEGLSTileProcessor(
-        imageWidth: columns,
-        imageHeight: rows,
-        configuration: TileConfiguration(
-            tileWidth: 512,
-            tileHeight: 512,
-            overlap: 4  // Overlap for boundary handling
-        )
+/// The encoder writes a DRI marker and emits RSTm markers every
+/// `restartInterval` lines, making the intervals independently codable
+/// so they can be processed in parallel. Supported for lossless
+/// (NEAR = 0), non-interleaved scans.
+func encodeLargeDICOMFrame(
+    pixelData: [[Int]],
+    bitsStored: Int
+) throws -> Data {
+    let imageData = try MultiComponentImageData.grayscale(
+        pixels: pixelData,
+        bitsPerSample: bitsStored
     )
 
-    let tiles = processor.calculateTilesWithOverlap()
-    let savings = processor.estimateMemorySavings(bytesPerPixel: bytesPerPixel)
-
-    return (tiles, savings)
+    // Large frames: parallelise a single image across cores with restart markers
+    let config = try JPEGLSEncoder.Configuration(restartInterval: 256)
+    return try JPEGLSEncoder().encode(imageData, configuration: config)
+    // Decoding splits at the RST markers automatically and decodes intervals concurrently.
 }
 ```
 
@@ -739,28 +738,17 @@ import JPEGLS
 ///
 /// 1. Buffer pooling is handled internally by the encoder
 /// 2. Process frames sequentially to limit peak memory
-/// 3. Use tile-based processing for large single images
+/// 3. Use restart intervals to parallelise large single frames
 /// 4. Release image data promptly after encoding
+///
+/// Note: the codec decodes each scan into one flat UInt16 pixel plane, so
+/// peak memory scales with rows × columns × components.
 func processWithMemoryEfficiency(
     pixelData: [[Int]],
     rows: Int,
     columns: Int,
     bitsStored: Int
 ) throws -> Data {
-    // Use cache-friendly buffer for better CPU performance
-    let cacheBuffer = JPEGLSCacheFriendlyBuffer(
-        width: columns,
-        height: rows,
-        initialValue: 0
-    )
-
-    // Populate cache-friendly buffer
-    for row in 0..<rows {
-        for col in 0..<columns {
-            cacheBuffer.set(row: row, column: col, value: pixelData[row][col])
-        }
-    }
-
     let imageData = try MultiComponentImageData.grayscale(
         pixels: pixelData,
         bitsPerSample: bitsStored

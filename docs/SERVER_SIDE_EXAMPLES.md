@@ -9,7 +9,7 @@ This guide demonstrates how to integrate JLSwift JPEG-LS compression into server
 - [Vapor Framework Examples](#vapor-framework-examples)
   - [REST API for JPEG-LS Conversion](#rest-api-for-jpeg-ls-conversion)
   - [Medical Imaging Upload Service](#medical-imaging-upload-service)
-  - [Streaming Large File Encoder](#streaming-large-file-encoder)
+  - [Large File Encoder](#large-file-encoder)
   - [Batch Processing API](#batch-processing-api)
 - [Hummingbird Framework Examples](#hummingbird-framework-examples)
   - [Simple JPEG-LS API Service](#simple-jpeg-ls-api-service)
@@ -41,7 +41,7 @@ JLSwift is well-suited for server-side Swift applications that need to:
 
 Key benefits for server-side use:
 - **Pure Swift**: No C dependencies, easier deployment
-- **Memory Efficient**: Buffer pooling and tile-based processing
+- **Memory Efficient**: Internal buffer pooling; restart-interval parallelism for large frames
 - **Performance**: Hardware acceleration on Apple Silicon servers
 - **Concurrent**: Safe to use across multiple concurrent requests
 - **Standards Compliant**: Full JPEG-LS (ISO/IEC 14495-1:1999) support
@@ -380,26 +380,22 @@ func validateMedicalImageParameters(_ metadata: MedicalImageMetadata) throws {
 }
 ```
 
-### Streaming Large File Encoder
+### Large File Encoder
 
-Process large files with streaming to minimise memory usage:
+Encode large images using restart-interval parallelism (ITU-T.87 DRI/RSTm).
+There is no tiling API — the codec works on one flat pixel plane per scan;
+restart intervals parallelise a single image across cores and add error
+resilience. Supported for lossless (NEAR = 0), non-interleaved scans:
 
 ```swift
 import Vapor
 import JPEGLS
 import NIOCore
 
-func configureStreamingRoutes(_ app: Application) throws {
+func configureLargeImageRoutes(_ app: Application) throws {
     
-    // POST /api/stream/encode - Stream-encode large image
-    app.on(.POST, "api", "stream", "encode", body: .stream) { req async throws -> Response in
-        // Use tile-based processing for large images
-        let tileConfig = TileConfiguration(
-            tileWidth: 512,
-            tileHeight: 512,
-            overlap: 4
-        )
-        
+    // POST /api/large/encode - Encode large image with restart-interval parallelism
+    app.on(.POST, "api", "large", "encode", body: .collect(maxSize: "512mb")) { req async throws -> Response in
         // Parse dimensions from query parameters
         guard let width = req.query[Int.self, at: "width"],
               let height = req.query[Int.self, at: "height"],
@@ -407,37 +403,27 @@ func configureStreamingRoutes(_ app: Application) throws {
             throw Abort(.badRequest, reason: "Missing dimensions")
         }
         
-        let processor = JPEGLSTileProcessor(
-            imageWidth: width,
-            imageHeight: height,
-            configuration: tileConfig
+        // Load pixel data from the request body
+        // (simplified - actual implementation would parse raw samples from req.body)
+        let pixels = try loadPixels(from: req, width: width, height: height)
+        
+        let imageData = try MultiComponentImageData.grayscale(
+            pixels: pixels,
+            bitsPerSample: bitsPerSample
         )
         
-        let tiles = processor.calculateTilesWithOverlap()
+        // Large frames: parallelise a single image across cores with restart markers
+        let config = try JPEGLSEncoder.Configuration(restartInterval: 256)
+        let encoded = try JPEGLSEncoder().encode(imageData, configuration: config)
+        // Decoding splits at the RST markers automatically and decodes intervals concurrently.
         
-        // Calculate memory savings
-        let savings = processor.estimateMemorySavings(bytesPerPixel: (bitsPerSample + 7) / 8)
-        
-        req.logger.info("Processing large image with \(tiles.count) tiles", metadata: [
-            "memory_savings": .string("\(Int(savings * 100))%"),
-            "tile_size": .string("\(tileConfig.tileWidth)x\(tileConfig.tileHeight)")
+        req.logger.info("Encoded large image", metadata: [
+            "pixels": .string("\(width * height)"),
+            "restart_interval_lines": .string("256"),
+            "compressed_bytes": .string("\(encoded.count)")
         ])
         
-        // Stream processing
-        var totalPixelsEncoded = 0
-        
-        for (index, tile) in tiles.enumerated() {
-            req.logger.debug("Processing tile \(index + 1)/\(tiles.count)")
-            
-            // Process tile (simplified - actual implementation would read from stream)
-            totalPixelsEncoded += tile.width * tile.height
-        }
-        
-        return Response(status: .ok, headers: [
-            "X-Tiles-Processed": "\(tiles.count)",
-            "X-Pixels-Encoded": "\(totalPixelsEncoded)",
-            "X-Memory-Savings": "\(Int(savings * 100))%"
-        ])
+        return Response(status: .ok, body: .init(data: encoded))
     }
 }
 ```
@@ -1242,7 +1228,10 @@ struct EncodeResult {
 
 ### Memory-Efficient Streaming
 
-Process large files with minimal memory footprint:
+Stream large uploads with backpressure, then encode the assembled frame. Note
+that the codec encodes and decodes whole frames (one flat pixel plane per
+scan) — there is no tiling API. For large frames, restart-interval
+parallelism is the mechanism for spreading the work across cores:
 
 ```swift
 import Vapor
@@ -1251,24 +1240,14 @@ import JPEGLS
 func configureStreamingProcessing(_ app: Application) {
     
     app.on(.POST, "api", "stream", "process", body: .stream) { req async throws -> Response in
-        let tileConfig = TileConfiguration(tileWidth: 512, tileHeight: 512, overlap: 4)
-        
+        var buffer = ByteBuffer()
         var bytesProcessed: Int64 = 0
-        var tilesProcessed = 0
         
-        // Stream processing with backpressure
+        // Stream collection with backpressure
         for try await chunk in req.body {
-            // Process chunk
             bytesProcessed += Int64(chunk.readableBytes)
-            
-            // Use cache-friendly buffer for better performance
-            let cacheBuffer = JPEGLSCacheFriendlyBuffer(
-                width: tileConfig.tileWidth,
-                height: tileConfig.tileHeight,
-                componentCount: 1
-            )
-            
-            tilesProcessed += 1
+            var chunk = chunk
+            buffer.writeBuffer(&chunk)
             
             // Apply backpressure if memory usage is high
             if bytesProcessed > 100_000_000 { // 100MB
@@ -1276,15 +1255,25 @@ func configureStreamingProcessing(_ app: Application) {
             }
         }
         
+        // Parse raw samples into pixel rows
+        // (simplified - parse `buffer` according to your upload format)
+        let pixels = try parsePixelRows(buffer)
+        let imageData = try MultiComponentImageData.grayscale(
+            pixels: pixels,
+            bitsPerSample: 16
+        )
+        
+        // Large frames: parallelise a single image across cores with restart markers
+        let config = try JPEGLSEncoder.Configuration(restartInterval: 256)
+        let encoded = try JPEGLSEncoder().encode(imageData, configuration: config)
+        // Decoding splits at the RST markers automatically and decodes intervals concurrently.
+        
         req.logger.info("Streaming processing complete", metadata: [
             "bytes_processed": "\(bytesProcessed)",
-            "tiles_processed": "\(tilesProcessed)"
+            "compressed_bytes": "\(encoded.count)"
         ])
         
-        return Response(status: .ok, headers: [
-            "X-Bytes-Processed": "\(bytesProcessed)",
-            "X-Tiles-Processed": "\(tilesProcessed)"
-        ])
+        return Response(status: .ok, body: .init(data: encoded))
     }
 }
 ```
@@ -1602,7 +1591,7 @@ func configureMonitoring(_ app: Application) {
 This guide provides comprehensive examples for integrating JLSwift into server-side Swift applications. Key takeaways:
 
 1. **Use appropriate frameworks**: Vapor for full-featured apps, Hummingbird for lightweight services, NIO for custom protocols
-2. **Optimise for performance**: Buffer pooling, tile-based processing, worker threads
+2. **Optimise for performance**: Restart-interval parallelism for large frames, worker threads
 3. **Handle errors gracefully**: Comprehensive error handling and validation
 4. **Secure your API**: Authentication, rate limiting, input validation
 5. **Monitor and log**: Health checks, structured logging, metrics
