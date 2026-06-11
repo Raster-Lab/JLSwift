@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-06-11
+
 ### Added
 - **Restart-interval support (DRI/RSTm)**: opt-in `Configuration.restartInterval`
   (and `jpegls encode --restart-interval N`) writes a DRI segment and emits
@@ -389,7 +391,9 @@ See [RELEASE_NOTES_TEMPLATE.md](docs/RELEASE_NOTES_TEMPLATE.md) for the release 
 - **0.6.0** - Memory optimisation (buffer pooling, tile processing)
 - **0.7.0** - CLI tool (info, verify, encode, decode, batch, completion)
 - **0.8.0** - Validation & conformance (CharLS, benchmarks, edge cases)
+- **0.9.0** - Hot-path performance rewrite, restart-interval parallelism, acceleration-layer removal
 - **1.0.0** - Planned stable release
 
-[Unreleased]: https://github.com/Raster-Lab/JLSwift/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/Raster-Lab/JLSwift/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/Raster-Lab/JLSwift/releases/tag/v0.9.0
 [0.8.0]: https://github.com/Raster-Lab/JLSwift/releases/tag/v0.8.0
