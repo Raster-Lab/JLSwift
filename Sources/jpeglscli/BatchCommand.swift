@@ -90,20 +90,10 @@ struct Batch: ParsableCommand {
             throw ValidationError("Cannot specify both --verbose and --quiet")
         }
         
-        // Validate encode-specific requirements
+        // Validate encode-specific requirements. Image geometry and bit depth
+        // are auto-detected from the input files (PGM/PPM/PNG/TIFF), so only
+        // the coding parameter needs validation here.
         if operation.lowercased() == "encode" {
-            guard let width = width, width > 0 else {
-                throw ValidationError("--width is required and must be positive for encode operation")
-            }
-            guard let height = height, height > 0 else {
-                throw ValidationError("--height is required and must be positive for encode operation")
-            }
-            guard (2...16).contains(bitsPerSample) else {
-                throw ValidationError("--bits-per-sample must be between 2 and 16")
-            }
-            guard components == 1 || components == 3 else {
-                throw ValidationError("--components must be 1 (greyscale) or 3 (RGB)")
-            }
             guard (0...255).contains(near) else {
                 throw ValidationError("--near must be between 0 and 255")
             }
@@ -417,16 +407,85 @@ struct BatchProcessor: Sendable {
         return (outputDir as NSString).appendingPathComponent(outputFilename)
     }
     
+    /// Lossless-encode one image file (PGM/PPM, PNG, or TIFF — auto-detected)
+    /// to JPEG-LS, mirroring `jpegls encode` defaults. `JPEGLSEncoder` is a
+    /// stateless Sendable struct, so concurrent per-file use from the worker
+    /// pool is safe.
     private func processEncode(input: String, output: String) throws {
-        // Placeholder for encode implementation
-        // TODO: Integrate with actual encoder when bitstream writer is complete
-        throw ValidationError("Encode operation requires bitstream writer integration (not yet implemented)")
+        let inputData = try Data(contentsOf: URL(fileURLWithPath: input))
+
+        let componentPixels: [[[Int]]]
+        let bitsPerSample: Int
+        if PNGSupport.isPNG(inputData) {
+            let png = try PNGSupport.decode(inputData)
+            componentPixels = png.componentPixels
+            bitsPerSample = png.bitDepth
+        } else if TIFFSupport.isTIFF(inputData) {
+            let tiff = try TIFFSupport.decode(inputData)
+            componentPixels = tiff.componentPixels
+            bitsPerSample = tiff.bitsPerSample
+        } else if inputData.count >= 2,
+                  inputData[inputData.startIndex] == UInt8(ascii: "P"),
+                  inputData[inputData.startIndex + 1] == UInt8(ascii: "5")
+                      || inputData[inputData.startIndex + 1] == UInt8(ascii: "6") {
+            let pnm = try PNMSupport.parse(inputData)
+            componentPixels = pnm.componentPixels
+            var bits = 1
+            while (1 << bits) - 1 < pnm.maxVal { bits += 1 }
+            bitsPerSample = max(2, bits)
+        } else {
+            throw ValidationError(
+                "Unsupported input format for batch encode: \(input) (PGM/PPM, PNG, or TIFF required)"
+            )
+        }
+
+        let imageData: MultiComponentImageData
+        switch componentPixels.count {
+        case 1:
+            imageData = try MultiComponentImageData.grayscale(
+                pixels: componentPixels[0], bitsPerSample: bitsPerSample
+            )
+        case 3:
+            imageData = try MultiComponentImageData.rgb(
+                redPixels: componentPixels[0],
+                greenPixels: componentPixels[1],
+                bluePixels: componentPixels[2],
+                bitsPerSample: bitsPerSample
+            )
+        default:
+            throw ValidationError("Batch encode requires 1 or 3 components; got \(componentPixels.count)")
+        }
+
+        let config = try JPEGLSEncoder.Configuration(near: encodeOptions.near)
+        let encoded = try JPEGLSEncoder().encode(imageData, configuration: config)
+        try encoded.write(to: URL(fileURLWithPath: output))
     }
-    
+
+    /// Decode one JPEG-LS file to packed raw samples (8-bit bytes, or 16-bit
+    /// big-endian words), matching `jpegls decode --format raw`.
     private func processDecode(input: String, output: String) throws {
-        // Placeholder for decode implementation
-        // TODO: Integrate with actual decoder when bitstream reader is complete
-        throw ValidationError("Decode operation requires bitstream reader integration (not yet implemented)")
+        let inputData = try Data(contentsOf: URL(fileURLWithPath: input))
+        let imageData = try JPEGLSDecoder().decode(inputData)
+
+        let wide = imageData.frameHeader.bitsPerSample > 8
+        var outputData = Data(
+            capacity: imageData.frameHeader.width * imageData.frameHeader.height
+                * imageData.components.count * (wide ? 2 : 1)
+        )
+        for component in imageData.components {
+            for row in component.pixels {
+                for pixel in row {
+                    if wide {
+                        let value = UInt16(clamping: pixel)
+                        outputData.append(UInt8((value >> 8) & 0xFF))
+                        outputData.append(UInt8(value & 0xFF))
+                    } else {
+                        outputData.append(UInt8(clamping: pixel))
+                    }
+                }
+            }
+        }
+        try outputData.write(to: URL(fileURLWithPath: output))
     }
     
     private func processInfo(input: String) throws {
