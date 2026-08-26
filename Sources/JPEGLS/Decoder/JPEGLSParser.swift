@@ -3,12 +3,12 @@
 /// Parses JPEG-LS encoded data streams, extracting frame headers, scan headers,
 /// preset parameters, and locating compressed image data.
 ///
-/// ## CharLS Compatibility
+/// ## Entropy stuffing and unknown markers
 ///
-/// This parser includes support for CharLS-specific extension markers in the range 0xFF60-0xFF7F.
-/// These markers are used by the CharLS library as escape sequences within scan data (similar to
-/// the standard 0xFF00 byte stuffing). The parser treats these sequences transparently, allowing
-/// it to correctly parse CharLS-encoded files while maintaining compatibility with standard JPEG-LS.
+/// Within scan data, an `0xFF` byte followed by a byte whose most-significant
+/// bit is zero is treated as stuffed entropy data per ITU-T.87 §9.1. Outside a
+/// scan, the parser also tolerates low-valued standalone continuation codes in
+/// the `0x60...0x7F` range and skips unknown length-prefixed marker segments.
 
 import Foundation
 
@@ -118,8 +118,9 @@ public final class JPEGLSParser {
     ///
     /// Validates the structure and extracts all metadata.
     ///
-    /// The parser handles both standard JPEG-LS files and CharLS-encoded files with extension markers.
-    /// Unknown markers (including CharLS-specific markers 0xFF60-0xFF7F) are gracefully skipped.
+    /// The parser handles JPEG-LS marker segments and stuffed entropy data.
+    /// Unknown length-prefixed markers and defensive low-valued continuation
+    /// codes in the `0x60...0x7F` range are skipped.
     ///
     /// - Returns: Parse result containing frame header, scan headers, and parameters
     /// - Throws: `JPEGLSError` if the bitstream is invalid or corrupted
@@ -160,8 +161,8 @@ public final class JPEGLSParser {
                     // RST markers (0xD0-0xD7), SOI (0xD8), and EOI (0xD9) have no length field
                     continue
                 } else if byte2 >= 0x60 && byte2 <= 0x7F {
-                    // CharLS uses markers in the 0xFF60-0xFF7F range as standalone markers (no length field)
-                    // These appear to be used for internal purposes and can be safely skipped
+                    // Defensive compatibility: tolerate low-valued standalone
+                    // continuation codes without interpreting a length field.
                     continue
                 } else {
                     // Read length and skip the marker segment

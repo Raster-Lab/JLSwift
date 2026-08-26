@@ -1,7 +1,7 @@
-// JPEGLSRoundTripInteroperabilityTests.swift
+// JPEGLSInternalRoundTripTests.swift
 // Phase 12.3: JLSwift encode → JLSwift decode → compare (regression)
 //
-// Comprehensive round-trip interoperability tests covering:
+// Comprehensive internal round-trip regression tests covering:
 //   - All bit depths (8, 12, 16)
 //   - Grayscale and RGB
 //   - All interleave modes (none, line, sample)
@@ -11,8 +11,8 @@
 //   - Edge-case images (1×1, single-row, single-column, checkerboard)
 //
 // Note: Near-lossless encoder round-trip tests are limited to small images (≤8×8)
-// due to a known pre-existing encoder issue. The decoder is correct (validated by
-// CharLS bit-exact comparison tests). See Phase 8.1 / Phase 12.1 in docs/MILESTONES.md.
+// due to a known pre-existing encoder issue. Decoder behaviour is covered by
+// standard-derived unit tests and generated regression vectors.
 //
 // Note: Test patterns avoid purely flat (constant-value) images >8×8 and gradient
 // patterns that produce flat transformed components after HP1/HP3 colour transforms,

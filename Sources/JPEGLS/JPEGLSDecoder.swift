@@ -467,7 +467,7 @@ public struct JPEGLSDecoder: Sendable {
         // Track left-edge values per component for boundary Rc at col=0.
         var prevRowEdges = Array(repeating: 0, count: componentCount)
 
-        // Per-component RUNindex per CharLS: each component line preserves its own run index.
+        // Per-component RUNindex per ITU-T.87: each component line preserves its own run index.
         var componentRunIndex = Array(repeating: 0, count: componentCount)
 
         // Per-component row index: tracks the next row to decode within each component's grid.
@@ -566,7 +566,7 @@ public struct JPEGLSDecoder: Sendable {
         
         // Decode pixel by pixel, cycling through components
         for row in 0..<frameHeader.height {
-            // Note: RUNindex is NOT reset per line. Per ITU-T.87 §A.7.1 and CharLS,
+            // Note: RUNindex is NOT reset per line. Per ITU-T.87 §A.7.1,
             // RUNindex persists across scan lines; it is only initialised to 0 at scan start.
             // Capture and advance edge values per component.
             let edgesForThisRow = prevRowEdges
@@ -625,7 +625,7 @@ public struct JPEGLSDecoder: Sendable {
 
                     // If run was interrupted (ended before the line), decode one
                     // interruption sample per component.
-                    // Per CharLS triplet handling: all components use riType=0 context,
+                    // Per ITU-T.87 triplet handling: all components use riType=0 context,
                     // prediction = rb (from previous row), with sign(rb - ra) correction.
                     if runLength < remainingInLine && newCol < frameHeader.width {
                         let j = runDecoder.computeJ(runIndex: context.currentRunIndex)
@@ -660,7 +660,7 @@ public struct JPEGLSDecoder: Sendable {
                             )
                             componentPixels[componentIndex][row][newCol] = sample
                         }
-                        // Per CharLS, decrement RUNindex after the interruption pixel(s).
+                        // Per ITU-T.87, decrement RUNindex after the interruption pixel(s).
                         context.decrementRunIndex()
                         newCol += 1
                     }
@@ -881,13 +881,13 @@ public struct JPEGLSDecoder: Sendable {
 
         try flat.withUnsafeMutableBufferPointer { buf in
             // Track the left-edge value for boundary Rc at col=0.
-            // In CharLS this is previous_line[0], which equals the first pixel
-            // of the row decoded TWO iterations ago (0 for rows 0 and 1).
+            // The edge buffer is previous_line[0], which equals the first pixel
+            // of the row decoded two iterations ago (0 for rows 0 and 1).
             var prevRowEdge = 0
 
             // Decode pixels in raster order
             for row in 0..<rows {
-                // Note: RUNindex is NOT reset per line. Per ITU-T.87 §A.7.1 and CharLS,
+                // Note: RUNindex is NOT reset per line. Per ITU-T.87 §A.7.1,
                 // RUNindex persists across scan lines; it is only initialised to 0 at scan start.
                 let rowBase = row * width
                 let prevBase = rowBase - width
@@ -945,7 +945,7 @@ public struct JPEGLSDecoder: Sendable {
 
                         if runLength < remainingInLine {
                             // Interrupted run: decode the interruption sample
-                            // (per ITU-T.87 §A.7.2 / CharLS).
+                            // (per ITU-T.87 §A.7.2).
                             let ra = a
                             let rb = row > 0 ? Int(buf[prevBase + col]) : 0
                             let riType = (abs(ra - rb) <= near) ? 1 : 0
@@ -970,7 +970,7 @@ public struct JPEGLSDecoder: Sendable {
                                 eMappedErrorValue: eMappedErrorValue,
                                 riType: riType
                             )
-                            // Per CharLS, decrement RUNindex AFTER the interruption pixel.
+                            // Per ITU-T.87, decrement RUNindex AFTER the interruption pixel.
                             context.decrementRunIndex()
 
                             buf[rowBase + col] = UInt16(truncatingIfNeeded: sample)
@@ -1015,7 +1015,7 @@ public struct JPEGLSDecoder: Sendable {
         qbppBits: Int,
         prevRowEdge: Int = 0
     ) throws {
-        // Note: RUNindex is NOT reset per line. Per ITU-T.87 §A.7.1 and CharLS,
+        // Note: RUNindex is NOT reset per line. Per ITU-T.87 §A.7.1,
         // RUNindex persists across scan lines; it is only initialised to 0 at scan start.
         var col = 0
         while col < width {
@@ -1188,10 +1188,10 @@ public struct JPEGLSDecoder: Sendable {
             // Determine RItype per ITU-T.87: type 1 if |Ra-Rb| <= NEAR
             let riType = (abs(ra - rb) <= near) ? 1 : 0
             
-            // Per ITU-T.87 §4.5.3 / CharLS, the Golomb parameter uses RItype-aware context
+            // Per ITU-T.87 §4.5.3, the Golomb parameter uses RItype-aware context
             let k = context.computeRunInterruptionGolombK(riType: riType)
             
-            // Per CharLS, the LIMIT for run interruption Golomb code is adjusted:
+            // Per ITU-T.87, the LIMIT for run interruption Golomb code is adjusted:
             // limit_ri = LIMIT - J[RUNindex] - 1
             let j = runDecoder.computeJ(runIndex: context.currentRunIndex)
             let adjustedLimit = limit - j - 1
@@ -1201,13 +1201,13 @@ public struct JPEGLSDecoder: Sendable {
                 reader: reader, k: k, limit: adjustedLimit, qbppBits: qbppBits
             )
             
-            // Per CharLS, compute error value with RItype offset:
+            // Per ITU-T.87, compute error value with RItype offset:
             // error = compute_error_value(eMappedErrorValue + riType, k)
             let errorValue = context.computeRunInterruptionErrorValue(
                 temp: eMappedErrorValue + riType, k: k, riType: riType
             )
             
-            // Prediction and sign correction per ITU-T.87 / CharLS
+            // Prediction and sign correction per ITU-T.87
             let prediction: Int
             let sample: Int
             if riType == 1 {
@@ -1221,14 +1221,14 @@ public struct JPEGLSDecoder: Sendable {
                 sample = runDecoder.reconstructSample(prediction: prediction, error: signCorrectedError)
             }
             
-            // Update run interruption context statistics per CharLS
+            // Update run interruption context statistics per ITU-T.87
             context.updateRunInterruptionContext(
                 errorValue: errorValue,
                 eMappedErrorValue: eMappedErrorValue,
                 riType: riType
             )
             
-            // Per CharLS, decrement RUNindex AFTER the interruption pixel
+            // Per ITU-T.87, decrement RUNindex AFTER the interruption pixel
             // is decoded (not during run-length reading).
             context.decrementRunIndex()
             
@@ -1333,7 +1333,7 @@ public struct JPEGLSDecoder: Sendable {
         var runLength = 0
         var runIndex = context.currentRunIndex
         
-        // Read continuation bits per CharLS / ITU-T.87 §A.7.1.
+        // Read continuation bits per ITU-T.87 §A.7.1.
         // Each '1' bit contributes min(2^J[RUNindex], remaining) pixels.
         // run_index is only incremented when a FULL block is used.
         while true {
@@ -1359,7 +1359,7 @@ public struct JPEGLSDecoder: Sendable {
         if runLength < remainingInLine {
             // Incomplete run — read J[RUNindex] remainder bits.
             // Note: run_index is NOT decremented here; the caller decrements
-            // after the interruption pixel is decoded (matching CharLS).
+            // after the interruption pixel is decoded (matching ITU-T.87).
             let j = runDecoder.computeJ(runIndex: runIndex)
             let remainder = j > 0 ? Int(try reader.readBits(j)) : 0
             runLength += remainder
@@ -1388,7 +1388,7 @@ public struct JPEGLSDecoder: Sendable {
     
     /// Get neighbor pixels for gradient computation
     ///
-    /// Handles boundary conditions per CharLS / ITU-T.87 Section 3.2.
+    /// Handles boundary conditions per ITU-T.87 Section 3.2.
     /// At col=0, row>0, the top-left (Rc) is the edge pixel from the
     /// previous row — not the first pixel of the previous row.
     ///

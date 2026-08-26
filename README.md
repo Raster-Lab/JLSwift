@@ -68,20 +68,20 @@ JPEG-LS is a lossless/near-lossless compression standard specifically designed f
 | 4.4 | Multi-Component Decoding | ✅ Complete | 92.10% |
 | 5.1–5.4 | Platform acceleration layer (NEON/Accelerate/Metal) | 🗑 Removed | — |
 | 7.3 | CLI Argument Parsing Tests | ✅ Complete | N/A* |
-| 8.1 | CharLS Reference Integration | ⏳ In Progress | 100.00% |
+| 8.1 | Generated Regression Vectors | ✅ Complete | 100.00% |
 | 8.4 | Edge Cases & Robustness | ✅ Complete | 100.00% |
 | 11.2 | Mapping Table (Palette) Support | ✅ Complete | 100.00% |
 | 11.3 | Extended Dimensions (LSE Type 4) | ✅ Complete | 100.00% |
 | 11.4 | Additional Part 2 Colour Transforms | ✅ Complete | 100.00% |
 | 11.5 | Part 2 Performance Regression Tests | ✅ Complete | 100.00% |
-| 12.1 | CharLS Decode Interoperability | ⏳ In Progress | — |
-| 12.2 | CharLS Encode Interoperability | ✅ Complete | 100.00% |
-| 12.3 | Round-Trip Interoperability (JLSwift) | ⏳ In Progress | 100.00% |
+| 12.1 | Decoder Standards Regression | ⏳ In Progress | — |
+| 12.2 | Encoder Round-Trip Matrix | ✅ Complete | 100.00% |
+| 12.3 | Cross-Implementation Interoperability | ⏳ In Progress | — |
 | 13.1–13.3 | Platform-specific optimisation layers | 🗑 Removed | — |
 
 **Overall Project Coverage: 95.80%** (exceeds 95% threshold)
 
-**Recent conformance fixes** (PRs #74, #75, #76, and current): Gradient quantisation, context update/bias correction, error correction XOR, LIMIT computation, default thresholds, run interruption coding overhaul, encoder RUNindex reset, error mapping formula, near-lossless boundary condition, **run-interruption adjustedLimit mismatch** (encoder now uses J[finalRunIndex] matching the decoder), and **near-lossless reconstructed-value tracking** for line-interleaved and sample-interleaved modes — all aligned with ITU-T.87 and CharLS reference implementation.
+**Recent conformance fixes** (PRs #74, #75, #76, and current): Gradient quantisation, context update/bias correction, error correction XOR, LIMIT computation, default thresholds, run interruption coding overhaul, encoder RUNindex reset, error mapping formula, near-lossless boundary condition, **run-interruption adjustedLimit mismatch** (encoder now uses J[finalRunIndex] matching the decoder), and **near-lossless reconstructed-value tracking** for line-interleaved and sample-interleaved modes — all aligned with ITU-T.87.
 
 *CLI executable target not included in coverage metrics (Swift Package Manager limitation), but validation logic thoroughly tested with 60 comprehensive tests.
 
@@ -566,8 +566,8 @@ swift test --enable-code-coverage
 # Run tests for a specific target
 swift test --filter JPEGLSTests
 
-# Run CharLS conformance tests
-swift test --filter CharLSConformanceTests
+# Run generated vector regression tests
+swift test --filter JPEGLSGeneratedVectorTests
 
 # Run performance benchmarks
 swift test --filter JPEGLSPerformanceBenchmarks
@@ -599,8 +599,8 @@ swift test --filter "benchmarkEncode512x512Grayscale8bit"
 # Run performance regression tests
 swift test --filter JPEGLSPerformanceRegressionTests
 
-# Run CharLS comparison benchmarks (currently disabled, requires CharLS integration)
-swift test --filter JPEGLSCharLSComparisonBenchmarks
+# Run the internal performance benchmark matrix
+swift test --filter JPEGLSPerformanceBenchmarks
 ```
 
 **Sample Results (x86_64 Linux, scalar implementation):**
@@ -630,48 +630,50 @@ JLSwift includes automated performance regression tests that detect catastrophic
 
 Baselines are established from x86_64 Linux CI with a 10x regression multiplier to avoid flaky failures while still catching algorithmic regressions. Precise regression detection (e.g., 1.2x threshold) requires dedicated benchmark hardware.
 
-### CharLS Comparison Benchmarks
+### Internal Performance Benchmarks
 
-Head-to-head performance comparison with [CharLS](https://github.com/team-charls/charls) (the reference C++ JPEG-LS implementation) is available as a test suite with disabled tests. The `JPEGLSCharLSComparisonBenchmarks` suite includes stubs for:
+The `JPEGLSPerformanceBenchmarks` suite measures encoding, decoding, memory,
+throughput, and compression behaviour across greyscale, RGB, lossless, and
+near-lossless configurations. It uses only deterministic synthetic input and
+does not require an external codec or test dependency.
 
-- **Encoding speed**: greyscale, RGB, near-lossless comparison
-- **Decoding speed**: greyscale, RGB, near-lossless comparison
-- **Memory usage**: encoding and decoding memory comparison
+### Generated Regression Testing
 
-These tests are currently disabled pending CharLS C library integration. JLSwift measurement infrastructure is in place; CharLS wrapper functions will be added when the C library is available as a Swift Package Manager dependency.
-
-### CharLS Conformance Testing
-
-JLSwift includes comprehensive conformance testing using reference files from the [CharLS](https://github.com/team-charls/charls) project. The test suite validates:
+JLSwift includes a deterministic, Raster-authored test corpus generated in
+memory by `SyntheticFixtureSupport.swift`. No copied image or compressed
+fixture files are stored in the repository. The test suite validates:
 
 - **File Structure**: SOI/EOI markers and basic JPEG-LS file format
-- **CharLS Byte Stuffing**: Extended support for CharLS escape sequences (`FF 60-7F`) and scan boundary detection
-- **Reference Images**: 12 JPEG-LS files covering various configurations:
-  - 8-bit and 16-bit samples
+- **Entropy Stuffing**: ITU-T.87 §9.1 stuffed entropy bytes and scan boundary detection
+- **Generated Vectors**: 12 JPEG-LS streams covering various configurations:
+  - 8-bit and 12-bit samples
   - Greyscale and RGB colour images
   - Lossless and near-lossless (NEAR=3) encoding
-  - Different colour transformation modes
   - Sub-sampling and interleaving modes
   - Non-default parameters
-- **Image Loading**: PGM (greyscale) and PPM (colour) reference image parsing
-- **Bit-Exact Comparison**: All 12 non-sub-sampled + 2 sub-sampled reference files validated for bit-exact decoding
+- **Image Loading**: PGM (greyscale) and PPM (colour) synthetic image parsing
+- **Pixel Regression**: 10 generated non-sub-sampled streams decoded and compared with their deterministic source pixels
   - 10 non-sub-sampled comparison test cases all passing (8-bit colour modes 0/1/2, 12-bit greyscale, non-default parameters)
-  - 2 sub-sampled comparison test cases passing (t8sse0.jls lossless, t8sse3.jls near=3)
   - Pixel-by-pixel validation per component (lossless: exact match; near-lossless: error ≤ NEAR)
-  - Non-default parameter tests validated against test8bs2.pgm reference
-  - Sub-sampled tests compare each component against its reference PGM (R 256×256, G 256×64, B 128×128)
+  - Non-default parameter tests use a generated 128×128 greyscale image
   - Flat-region (run mode) and near-lossless round-trip encoding/decoding verified correct
-- **Round-Trip Interoperability**: 33 JLSwift encode → decode → compare regression tests
+- **Sub-sampled Layout Smoke Tests**: 2 hand-authored zero-run streams verify line-interleaved scheduling and component dimensions of 256×256, 256×64, and 128×128
+  - The second stream carries NEAR=3 in its scan header; non-zero sub-sampled near-lossless semantics remain pending independent vectors
+- **Internal Round-Trip Regression**: 33 JLSwift encode → decode → compare tests
   - All bit depths (8/12/16-bit), greyscale and RGB, all interleave modes
   - Colour transforms (HP1, HP2, HP3)
   - Medical imaging patterns (CT, MR, CR/DX, US, NM simulations)
   - Edge cases (1×1, boundary values, single-row/column, checkerboard)
-- **Colour Transform Interoperability**: 14 encode → decode tests on 256×256 CharLS reference image
+- **Colour Transform Round Trips**: 14 encode → decode tests on a 16×16 deterministic noise image
   - HP1, HP2, HP3 with all interleave modes (none, line, sample) — 9 lossless tests
   - HP1 (3 modes), HP2, HP3 near-lossless with NEAR=3 — 5 near-lossless tests
   - Near-lossless error verified in transformed domain per ITU-T T.870
 
-The conformance tests are located in `Tests/JPEGLSTests/CharLSConformanceTests.swift` with reference fixtures in `Tests/JPEGLSTests/TestFixtures/`. These tests ensure compatibility with the JPEG-LS standard (ISO/IEC 14495-1:1999 / ITU-T.87) and provide a foundation for bit-exact comparison with CharLS output.
+The generated vector tests are located in
+`Tests/JPEGLSTests/JPEGLSConformanceTests.swift`. Because encoder-generated
+streams are tested with the decoder from the same package, these cases are
+described as regression and round-trip coverage rather than independent
+cross-implementation conformance evidence.
 
 A full standards conformance matrix (`docs/CONFORMANCE_MATRIX.md`) documents the mapping between every normative section of ITU-T.87 and its implementation in JLSwift, including all deviations found and fixed during Milestone 10 (Phases 10.1–10.4).
 
@@ -759,11 +761,6 @@ When contributing to JLSwift, please follow these guidelines:
 
 ## License
 
-JLSwift code and documentation owned by Raster Images Private Limited are
-licensed under the [Apache License 2.0](LICENSE). See [NOTICE](NOTICE) for the
-project attribution.
-
-The byte-identical CharLS JPEG-LS conformance fixtures under
-`Tests/JPEGLSTests/TestFixtures` remain under BSD-3-Clause and are not
-relicensed. Their provenance, retained copyright notices, and full licence text
-are in [LICENSE-BSD-3-Clause.txt](Tests/JPEGLSTests/TestFixtures/LICENSE-BSD-3-Clause.txt).
+JLSwift code, documentation, and generated test support owned by Raster Images
+Private Limited are licensed under the [Apache License 2.0](LICENSE). See
+[NOTICE](NOTICE) for project attribution.

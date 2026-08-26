@@ -1,19 +1,16 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright 2026 Raster Images Private Limited
-// CharLS Encode Interoperability Tests
+// JPEG-LS Encode Round-Trip Tests
 //
-// Phase 12.2: JLSwift-encoded → (JLSwift-decoded) interoperability tests.
-//
-// Tests that JLSwift produces valid JPEG-LS output for real-world reference images
-// from the CharLS conformance test suite (test8.ppm and test16.pgm).  Since the
-// JLSwift decoder is validated bit-exact against CharLS (Phase 12.1), a successful
-// JLSwift-encode → JLSwift-decode round-trip on these images demonstrates that:
-//   - The encoder produces standards-compliant JPEG-LS bitstreams.
-//   - All interleave modes (none, line, sample) work with natural images.
+// Tests that JLSwift produces valid JPEG-LS output for deterministic,
+// Raster-authored synthetic images. A successful encode → decode round trip
+// exercises that:
+//   - The encoder and decoder agree across the supported configuration matrix.
+//   - All interleave modes (none, line, sample) work with structured synthetic images.
 //   - All target bit depths (8-bit, 12-bit, 16-bit) are correctly handled.
-//   - Near-lossless coding (NEAR > 0) respects the error bound on natural images.
+//   - Near-lossless coding (NEAR > 0) respects the error bound on synthetic images.
 //   - Grayscale and RGB component configurations are both correctly encoded.
-//   - Part 2 colour transforms (HP1, HP2, HP3) work correctly on natural images.
+//   - Part 2 colour transforms (HP1, HP2, HP3) work correctly on deterministic noise.
 //
 // Coverage:
 //   Phase 12.2 items addressed:
@@ -21,23 +18,23 @@
 //     ✅ Validate lossless output (bit-exact round-trip) — 8-bit RGB, 12-bit grayscale
 //     ✅ Validate near-lossless output (error ≤ NEAR) — 8-bit RGB near=3, 12-bit near=3
 //     ✅ All interleaving modes: none, line, sample
-//     ✅ Bit depths: 8-bit and 12-bit (natural images); 16-bit in RoundTripTests
+//     ✅ Bit depths: 8-bit and 12-bit synthetic images; 16-bit in RoundTripTests
 //     ✅ Grayscale and RGB configurations
 //   Phase 12.1 items addressed:
-//     ✅ Test encoding/decoding with colour transformations (HP1, HP2, HP3) on natural images
+//     ✅ Test encoding/decoding with colour transformations (HP1, HP2, HP3)
 //
-// Note: Bit depth listed as "16-bit" in the JLS standard actually stores 12-bit
-// (MAXVAL=4095) samples for the CharLS test16 reference image.
+// These same-implementation round trips are regression coverage. Independent
+// implementation testing is still required as external interoperability evidence.
 
 import Testing
 @testable import JPEGLS
 
-// MARK: - Encoder Interoperability Test Configuration
+// MARK: - Encoder Round-Trip Test Configuration
 
-/// A test case that encodes a reference image with the JLSwift encoder and
+/// A test case that encodes a synthetic image with the JLSwift encoder and
 /// round-trips it through the JLSwift decoder.
 struct EncodeInteropTestCase: CustomTestStringConvertible, Sendable {
-    /// Source reference file name (PGM or PPM from TestFixtures)
+    /// Source synthetic image name (PGM or PPM generated in memory)
     let referenceFile: String
     /// Expected image width
     let width: Int
@@ -59,49 +56,49 @@ struct EncodeInteropTestCase: CustomTestStringConvertible, Sendable {
     var testDescription: String { description }
 }
 
-// MARK: - CharLS Encoder Interoperability Test Suite
+// MARK: - Encoder Round-Trip Test Suite
 
-/// Tests that JLSwift produces valid JPEG-LS output for all CharLS reference images.
+/// Tests that JLSwift produces valid JPEG-LS output for the synthetic image matrix.
 ///
-/// Each test loads a reference image, encodes it with JLSwift, decodes the encoded
+/// Each test loads a synthetic image, encodes it with JLSwift, decodes the encoded
 /// data with JLSwift, and compares the decoded pixels against the original.
-@Suite("CharLS Encode Interoperability Tests")
-struct CharLSEncodeInteropTests {
+@Suite("JPEG-LS Encode Round-Trip Tests")
+struct JPEGLSEncodeRoundTripTests {
 
     // MARK: - Lossless test cases
 
-    /// Parameterised lossless test cases covering both reference images and all
+    /// Parameterised lossless test cases covering both synthetic images and all
     /// interleave modes that are applicable to each image type.
     static let losslessTestCases: [EncodeInteropTestCase] = [
-        // 8-bit colour (test8.ppm) — three interleave modes
+        // 8-bit synthetic colour image — three interleave modes
         EncodeInteropTestCase(
-            referenceFile: "test8.ppm",
+            referenceFile: SyntheticFixtureName.rgb8,
             width: 256, height: 256, components: 3, maxVal: 255, near: 0,
             interleaveMode: .none, colorTransformation: .none,
             description: "8-bit RGB none-ILV lossless"
         ),
         EncodeInteropTestCase(
-            referenceFile: "test8.ppm",
+            referenceFile: SyntheticFixtureName.rgb8,
             width: 256, height: 256, components: 3, maxVal: 255, near: 0,
             interleaveMode: .line, colorTransformation: .none,
             description: "8-bit RGB line-ILV lossless"
         ),
         EncodeInteropTestCase(
-            referenceFile: "test8.ppm",
+            referenceFile: SyntheticFixtureName.rgb8,
             width: 256, height: 256, components: 3, maxVal: 255, near: 0,
             interleaveMode: .sample, colorTransformation: .none,
             description: "8-bit RGB sample-ILV lossless"
         ),
-        // 8-bit grayscale (test8r.pgm — R component of test8)
+        // 8-bit synthetic red plane used as greyscale
         EncodeInteropTestCase(
-            referenceFile: "test8r.pgm",
+            referenceFile: SyntheticFixtureName.red8,
             width: 256, height: 256, components: 1, maxVal: 255, near: 0,
             interleaveMode: .none, colorTransformation: .none,
             description: "8-bit grayscale lossless"
         ),
-        // 12-bit grayscale (test16.pgm — stored with MAXVAL=4095)
+        // 12-bit synthetic greyscale (MAXVAL=4095)
         EncodeInteropTestCase(
-            referenceFile: "test16.pgm",
+            referenceFile: SyntheticFixtureName.gray12,
             width: 256, height: 256, components: 1, maxVal: 4095, near: 0,
             interleaveMode: .none, colorTransformation: .none,
             description: "12-bit grayscale lossless"
@@ -110,30 +107,30 @@ struct CharLSEncodeInteropTests {
 
     // MARK: - Near-lossless test cases
 
-    /// Parameterised near-lossless test cases for natural reference images.
+    /// Parameterised near-lossless test cases for synthetic images.
     static let nearLosslessTestCases: [EncodeInteropTestCase] = [
         // 8-bit colour near=3
         EncodeInteropTestCase(
-            referenceFile: "test8.ppm",
+            referenceFile: SyntheticFixtureName.rgb8,
             width: 256, height: 256, components: 3, maxVal: 255, near: 3,
             interleaveMode: .none, colorTransformation: .none,
             description: "8-bit RGB none-ILV near=3"
         ),
         EncodeInteropTestCase(
-            referenceFile: "test8.ppm",
+            referenceFile: SyntheticFixtureName.rgb8,
             width: 256, height: 256, components: 3, maxVal: 255, near: 3,
             interleaveMode: .line, colorTransformation: .none,
             description: "8-bit RGB line-ILV near=3"
         ),
         EncodeInteropTestCase(
-            referenceFile: "test8.ppm",
+            referenceFile: SyntheticFixtureName.rgb8,
             width: 256, height: 256, components: 3, maxVal: 255, near: 3,
             interleaveMode: .sample, colorTransformation: .none,
             description: "8-bit RGB sample-ILV near=3"
         ),
         // 12-bit grayscale near=3
         EncodeInteropTestCase(
-            referenceFile: "test16.pgm",
+            referenceFile: SyntheticFixtureName.gray12,
             width: 256, height: 256, components: 1, maxVal: 4095, near: 3,
             interleaveMode: .none, colorTransformation: .none,
             description: "12-bit grayscale near=3"
@@ -143,62 +140,62 @@ struct CharLSEncodeInteropTests {
     // MARK: - Colour transform lossless test cases
 
     /// Parameterised lossless test cases with Part 2 colour transforms (HP1, HP2, HP3)
-    /// applied to the 256×256 RGB reference image (test8.ppm).
+    /// applied to the 16×16 synthetic RGB transform image.
     static let colorTransformLosslessTestCases: [EncodeInteropTestCase] = [
         // HP1 colour transform — all interleave modes
         EncodeInteropTestCase(
-            referenceFile: "test8.ppm",
-            width: 256, height: 256, components: 3, maxVal: 255, near: 0,
+            referenceFile: SyntheticFixtureName.rgb8Transform,
+            width: 16, height: 16, components: 3, maxVal: 255, near: 0,
             interleaveMode: .none, colorTransformation: .hp1,
             description: "8-bit RGB HP1 none-ILV lossless"
         ),
         EncodeInteropTestCase(
-            referenceFile: "test8.ppm",
-            width: 256, height: 256, components: 3, maxVal: 255, near: 0,
+            referenceFile: SyntheticFixtureName.rgb8Transform,
+            width: 16, height: 16, components: 3, maxVal: 255, near: 0,
             interleaveMode: .line, colorTransformation: .hp1,
             description: "8-bit RGB HP1 line-ILV lossless"
         ),
         EncodeInteropTestCase(
-            referenceFile: "test8.ppm",
-            width: 256, height: 256, components: 3, maxVal: 255, near: 0,
+            referenceFile: SyntheticFixtureName.rgb8Transform,
+            width: 16, height: 16, components: 3, maxVal: 255, near: 0,
             interleaveMode: .sample, colorTransformation: .hp1,
             description: "8-bit RGB HP1 sample-ILV lossless"
         ),
         // HP2 colour transform — all interleave modes
         EncodeInteropTestCase(
-            referenceFile: "test8.ppm",
-            width: 256, height: 256, components: 3, maxVal: 255, near: 0,
+            referenceFile: SyntheticFixtureName.rgb8Transform,
+            width: 16, height: 16, components: 3, maxVal: 255, near: 0,
             interleaveMode: .none, colorTransformation: .hp2,
             description: "8-bit RGB HP2 none-ILV lossless"
         ),
         EncodeInteropTestCase(
-            referenceFile: "test8.ppm",
-            width: 256, height: 256, components: 3, maxVal: 255, near: 0,
+            referenceFile: SyntheticFixtureName.rgb8Transform,
+            width: 16, height: 16, components: 3, maxVal: 255, near: 0,
             interleaveMode: .line, colorTransformation: .hp2,
             description: "8-bit RGB HP2 line-ILV lossless"
         ),
         EncodeInteropTestCase(
-            referenceFile: "test8.ppm",
-            width: 256, height: 256, components: 3, maxVal: 255, near: 0,
+            referenceFile: SyntheticFixtureName.rgb8Transform,
+            width: 16, height: 16, components: 3, maxVal: 255, near: 0,
             interleaveMode: .sample, colorTransformation: .hp2,
             description: "8-bit RGB HP2 sample-ILV lossless"
         ),
         // HP3 colour transform — all interleave modes
         EncodeInteropTestCase(
-            referenceFile: "test8.ppm",
-            width: 256, height: 256, components: 3, maxVal: 255, near: 0,
+            referenceFile: SyntheticFixtureName.rgb8Transform,
+            width: 16, height: 16, components: 3, maxVal: 255, near: 0,
             interleaveMode: .none, colorTransformation: .hp3,
             description: "8-bit RGB HP3 none-ILV lossless"
         ),
         EncodeInteropTestCase(
-            referenceFile: "test8.ppm",
-            width: 256, height: 256, components: 3, maxVal: 255, near: 0,
+            referenceFile: SyntheticFixtureName.rgb8Transform,
+            width: 16, height: 16, components: 3, maxVal: 255, near: 0,
             interleaveMode: .line, colorTransformation: .hp3,
             description: "8-bit RGB HP3 line-ILV lossless"
         ),
         EncodeInteropTestCase(
-            referenceFile: "test8.ppm",
-            width: 256, height: 256, components: 3, maxVal: 255, near: 0,
+            referenceFile: SyntheticFixtureName.rgb8Transform,
+            width: 16, height: 16, components: 3, maxVal: 255, near: 0,
             interleaveMode: .sample, colorTransformation: .hp3,
             description: "8-bit RGB HP3 sample-ILV lossless"
         ),
@@ -207,38 +204,38 @@ struct CharLSEncodeInteropTests {
     // MARK: - Colour transform near-lossless test cases
 
     /// Parameterised near-lossless test cases with Part 2 colour transforms (HP1, HP2, HP3)
-    /// applied to the 256×256 RGB reference image (test8.ppm) with NEAR=3.
+    /// applied to the 16×16 synthetic RGB image with NEAR=3.
     static let colorTransformNearLosslessTestCases: [EncodeInteropTestCase] = [
         // HP1 colour transform near=3 — all interleave modes
         EncodeInteropTestCase(
-            referenceFile: "test8.ppm",
-            width: 256, height: 256, components: 3, maxVal: 255, near: 3,
+            referenceFile: SyntheticFixtureName.rgb8Transform,
+            width: 16, height: 16, components: 3, maxVal: 255, near: 3,
             interleaveMode: .none, colorTransformation: .hp1,
             description: "8-bit RGB HP1 none-ILV near=3"
         ),
         EncodeInteropTestCase(
-            referenceFile: "test8.ppm",
-            width: 256, height: 256, components: 3, maxVal: 255, near: 3,
+            referenceFile: SyntheticFixtureName.rgb8Transform,
+            width: 16, height: 16, components: 3, maxVal: 255, near: 3,
             interleaveMode: .line, colorTransformation: .hp1,
             description: "8-bit RGB HP1 line-ILV near=3"
         ),
         EncodeInteropTestCase(
-            referenceFile: "test8.ppm",
-            width: 256, height: 256, components: 3, maxVal: 255, near: 3,
+            referenceFile: SyntheticFixtureName.rgb8Transform,
+            width: 16, height: 16, components: 3, maxVal: 255, near: 3,
             interleaveMode: .sample, colorTransformation: .hp1,
             description: "8-bit RGB HP1 sample-ILV near=3"
         ),
         // HP2 colour transform near=3
         EncodeInteropTestCase(
-            referenceFile: "test8.ppm",
-            width: 256, height: 256, components: 3, maxVal: 255, near: 3,
+            referenceFile: SyntheticFixtureName.rgb8Transform,
+            width: 16, height: 16, components: 3, maxVal: 255, near: 3,
             interleaveMode: .none, colorTransformation: .hp2,
             description: "8-bit RGB HP2 none-ILV near=3"
         ),
         // HP3 colour transform near=3
         EncodeInteropTestCase(
-            referenceFile: "test8.ppm",
-            width: 256, height: 256, components: 3, maxVal: 255, near: 3,
+            referenceFile: SyntheticFixtureName.rgb8Transform,
+            width: 16, height: 16, components: 3, maxVal: 255, near: 3,
             interleaveMode: .none, colorTransformation: .hp3,
             description: "8-bit RGB HP3 none-ILV near=3"
         ),
@@ -246,16 +243,16 @@ struct CharLSEncodeInteropTests {
 
     // MARK: - Helpers
 
-    /// Load reference pixel data from a PGM or PPM fixture file.
+    /// Load source pixel data from an in-memory synthetic PGM or PPM image.
     ///
     /// Returns a flat array of UInt16 sample values in component-interleaved order
     /// (for PPM: R0 G0 B0 R1 G1 B1 …; for PGM: Y0 Y1 …).
     private func loadReferencePixels(testCase: EncodeInteropTestCase) throws -> [UInt16] {
         if testCase.referenceFile.hasSuffix(".ppm") {
-            let (_, _, _, pixels) = try TestFixtureLoader.loadPPM(named: testCase.referenceFile)
+            let (_, _, _, pixels) = try SyntheticFixtureLoader.loadPPM(named: testCase.referenceFile)
             return pixels
         } else {
-            let (_, _, _, pixels) = try TestFixtureLoader.loadPGM(named: testCase.referenceFile)
+            let (_, _, _, pixels) = try SyntheticFixtureLoader.loadPGM(named: testCase.referenceFile)
             return pixels
         }
     }
@@ -302,7 +299,7 @@ struct CharLSEncodeInteropTests {
 
     // MARK: - Lossless encode/decode round-trip
 
-    @Test("Lossless encode round-trip for reference image", arguments: losslessTestCases)
+    @Test("Lossless encode round-trip for synthetic image", arguments: losslessTestCases)
     func testLosslessRoundTrip(testCase: EncodeInteropTestCase) throws {
         let referencePixels = try loadReferencePixels(testCase: testCase)
         let imageData = try buildImageData(pixels: referencePixels, testCase: testCase)
@@ -336,7 +333,7 @@ struct CharLSEncodeInteropTests {
 
     // MARK: - Near-lossless encode/decode round-trip
 
-    @Test("Near-lossless encode round-trip for reference image", arguments: nearLosslessTestCases)
+    @Test("Near-lossless encode round-trip for synthetic image", arguments: nearLosslessTestCases)
     func testNearLosslessRoundTrip(testCase: EncodeInteropTestCase) throws {
         let referencePixels = try loadReferencePixels(testCase: testCase)
         let imageData = try buildImageData(pixels: referencePixels, testCase: testCase)
@@ -371,7 +368,7 @@ struct CharLSEncodeInteropTests {
 
     // MARK: - Colour transform lossless encode/decode round-trip
 
-    @Test("Colour transform lossless encode round-trip for reference image",
+    @Test("Colour transform lossless encode round-trip for synthetic image",
           arguments: colorTransformLosslessTestCases)
     func testColorTransformLosslessRoundTrip(testCase: EncodeInteropTestCase) throws {
         let referencePixels = try loadReferencePixels(testCase: testCase)
@@ -406,7 +403,7 @@ struct CharLSEncodeInteropTests {
 
     // MARK: - Colour transform near-lossless encode/decode round-trip
 
-    @Test("Colour transform near-lossless encode round-trip for reference image",
+    @Test("Colour transform near-lossless encode round-trip for synthetic image",
           arguments: colorTransformNearLosslessTestCases)
     func testColorTransformNearLosslessRoundTrip(testCase: EncodeInteropTestCase) throws {
         let referencePixels = try loadReferencePixels(testCase: testCase)

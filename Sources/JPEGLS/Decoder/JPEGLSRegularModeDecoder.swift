@@ -84,8 +84,8 @@ public struct JPEGLSRegularModeDecoder: Sendable {
         self.gradientTable = table
     }
 
-    /// Reference gradient quantisation per ITU-T.87 Table A.7 /
-    /// CharLS `quantize_gradient_org` (strict less-than upper boundaries).
+    /// Reference gradient quantisation using the strict upper interval
+    /// boundaries in ITU-T.87 Table A.7.
     /// Used to build `gradientTable`; kept as the single source of truth
     /// for the boundary semantics.
     private static func quantizeGradientReference(
@@ -290,7 +290,7 @@ public struct JPEGLSRegularModeDecoder: Sendable {
         let dequantized = dequantizeError(error)
         var sample = prediction + dequantized
         
-        // Per ITU-T.87 §A.4.4 / CharLS fix_reconstructed_value:
+        // Per ITU-T.87 §A.4.4 fix_reconstructed_value:
         // wrap range is RANGE × (2·NEAR + 1); thresholds are −NEAR and MAXVAL+NEAR.
         let wrapRange = near == 0 ? range : range * qbpp
         if sample < -near {

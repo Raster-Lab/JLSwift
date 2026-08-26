@@ -382,7 +382,7 @@ for _ in 0..<height {
 
 **Possible causes**:
 
-1. **CharLS extension markers**: JLSwift supports CharLS extension markers (0xFF60-0xFF7F)
+1. **Stuffed entropy bytes**: JLSwift accepts `0xFF` followed by a byte whose most-significant bit is zero, per ITU-T.87 §9.1
 
 2. **Non-standard markers**: Some encoders add proprietary markers
 
@@ -425,7 +425,7 @@ jpegls verify image.jls --verbose
 2. **Check conformance**:
 ```bash
 # Run conformance tests
-swift test --filter CharLSConformanceTests
+swift test --filter JPEGLSGeneratedVectorTests
 ```
 
 3. **Report incompatibilities** with:
@@ -537,7 +537,7 @@ xxd -l 128 problematic.jls > file-hex.txt
 
 [Create a GitHub issue](https://github.com/Raster-Lab/JLSwift/issues) with:
 
-**Title**: Brief description (e.g., "Parser fails on CharLS file with extension markers")
+**Title**: Brief description (e.g., "Parser fails on stuffed entropy bytes")
 
 **Body**:
 ```markdown
