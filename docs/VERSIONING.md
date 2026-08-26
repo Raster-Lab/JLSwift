@@ -169,7 +169,7 @@ Current development phase leading to 1.0.0:
 - **0.5.0**: Platform optimisation (ARM64, x86_64, Accelerate)
 - **0.6.0**: Memory optimisation (buffer pooling, tile processing)
 - **0.7.0**: CLI tool (encode, decode, info, verify, batch)
-- **0.8.0**: Validation & conformance (CharLS compatibility, benchmarks)
+- **0.8.0**: Validation and conformance (regression vectors, benchmarks)
 - **0.9.0-beta**: Beta testing with real-world usage
 - **1.0.0**: Stable production release
 

@@ -118,7 +118,7 @@ public struct JPEGLSContextModel: Sendable {
         
         // Initialize run-length state
         self.runInterruptionIndex = Array(repeating: 0, count: Self.runContextCount)
-        // Initialise run interruption statistics per ITU-T.87 §4.5.3 / CharLS.
+        // Initialise run interruption statistics per ITU-T.87 §4.5.3.
         // Two contexts: index 0 for RItype=0, index 1 for RItype=1.
         let riAInit = max(2, (range + 32) / 64)
         self.runInterruptionA = [riAInit, riAInit]
@@ -294,7 +294,7 @@ public struct JPEGLSContextModel: Sendable {
         r.b += errval * bFactor
 
         // Reset when N reaches RESET value per ITU-T.87 Section A.6.2
-        // Reset check happens BEFORE N is incremented (per standard and CharLS).
+        // Reset check happens BEFORE N is incremented (per standard).
         if r.n >= resetThreshold {
             r.a >>= 1
             r.b >>= 1
@@ -368,11 +368,11 @@ public struct JPEGLSContextModel: Sendable {
         return (r.c, k, errorCorrection)
     }
     
-    /// Compute error correction for k=0 map swap per ITU-T.87 §A.5.2 / CharLS.
+    /// Compute error correction for k=0 map swap per ITU-T.87 §A.5.2.
     ///
     /// Returns `bit_wise_sign(2*B[Q] + N[Q] - 1)`, i.e. −1 when
-    /// `2*B[Q] + N[Q] <= 0` and 0 otherwise.  This matches the CharLS
-    /// reference implementation (`regular_mode_context::get_error_correction`).
+    /// `2*B[Q] + N[Q] <= 0` and 0 otherwise. This is the regular-mode
+    /// map-swap condition defined by ITU-T.87 §A.5.2.
     /// Only applied when k=0 and near=0 (lossless mode).
     ///
     /// - Parameters:
@@ -444,7 +444,7 @@ public struct JPEGLSContextModel: Sendable {
     
     /// Decrement the run index by 1 (minimum 0).
     ///
-    /// Per CharLS, the run index is decremented after a run interruption
+    /// Per ITU-T.87, the run index is decremented after a run interruption
     /// pixel has been decoded — not during run-length reading.
     public mutating func decrementRunIndex() {
         if runIndex > 0 {
@@ -467,7 +467,7 @@ public struct JPEGLSContextModel: Sendable {
     
     /// Compute the Golomb-Rice parameter k for run interruption coding.
     ///
-    /// Per ITU-T.87 §4.5.3 / CharLS `run_mode_context::compute_golomb_coding_parameter`:
+    /// ITU-T.87 §4.5.3 uses RItype-aware run-interruption statistics:
     /// For RItype=1: temp = A + (N >> 1), find smallest k such that N × 2^k ≥ temp
     /// For RItype=0: temp = A, find smallest k such that N × 2^k ≥ temp
     ///
@@ -490,8 +490,8 @@ public struct JPEGLSContextModel: Sendable {
     
     /// Compute the error value from mapped error for run interruption.
     ///
-    /// Per CharLS `run_mode_context::compute_error_value`:
-    /// Uses nn (negative error count) and k to determine the sign of the error.
+    /// The inverse mapping uses nn (negative error count) and k to determine
+    /// the sign of the error.
     ///
     /// - Parameters:
     ///   - temp: MErrval + riType (the adjusted mapped error)
@@ -513,7 +513,7 @@ public struct JPEGLSContextModel: Sendable {
     
     /// Compute the map value for run interruption error mapping (encoder).
     ///
-    /// Per CharLS `run_mode_context::compute_map`:
+    /// Implements the run-interruption error mapping defined by ITU-T.87.
     ///
     /// - Parameters:
     ///   - errorValue: Signed error value
@@ -533,7 +533,7 @@ public struct JPEGLSContextModel: Sendable {
     
     /// Update run interruption context statistics after coding one interruption sample.
     ///
-    /// Per CharLS `run_mode_context::update_variables` (Code segment A.23):
+    /// Per ITU-T.87 Code segment A.23:
     /// - Track negative error count (nn)
     /// - Update A using (eMappedErrorValue + 1 - riType) >> 1
     /// - Reset when N reaches RESET

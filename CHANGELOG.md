@@ -84,9 +84,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 #### Validation & Conformance (Milestone 8)
-- CharLS reference test fixtures (12 JPEG-LS files, 7 reference images)
-- CharLS conformance test suite with 589 tests
-- CharLS extension marker support (0xFF60-0xFF7F) in parser
+- JPEG-LS validation corpus (later replaced by Raster-authored generated vectors)
+- JPEG-LS conformance and regression suite with 589 tests
+- Defensive low-valued continuation handling (0xFF60-0xFF7F) in parser
 - TestFixtureLoader utility for PGM/PPM format parsing
 - Comprehensive performance benchmark suite (18 benchmarks)
 - Performance timing framework with throughput calculation (MB/s, Mpixels/s)
@@ -131,8 +131,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Renamed executable target `jpegls` → `jpeglscli` to avoid a case-insensitive-filesystem collision with the `JPEGLS` library target (the built product is still named `jpegls`)
 
 ### Fixed
-- Parser now handles CharLS-encoded files with extension markers
-- All 12 CharLS reference files can be parsed without errors
+- Parser now handles streams containing low-valued standalone continuation codes
+- All 12 legacy validation vectors could be parsed without errors
 - Build & test compilation on case-insensitive (Apple) filesystems
 - `SIMDMask.any()` build error on ARM64 (replaced with an equality check)
 - Metal GPU path now works under `swift build`/`swift test`: when no precompiled `default.metallib` is present (SwiftPM copies the `.metal` source rather than compiling it), `MetalAccelerator` compiles the bundled shader source at runtime instead of failing with "no default library was found"
@@ -390,7 +390,7 @@ See [RELEASE_NOTES_TEMPLATE.md](docs/RELEASE_NOTES_TEMPLATE.md) for the release 
 - **0.5.0** - Platform optimisation (ARM64, x86_64, Accelerate)
 - **0.6.0** - Memory optimisation (buffer pooling, tile processing)
 - **0.7.0** - CLI tool (info, verify, encode, decode, batch, completion)
-- **0.8.0** - Validation & conformance (CharLS, benchmarks, edge cases)
+- **0.8.0** - Validation and conformance (regression vectors, benchmarks, edge cases)
 - **0.9.0** - Hot-path performance rewrite, restart-interval parallelism, acceleration-layer removal
 - **1.0.0** - Planned stable release
 

@@ -238,7 +238,7 @@ public struct JPEGLSRunModeDecoder: Sendable {
     
     /// Reconstruct a sample from prediction and error with modular arithmetic.
     ///
-    /// Per ITU-T.87 §A.4.4 / CharLS fix_reconstructed_value:
+    /// Per ITU-T.87 §A.4.4 fix_reconstructed_value:
     /// - Rx = prediction + error × (2·NEAR + 1)
     /// - If Rx < −NEAR:       Rx += RANGE × (2·NEAR + 1)
     /// - If Rx > MAXVAL+NEAR: Rx -= RANGE × (2·NEAR + 1)
@@ -256,7 +256,7 @@ public struct JPEGLSRunModeDecoder: Sendable {
         let dequantized = error * qbpp
         var sample = prediction + dequantized
         
-        // Per ITU-T.87 §A.4.4 / CharLS fix_reconstructed_value
+        // Per ITU-T.87 §A.4.4 fix_reconstructed_value
         let range: Int
         if near == 0 {
             range = parameters.maxValue + 1

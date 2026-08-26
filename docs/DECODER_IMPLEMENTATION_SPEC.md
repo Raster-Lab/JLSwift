@@ -291,10 +291,10 @@ Code already exists in `JPEGLSMultiComponentDecoder` (lines 219-326).
    }
    ```
 
-5. **CharLS Conformance**
-   - Decode CharLS reference files
-   - Compare with reference images
-   - Validate against known checksums
+5. **Standards Regression**
+   - Decode deterministic JPEG-LS vectors
+   - Compare with generated source images
+   - Validate marker structure and coding parameters
 
 ### Performance Tests
 
@@ -331,7 +331,7 @@ Code already exists in `JPEGLSMultiComponentDecoder` (lines 219-326).
 
 ### Phase 5: Integration & Testing (Estimated: 4-5 hours)
 - [ ] Round-trip tests (encode → decode → verify)
-- [ ] CharLS conformance tests
+- [ ] Standards-derived conformance and generated regression tests
 - [ ] Error handling and edge cases
 - [ ] Performance benchmarks
 
@@ -350,13 +350,13 @@ Code already exists in `JPEGLSMultiComponentDecoder` (lines 219-326).
 | Context synchronization errors | High | Step-by-step verification against encoder |
 | Neighbour pixel tracking bugs | Medium | Comprehensive boundary condition tests |
 | Performance issues | Medium | Benchmark early, optimise incrementally |
-| CharLS incompatibility | Low | Parser already handles CharLS extensions |
+| Cross-implementation incompatibility | Low | Exercise normative marker, stuffing, and coding rules |
 
 ## Success Criteria
 
 1. ✅ `JPEGLSDecoder` API matches `JPEGLSEncoder` in simplicity
 2. ✅ Round-trip tests pass: encode → decode → pixel-perfect match
-3. ✅ All CharLS reference files decode correctly
+3. ✅ All generated JPEG-LS regression vectors decode correctly
 4. ✅ >95% test coverage maintained
 5. ✅ CLI `decode` command works end-to-end
 6. ✅ Documentation updated (README.md, MILESTONES.md)
@@ -367,7 +367,7 @@ Code already exists in `JPEGLSMultiComponentDecoder` (lines 219-326).
 - ITU-T.87 (ISO/IEC 14495-1:1999): JPEG-LS standard
 - `Sources/JPEGLS/JPEGLSEncoder.swift`: Reference implementation for encoding
 - `Sources/JPEGLS/Decoder/`: Existing decoder math components
-- CharLS project: Reference implementation and test files
+- ITU-T.87: Normative JPEG-LS coding and bitstream specification
 
 ---
 

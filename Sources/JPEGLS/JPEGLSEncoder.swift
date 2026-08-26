@@ -757,7 +757,7 @@ public struct JPEGLSEncoder: Sendable {
     
     /// Compute causal neighbours (Ra, Rb, Rc, Rd) for a pixel directly from
     /// hoisted row arrays, replicating `JPEGLSPixelBuffer.getNeighbors`
-    /// boundary semantics (ITU-T.87 §3.2 / CharLS edge handling) without the
+    /// boundary semantics (ITU-T.87 §3.2 edge handling) without the
     /// per-pixel Dictionary lookup that method performs.
     ///
     /// - `previousRow == nil` means row 0: top/topLeft/topRight are 0.
@@ -843,7 +843,7 @@ public struct JPEGLSEncoder: Sendable {
         // Encode pixels in raster order with run mode support
         var prevRowEdge = 0
         for row in 0..<buffer.height {
-            // Note: RUNindex is NOT reset per line. Per ITU-T.87 §A.7.1 and CharLS,
+            // Note: RUNindex is NOT reset per line. Per ITU-T.87 §A.7.1,
             // RUNindex persists across scan lines; it is only initialised to 0 at scan start.
             let edgeForThisRow = prevRowEdge
             let currentRow = componentPixels[row]
@@ -926,7 +926,7 @@ public struct JPEGLSEncoder: Sendable {
                                 encRb = 0
                             }
                             
-                            // Per ITU-T.87 / CharLS: use finalRunIndex (post-continuation)
+                            // Per ITU-T.87: use finalRunIndex (post-continuation)
                             // for J when computing adjustedLimit in the interruption pixel.
                             // The decoder also uses finalRunIndex at this point.
                             context.setRunIndex(finalRunIndex)
@@ -956,7 +956,7 @@ public struct JPEGLSEncoder: Sendable {
                         }
                     } else {
                         // Run reaches end of line.
-                        // Per ITU-T.87 §A.7.1 / CharLS: for a partial last block at
+                        // Per ITU-T.87 §A.7.1: for a partial last block at
                         // EOL, write one '1' bit (the partial-continuation bit).  The
                         // decoder reads the '1', adds min(2^J, remaining)=remaining,
                         // sees the line is full, and exits without reading J remainder
@@ -1099,7 +1099,7 @@ public struct JPEGLSEncoder: Sendable {
             var prevRowEdge = 0
             let firstRow = rowRange.lowerBound
             for row in rowRange {
-                // Note: RUNindex is NOT reset per line. Per ITU-T.87 §A.7.1 and CharLS,
+                // Note: RUNindex is NOT reset per line. Per ITU-T.87 §A.7.1,
                 // RUNindex persists across scan lines; it is only initialised to 0 at scan start.
                 let rowBase = row * width
                 let prevBase = rowBase - width
@@ -1178,7 +1178,7 @@ public struct JPEGLSEncoder: Sendable {
                             let interruptionActual = Int(buf[rowBase + interruptionCol])
                             let encRb = row > firstRow ? Int(buf[prevBase + interruptionCol]) : 0
 
-                            // Per ITU-T.87 / CharLS: use finalRunIndex (post-continuation)
+                            // Per ITU-T.87: use finalRunIndex (post-continuation)
                             // for J when computing adjustedLimit in the interruption pixel.
                             context.setRunIndex(finalRunIndex)
                             _ = writeRunInterruptionBits(
@@ -1241,7 +1241,7 @@ public struct JPEGLSEncoder: Sendable {
         // Encode line by line, all components per line
         var prevRowEdges: [UInt8: Int] = [:]
         for component in scanHeader.components { prevRowEdges[component.id] = 0 }
-        // Per-component RUNindex per CharLS: each component line preserves its own run index.
+        // Per-component RUNindex per ITU-T.87: each component line preserves its own run index.
         var componentRunIndex: [UInt8: Int] = [:]
         for component in scanHeader.components { componentRunIndex[component.id] = 0 }
         // Resolve each component's pixel array once per scan so the Dictionary
@@ -1264,7 +1264,7 @@ public struct JPEGLSEncoder: Sendable {
             }
         }
         for row in 0..<buffer.height {
-            // Note: RUNindex is NOT reset per line. Per ITU-T.87 §A.7.1 and CharLS,
+            // Note: RUNindex is NOT reset per line. Per ITU-T.87 §A.7.1,
             // RUNindex persists across scan lines; it is only initialised to 0 at scan start.
             for component in scanHeader.components {
                 // Restore this component's run index
@@ -1452,7 +1452,7 @@ public struct JPEGLSEncoder: Sendable {
 
         // Encode row by row
         for row in 0..<buffer.height {
-            // Note: RUNindex is NOT reset per line. Per ITU-T.87 §A.7.1 and CharLS,
+            // Note: RUNindex is NOT reset per line. Per ITU-T.87 §A.7.1,
             // RUNindex persists across scan lines; it is only initialised to 0 at scan start.
             let currentRows = componentPixelArrays.map { $0[row] }
             let previousRows: [[Int]]? = row > 0 ? componentPixelArrays.map { $0[row - 1] } : nil
@@ -1581,7 +1581,7 @@ public struct JPEGLSEncoder: Sendable {
                                     writer: writer,
                                     limit: limit,
                                     qbppBits: qbppBits,
-                                    overrideRiType: 0  // Per CharLS: triplet always uses riType=0
+                                    overrideRiType: 0  // Per ITU-T.87: triplet always uses riType=0
                                 )
                                 if near > 0 {
                                     reconstructedPerComponent[component.id]?[row][interruptionCol] = rv3
@@ -1671,7 +1671,7 @@ public struct JPEGLSEncoder: Sendable {
             return (left, 0, 0, 0)
         } else if col == 0 {
             let top = reconstructed[row - 1][col]
-            // Per ITU-T.87 §3.2 and CharLS edge-pixel buffering: Rc at col=0 is
+            // Per ITU-T.87 §3.2 edge-pixel buffering: Rc at col=0 is
             // the first pixel of two rows above (equivalent to prevRowEdge in the
             // lossless path).  For row 0–1 this equals 0; for row r≥2 it is the
             // reconstructed value at (r−2, 0).
@@ -1790,7 +1790,7 @@ public struct JPEGLSEncoder: Sendable {
         let ra = runValue
         let riType = overrideRiType ?? ((abs(ra - rb) <= near) ? 1 : 0)
         
-        // Prediction and error per CharLS
+        // Prediction and error per ITU-T.87
         let prediction: Int
         let rawError: Int
         if riType == 1 {
@@ -1802,7 +1802,7 @@ public struct JPEGLSEncoder: Sendable {
             rawError = (rb >= ra) ? raw : -raw
         }
         
-        // Quantize and modular-reduce per CharLS compute_error_value
+        // Quantize and modular-reduce the interruption error per ITU-T.87.
         let params = parameters(regularMode)
         let qbpp = near > 0 ? (2 * near + 1) : 1
         let range: Int
@@ -1831,7 +1831,7 @@ public struct JPEGLSEncoder: Sendable {
         let k = context.computeRunInterruptionGolombK(riType: riType)
         let map = context.computeRunInterruptionMap(errorValue: reducedError, k: k, riType: riType)
         
-        // Map to non-negative per CharLS encode_run_interruption_error:
+        // Map to the non-negative interruption code per ITU-T.87:
         // e_mapped = 2 * |error| - riType - map
         let eMappedErrorValue = 2 * abs(reducedError) - riType - (map ? 1 : 0)
         

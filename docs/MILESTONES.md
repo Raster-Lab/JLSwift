@@ -357,18 +357,19 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 - Added man page documentation section to README.md with installation and usage instructions
 
 ### Milestone 8: Validation & Conformance Testing ⏳
-**Target**: CharLS compatibility and standards compliance  
+**Target**: ITU-T.87 compliance and deterministic regression coverage
 **Status**: In Progress
 
-#### Phase 8.1: CharLS Reference Integration ⏳
-- [x] Set up CharLS test fixtures (downloaded from GitHub conformance directory)
-- [x] Create test image corpus (12 JPEG-LS files + 7 reference images: various sizes, bit depths, component counts)
-- [x] Implement test fixture loading utilities (PGM/PPM parsers, JPEG-LS file loaders)
+#### Phase 8.1: Generated Regression Corpus ✅
+- [x] Create a Raster-authored synthetic image corpus covering 8-bit RGB and 12-bit greyscale
+- [x] Generate 12 JPEG-LS streams and 8 PGM/PPM images deterministically in test code
+- [x] Remove copied binary fixtures and their third-party licence scope
+- [x] Implement in-memory fixture loading utilities (PGM/PPM parsers and JPEG-LS vector generation)
 - [x] Create automated conformance test suite (5 test groups, 589 total tests)
 - [x] Validate JPEG-LS file structure (SOI/EOI markers)
-- [x] Add support for CharLS extension markers (0xFF60-0xFF7F) to JPEGLSParser
-- [x] **NEW**: Implement bit-exact comparison test infrastructure (10 test cases — all passing)
-- [x] **NEW**: Extend parser to handle CharLS byte stuffing (`FF XX` where XX is not a valid marker)
+- [x] Handle ITU-T.87 §9.1 stuffed entropy bytes by testing the following byte's most-significant bit
+- [x] Implement generated pixel-comparison infrastructure (10 non-sub-sampled cases — all passing)
+- [x] Add two hand-authored, line-interleaved sub-sampling vectors for decoder regression
 - [x] **NEW**: Fix LSE preset parameters length validation (changed from 11 to 13 bytes)
 - [x] **NEW**: Fix gradient quantisation boundaries — strict `<` for positive thresholds per Table A.7 (PR #74)
 - [x] **NEW**: Fix context update order & bias correction — reset check before N increment per §A.6.2 (PR #74)
@@ -378,28 +379,18 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 - [x] **NEW**: Fix error correction condition — `(2*B + N) < 0` strict less-than per §A.5.2 (PR #75)
 - [x] **NEW**: Overhaul run interruption coding (§A.7) — dual RItype contexts, adjusted LIMIT (`LIMIT-J[RUNindex]-1`), RItype-aware k, nn-based map, `sign(Rb-Ra)` correction (PR #75)
 - [x] **NEW**: Fix encoder RUNindex reset — `context.setRunIndex(0)` at start of each scan line in all 3 interleave modes per §4.5.1 (PR #76)
-- [x] **NEW**: Fix encoder run interruption error mapping — `2*|error| - riType - map` matching CharLS (PR #76)
+- [x] **NEW**: Fix encoder run interruption error mapping — `2*|error| - riType - map` per ITU-T.87 (PR #76)
 - [x] **NEW**: Fix near-lossless boundary condition — row 0, col > 0 returns `(left, 0, 0, 0)` matching decoder (PR #76)
-- [x] **NEW**: Fix non-default parameter test reference images — t8nde0.jls/t8nde3.jls use test8bs2.pgm (128×128 greyscale, blue component sub-sampled 2×)
-- [ ] Complete CharLS bit-exact validation (in progress — encoder scan data diverges from CharLS at byte 551 for 12-bit test image; remaining issue in regular-mode or context-update logic)
-- [x] Document CharLS compatibility in parser code comments
+- [x] Cover non-default preset parameters with a generated 128×128 greyscale image
+- [ ] Add independent cross-implementation conformance vectors when their provenance and licence are explicitly approved
+- [x] Document entropy stuffing and defensive unknown-marker handling in parser comments
 
 **Implementation Details:**
-- Downloaded CharLS test fixtures from `team-charls/charls/test/conformance`
-- 12 reference JPEG-LS files covering: 8-bit/16-bit, greyscale/colour, lossless/near-lossless, various interleaving modes
-- 7 reference images (PGM/PPM format) for encoder validation
-- TestFixtureLoader utility for loading and parsing reference images
-- CharLSConformanceTests suite validates file structure and markers - all tests pass
-- **CharLS Byte Stuffing Support**: Parser now handles extended byte stuffing rules
-  - Standard JPEG-LS: `FF 00` (byte stuffing)
-  - CharLS escape sequences: `FF 60-7F` (treated like byte stuffing)
-  - CharLS extended: `FF XX` where XX is not a valid marker (used for scan boundary detection in parser)
-  - Bitstream reader handles `FF 00` and `FF 60-7F` stuffing during decoding
-- **Bit-Exact Comparison Infrastructure**: Complete test suite — all 10 test cases passing
-  - `CharLSBitExactComparisonTests` with 10 active test cases (8 for non-sub-sampled files, 2 for non-default parameters)
-  - Compares decoded pixels against reference PGM/PPM files
-  - Supports lossless (exact match) and near-lossless (error ≤ NEAR) validation
-  - Non-default parameter tests (t8nde0.jls, t8nde3.jls) validated against test8bs2.pgm (128×128 blue component sub-sampled 2×)
+- `SyntheticFixtureSupport.swift` derives all pixels from fixed integer formulas; no external image data is read.
+- Ten normal streams are generated through the public encoder for planar, line, sample, lossless, near-lossless, 8-bit, 12-bit, and custom-preset coverage.
+- Two 107-byte zero-run sub-sampled streams are authored directly from ITU-T.87 marker and run-mode rules. They verify scan scheduling and component dimensions of 256×256, 256×64, and 128×128; non-zero sub-sampled pixel semantics remain pending independent vectors.
+- `JPEGLSGeneratedVectorTests` validates file structure and parameters; `JPEGLSGeneratedPixelRegressionTests` compares decoded pixels with deterministic source pixels.
+- Encoder-generated streams decoded by the same package are described as regression and round-trip evidence, not independent cross-implementation conformance.
 - **ITU-T.87 Conformance Fixes** (PRs #74, #75, #76):
   - Gradient quantisation: strict `<` on positive thresholds, `<=` on negative thresholds per Table A.7
   - Context update: reset check before N increment; bias correction conditions `B+N≤0` / `B>0`; B clamped to `[-N+1, 0]`
@@ -409,16 +400,15 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
   - Run interruption: dual RItype contexts (0: Ra≠Rb, 1: Ra≈Rb), adjusted LIMIT, RItype-dependent k, nn-based map, Rb/Ra prediction, `(eMapped+1-riType)>>1` context update
   - Encoder: RUNindex reset per scan line, correct error mapping formula `2*|error|-riType-map`
   - Encoder: near-lossless boundary for row 0 returns `(left, 0, 0, 0)` matching ITU-T.87 §3.2
-- All 12 CharLS reference files now parse successfully
+- All 12 generated JPEG-LS vectors parse successfully
 - Run mode test expectations corrected to match ITU-T.87 Annex J table
-- Known remaining issue: encoder scan data diverges from CharLS at byte 551 for 256×256 12-bit natural test image (regular-mode or context-update logic)
 - Overall project coverage maintained at >95%
 
 #### Phase 8.2: Performance Benchmarking ✅
 - [x] Create comprehensive benchmark suite (18 benchmarks)
-- [x] Benchmark encoding speed vs CharLS (stub infrastructure — deferred, requires CharLS C library integration)
-- [x] Benchmark decoding speed vs CharLS (stub infrastructure — deferred, requires CharLS C library integration)
-- [x] Benchmark memory usage vs CharLS (stub infrastructure — deferred, requires CharLS C library integration)
+- [x] Benchmark internal encoding speed across representative configurations
+- [x] Benchmark internal decoding speed across representative configurations
+- [x] Benchmark memory usage on supported platforms
 - [x] Create performance regression tests (baseline metrics established, automated threshold detection active)
 - [x] Generate benchmark reports for various:
   - [x] Image sizes (256x256, 512x512, 1024x1024, 2048x2048, 4096x4096)
@@ -437,14 +427,6 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 - Near-lossless benchmarks (NEAR=3, NEAR=10)
 - Interleaving mode benchmarks (none, line, sample)
 - Content-type-specific benchmarks (flat, gradient, medical-like)
-
-**CharLS Comparison Benchmarks (deferred):**
-- Created `JPEGLSCharLSComparisonBenchmarks` test suite with 9 disabled tests
-- Encoding speed comparison: greyscale, RGB, near-lossless (NEAR=3)
-- Decoding speed comparison: greyscale, RGB, near-lossless (NEAR=3)
-- Memory usage comparison: encoding and decoding for greyscale and RGB
-- All tests disabled with `.disabled("Deferred — requires CharLS C library integration")`
-- JLSwift measurement helpers ready; CharLS wrappers to be added when C library is integrated
 
 **Performance Regression Tests:**
 - Created `JPEGLSPerformanceRegressionTests` test suite with 11 active tests
@@ -466,7 +448,7 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 - 512x512 16-bit greyscale: ~3.31 Mpixels/s (6.31 MB/s)
 - 512x512 RGB sample-interleaved: ~1.80 Mpixels/s (1.71 MB/s)
 
-**Note**: Head-to-head CharLS comparison deferred to post-release as it requires CharLS C library integration. Performance regression detection is active with generous thresholds suitable for CI environments. Precise regression detection (e.g., 1.2x threshold) requires dedicated benchmark hardware.
+**Note**: Performance regression detection is active with generous thresholds suitable for CI environments. Precise regression detection (for example, a 1.2× threshold) requires dedicated benchmark hardware. Any future external-codec comparison must be added as an optional, separately licensed test tool rather than a package dependency.
 
 #### Phase 8.3: DICOM Integration Testing ✅
 - [x] Test with real-world DICOM files (validated with test data structures)
@@ -518,7 +500,7 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 #### Phase 9.1: API Documentation ✅
 - [x] Complete DocC documentation for all public APIs
 - [x] Create getting started guide
-- [ ] Create migration guide for CharLS users (deferred - requires full decoder integration)
+- [ ] Create migration guide for users of native JPEG-LS codecs (deferred until decoder integration is complete)
 - [x] Create performance tuning guide
 - [x] Create troubleshooting guide
 
@@ -668,7 +650,7 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 - [x] Refactor marker segment parsing and writing for strict standard compliance
 - [x] Refactor LSE preset parameters handling (length field, threshold validation)
 - [x] Refactor restart marker support (RST intervals) — DRI marker parsed; RST decode deferred
-- [x] Refactor byte stuffing logic (standard FF 00 and CharLS extended patterns)
+- [x] Refactor entropy stuffing logic (`FF` followed by a byte with MSB=0)
 - [x] Validate all marker lengths and parameter ranges against the standard
 - [x] Ensure encoder output is valid JPEG-LS that any compliant decoder can process
 - [x] Run the full test suite after each file format change — no regressions permitted
@@ -744,48 +726,46 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 - [x] Add performance regression tests for all Phase 11 Part 2 codepaths: HP1/HP2/HP3 colour-transform encode, decode, and round-trip; mapping-table decode; Part 2 overhead vs. no-transform baseline
 - [x] Run the full test suite — no regressions to Part 1 functionality (824 tests pass)
 
-### Milestone 12: CharLS Bidirectional Interoperability ⏳
-**Target**: Full interoperability with CharLS in both encoding and decoding directions  
+### Milestone 12: Cross-Implementation Interoperability ⏳
+**Target**: Full interoperability with independently produced JPEG-LS streams in both directions
 **Status**: In Progress (prerequisite conformance fixes completed in PRs #74, #75, #76)
 
-#### Phase 12.1: CharLS Decode Interoperability (CharLS-encoded → JLSwift-decoded) ⏳
+#### Phase 12.1: Decoder Regression Matrix ✅
 - [x] Fix decoder pixel drift root causes — gradient quantisation, context update, error correction, LIMIT, default thresholds, run interruption coding (PRs #74, #75)
-- [x] Enable and pass all CharLS bit-exact comparison tests for non-sub-sampled reference files (10 test cases: 8-bit colour modes 0/1/2 lossless+near, 12-bit greyscale lossless+near, non-default params lossless+near)
-- [x] Fix non-default parameter test reference images (t8nde0.jls/t8nde3.jls → test8bs2.pgm, 128×128 greyscale)
-- [x] Test decoding of CharLS-encoded 8-bit and 16-bit greyscale images (bit-exact verified)
-- [x] Test decoding of CharLS-encoded RGB images with all interleaving modes (bit-exact verified for modes 0/1/2)
-- [x] Test decoding of CharLS-encoded near-lossless images (error ≤ NEAR verified)
-- [x] Test decoding of CharLS-encoded images with non-default preset parameters (T1=T2=T3=9, RESET=31)
-- [ ] Resolve remaining decoder divergence for 12-bit natural images (byte 551 drift — encoder issue, decoder is correct; decoder bit-exact comparison tests t16e0/t16e3 pass)
-- [x] Test decoding of CharLS-encoded images with colour transformations (HP1, HP2, HP3 — 9 lossless + 5 near-lossless tests on 256×256 reference image)
-- [x] Test decoding of CharLS-encoded sub-sampled images (t8sse0.jls, t8sse3.jls — sub-sampling decoder support implemented)
+- [x] Pass 10 generated non-sub-sampled pixel-regression cases: 8-bit RGB modes 0/1/2 lossless+near, 12-bit greyscale lossless+near, and non-default presets lossless+near
+- [x] Test generated 8-bit and 12-bit greyscale streams
+- [x] Test generated RGB streams with all interleaving modes
+- [x] Verify near-lossless error is at most NEAR
+- [x] Test non-default preset parameters (T1=T2=T3=9, RESET=31)
+- [x] Test colour transformations (HP1, HP2, HP3 — 9 lossless + 5 near-lossless cases on a 16×16 deterministic noise image)
+- [x] Test line-interleaved sub-sampled decoding with two standards-derived zero-run streams
+- [ ] Add independently produced vectors after provenance and licensing review
 
 **Implementation Details (Phase 12.1 — sub-sampling decoder support):**
 - **`decodeLineInterleaved` sub-sampling support** (`JPEGLSDecoder`): Updated the line-interleaved decoder to compute per-component pixel dimensions from the frame header's sampling factors (Hi, Vi). For each component i: `width_i = ⌈frameWidth × H_i / Hmax⌉`, `height_i = ⌈frameHeight × V_i / Vmax⌉`. The scan data is decoded in stripes; each stripe covers Vmax rows of the reference grid and contains Vi lines for component i.
 - **`MultiComponentImageData.init` sub-sampling support** (`JPEGLSPixelBuffer`): Updated the initialiser to validate each component against its per-component expected dimensions (derived from sampling factors) rather than the uniform frame dimensions. For uniform images (all H=V=1) the behaviour is unchanged.
-- **`CharLSSubSampledComparisonTests`** (`CharLSConformanceTests.swift`): 2 new parameterised test cases (t8sse0.jls lossless + t8sse3.jls near=3) compare each decoded component against its reference PGM — R vs test8r.pgm (256×256), G vs test8gr4.pgm (256×64), B vs test8bs2.pgm (128×128). Both pass.
+- **`JPEGLSSubsampledZeroRunLayoutTests`** (`JPEGLSConformanceTests.swift`): 2 parameterised smoke tests verify generated line-interleaved zero-run streams, SOS NEAR values, and decoded component dimensions of 256×256, 256×64, and 128×128. They do not claim non-zero or independent near-lossless sub-sampled conformance.
 
-#### Phase 12.2: CharLS Encode Interoperability (JLSwift-encoded → CharLS-decoded) ✅
+#### Phase 12.2: Encoder Round-Trip Matrix ✅
 - [x] Fix encoder conformance — RUNindex reset, run interruption error mapping, near-lossless boundary (PR #76)
-- [x] Fix run-interruption adjustedLimit encoder/decoder mismatch: encoder now uses J[finalRunIndex] (post-continuation) for the Golomb limit, matching the decoder and CharLS
+- [x] Fix run-interruption adjustedLimit encoder/decoder mismatch: encoder now uses J[finalRunIndex] (post-continuation) for the Golomb limit defined by ITU-T.87
 - [x] Fix near-lossless encoder for line-interleaved and sample-interleaved modes: track reconstructed values and use them for gradient computation, run detection, and Rb in interruption pixels
-- [x] Create test infrastructure to invoke CharLS decoder on JLSwift-encoded output
-- [x] Validate that CharLS can decode all JLSwift-encoded lossless output (bit-exact) — 8-bit RGB (all 3 interleave modes), 12-bit greyscale, 16-bit greyscale
-- [x] Validate that CharLS can decode JLSwift-encoded near-lossless output (error ≤ NEAR) — 8-bit RGB near=3 (all 3 interleave modes), 12-bit greyscale near=3
+- [x] Validate JLSwift-encoded lossless output by decode round trip — 8-bit RGB (all 3 interleave modes), 12-bit greyscale, and 16-bit greyscale
+- [x] Validate JLSwift-encoded near-lossless output by decode round trip — 8-bit RGB near=3 (all 3 interleave modes) and 12-bit greyscale near=3
 - [x] Test all interleaving modes (none, line, sample) for both lossless and near-lossless
 - [x] Test 8-bit, 12-bit, and 16-bit depths
 - [x] Test greyscale and RGB component configurations
 
-#### Phase 12.3: Round-Trip Interoperability Validation ⏳
-- [ ] Implement automated round-trip tests: JLSwift encode → CharLS decode → compare
-- [ ] Implement automated round-trip tests: CharLS encode → JLSwift decode → compare
+#### Phase 12.3: Cross-Implementation Validation ⏳
+- [ ] Implement optional tests: JLSwift encode → independent decoder → compare
+- [ ] Implement optional tests: independent encoder → JLSwift decode → compare
 - [x] Implement automated round-trip tests: JLSwift encode → JLSwift decode → compare (regression)
 - [x] Test round-trip with medical imaging test patterns (CT, MR, CR/DX, US, NM simulations)
 - [x] Test round-trip with edge-case images (1×1, single-row, single-column, narrow-tall, wide-short, checkerboard, boundary values, mixed flat/gradient)
-- [x] Achieve 100% pass rate on all interoperability test cases that do not require a CharLS binary (12/12 non-sub-sampled + 2/2 sub-sampled CharLS reference files pass)
+- [x] Achieve 100% pass rate on 10 non-sub-sampled pixel regressions and 2 sub-sampled zero-run layout smoke tests
 
-**Implementation Details (Phase 12.3 — JLSwift internal round-trip):**
-- Created `JPEGLSRoundTripInteroperabilityTests.swift` with **33 test cases** across 4 test suites — all passing
+**Implementation Details (Phase 12.3 — JLSwift internal round-trip regression):**
+- Created `JPEGLSInternalRoundTripTests.swift` with **33 test cases** across 4 test suites — all passing
 - **Greyscale Lossless** (10 cases): gradient and noise patterns at 8/12/16-bit, 32×32 and 64×64
 - **RGB Lossless** (9 cases): all interleave modes (none, line, sample), colour transforms (HP1, HP2, HP3), 8-bit and 12-bit
 - **Medical Imaging Patterns** (5 tests): CT 12-bit with organ boundaries, MR 12-bit soft-tissue, CR/DX 16-bit radiograph, US 8-bit speckle, NM 8-bit hot spots
@@ -942,7 +922,7 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 - Added `computeEncodingPipelineBatch` and `computeDecodingPipelineBatch` to `VulkanAccelerator` (Phase 15.2): CPU-fallback combined pipeline mirroring `MetalAccelerator`. Added `inputLengthMismatch` error case and `Equatable` conformance to `VulkanAcceleratorError`. Added 11 new Vulkan pipeline correctness tests plus 3 pipeline throughput benchmarks at 512×512 and 2048×2048.
 
 ### Milestone 16: Performance Optimisation & Benchmarking 🔄
-**Target**: Achieve better-than-CharLS performance across all key metrics  
+**Target**: Reach competitive native JPEG-LS performance across all key metrics
 **Status**: In Progress
 
 #### Phase 16.1: Performance Profiling & Hotspot Analysis ✅
@@ -1011,16 +991,16 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
   heap allocation is reused and zero-filled in place (loop write) rather than discarding it and allocating a new
   array. The selection strategy now picks the smallest eligible pooled buffer to minimise wasted capacity.
 
-#### Phase 16.4: CharLS Head-to-Head Benchmarking
-- [ ] Integrate CharLS C library as a Swift Package Manager test dependency
-- [ ] Enable and complete all CharLS comparison benchmark tests
-- [ ] Benchmark encoding speed: JLSwift vs CharLS (greyscale, RGB, near-lossless, all bit depths)
-- [ ] Benchmark decoding speed: JLSwift vs CharLS (greyscale, RGB, near-lossless, all bit depths)
-- [ ] Benchmark memory usage: JLSwift vs CharLS (encoding and decoding)
-- [ ] Benchmark compression ratio: JLSwift vs CharLS (should be identical for lossless)
-- [ ] Establish performance targets: match or exceed CharLS in all categories
+#### Phase 16.4: Independent Native-Codec Benchmarking
+- [ ] Define an optional, separately installed native-codec benchmark harness
+- [ ] Enable encoding and decoding comparisons without adding a package dependency
+- [ ] Benchmark encoding speed (greyscale, RGB, near-lossless, all bit depths)
+- [ ] Benchmark decoding speed (greyscale, RGB, near-lossless, all bit depths)
+- [ ] Benchmark memory usage for encoding and decoding
+- [ ] Benchmark compression ratio for identical lossless inputs
+- [ ] Establish competitive performance targets across all categories
 - [ ] Document performance comparison results with methodology
-- [ ] Create automated regression tests to maintain performance parity with CharLS
+- [ ] Create automated internal regression tests to maintain the agreed targets
 
 ### Milestone 17: Command Line Tools Enhancement ⏳
 **Target**: Complete, well-documented CLI with full functionality and dual-spelling support  
@@ -1159,7 +1139,7 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
   - PGM/PPM header parsing tests (8-bit, 16-bit, colour)
   - PGM write tests (header format, 16-bit big-endian pixels)
   - Library round-trip tests via JPEGLS encoder/decoder (PGM 8-bit, PGM 12-bit, PPM 8-bit)
-  - Decode → PGM/PPM output tests verified against CharLS reference fixtures (pixel-exact)
+  - Decode → PGM/PPM output tests verified against generated source pixels
   - `bitsNeeded` and `isPNMFile` logic tests
 
 **Implementation Details (--preset / T1/T2/T3/RESET integration):**
@@ -1307,7 +1287,7 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
   - `initialize` → `initialise` (inline test comments)
 - Updated all `@Test` name strings in `Tests/JPEGLSTests/JPEGLSMultiComponentDecoderTests.swift` to British English
 - Updated `CLIArgumentParsingTests.swift` file-level doc comment
-- Updated `CharLSConformanceTests.swift` test case descriptions and inline comments
+- Updated `JPEGLSConformanceTests.swift` test case descriptions and inline comments
 - Updated `DICOMIntegrationTests.swift` inline comments
 - Public API identifiers (type names, method names, property names) are intentionally unchanged
 
@@ -1380,7 +1360,7 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 - [ ] Create example: batch processing with progress reporting (deferred — requires progress bar infrastructure)
 - [x] Create example: GPU-accelerated processing on Apple Silicon
 - [x] Create example: Part 2 extensions usage (colour transforms and mapping tables)
-- [ ] Create example: CharLS interoperability (deferred — requires CharLS C library integration)
+- [ ] Create example: optional independent-codec interoperability validation
 - [x] Verify all code examples compile and produce correct output
 - [x] Add inline documentation examples using `/// ```swift` blocks
 
@@ -1440,7 +1420,7 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 - [x] Fix encoder crash for images wider than 65 535 pixels (`detectRunLength` false-run-interruption bug)
 - [x] Ensure all unit tests pass across all milestones (10–20)
 - [ ] Achieve >95% test coverage across all modules including new Part 2 code
-- [ ] Verify all CharLS interoperability tests pass in both directions
+- [ ] Verify optional independent-codec interoperability tests pass in both directions
 - [ ] Verify all conformance tests pass (core coding system and file formats)
 - [ ] Verify all performance regression tests pass with no regressions
 - [ ] Run fuzz testing on the decoder for robustness (if infrastructure is available)
@@ -1459,10 +1439,10 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
   behaviour (full-line scan regardless of `maxRunLength`).
 
 #### Phase 20.3: Final Performance Validation
-- [ ] Confirm JLSwift meets or exceeds CharLS performance in encoding speed
-- [ ] Confirm JLSwift meets or exceeds CharLS performance in decoding speed
-- [ ] Confirm JLSwift meets or exceeds CharLS performance in memory efficiency
-- [ ] Confirm compression ratios match CharLS for identical lossless inputs
+- [ ] Confirm JLSwift meets the agreed native-codec target for encoding speed
+- [ ] Confirm JLSwift meets the agreed native-codec target for decoding speed
+- [ ] Confirm JLSwift meets the agreed native-codec target for memory efficiency
+- [ ] Confirm compression ratios match the independent baseline for identical lossless inputs
 - [ ] Document final performance comparison with methodology and hardware details
 - [ ] Publish benchmark results in the repository documentation
 
@@ -1488,15 +1468,15 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 | **5** | Apple Silicon | NEON/SIMD ✅, Accelerate ✅, Metal ✅, memory optimisation ✅ |
 | **6** | x86-64 | Removable x86-64 support with clear boundaries ✅ |
 | **7** | CLI | Core commands (info ✅, verify ✅, encode ✅, decode ✅), utilities ✅, help & docs ✅ |
-| **8** | Validation | CharLS conformance ✅, benchmarks ✅, DICOM testing ✅, edge cases ✅ |
+| **8** | Validation | Generated regression vectors ✅, benchmarks ✅, DICOM testing ✅, edge cases ✅ |
 | **9** | Release | API docs ✅, integration guides ✅, versioning ✅, changelog ✅, release template ✅ |
 | **10** | Standards Conformance & Refactoring | Conformance audit ✅, core refactoring ✅, file format refactoring ✅, Swift 6.2 concurrency ✅ |
 | **11** | Part 2 Extensions | Mapping tables ✅, extended dimensions ✅, colour transforms ✅, Part 2 optimisation ✅ |
-| **12** | CharLS Interoperability | Conformance fixes ✅, bidirectional interoperability, bit-exact validation, round-trip testing ⏳ |
+| **12** | Cross-Implementation Interoperability | Conformance fixes ✅, independent validation 📋, round-trip testing ✅ |
 | **13** | Apple Silicon Optimisation | ARM Neon enhancement, Accelerate deep integration, memory architecture tuning 📋 |
 | **14** | Intel x86-64 Optimisation | SSE/AVX enhancement, memory/cache tuning, separation verification ✅ |
 | **15** | GPU Compute | Metal colour transforms ✅, gradient quantisation ✅, Vulkan CPU architecture ✅, GPU testing ⏳ |
-| **16** | Performance Optimisation | Hotspot analysis, algorithmic optimisation, CharLS head-to-head benchmarking 📋 |
+| **16** | Performance Optimisation | Hotspot analysis, algorithmic optimisation, optional native-codec benchmarking 📋 |
 | **17** | CLI Enhancement | PNG/TIFF input for encode ✅, convert command ✅, progress bars ✅, British & American spelling support ✅, help & usage docs ✅ |
 | **18** | Localisation | British English in comments ✅, help text ✅, error messages ✅, documentation ✅ |
 | **19** | Documentation & J2KSwift | Documentation revision ✅, sample code ✅, J2KSwift consistency alignment 📋 |
@@ -1521,7 +1501,7 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 - **Apple Accelerate**: vDSP-based batch operations and statistical analysis (macOS, iOS, tvOS, watchOS)
 - **Metal**: GPU acceleration for Apple platforms (macOS 10.13+, iOS 11+)
 - **Vulkan**: GPU compute for Linux/Windows (planned)
-- **CharLS**: Test reference only (not a runtime dependency)
+- **Independent native codec**: Optional validation and benchmark tool only; not a runtime or package dependency
 
 ### Hardware Targets
 
@@ -1534,7 +1514,7 @@ Native Swift implementation of JPEG-LS (ISO/IEC 14495-1:1999 / ITU-T.87) compres
 
 ### Performance Targets
 
-- **Goal**: Match or exceed CharLS performance in encoding speed, decoding speed, and memory efficiency
+- **Goal**: Meet competitive native-codec targets for encoding speed, decoding speed, and memory efficiency
 - **Approach**: Hardware acceleration via ARM Neon, Accelerate, Metal, SSE/AVX, and Vulkan
 - **End Goal**: A hardware-accelerated, 100% Swift native reference implementation
 

@@ -22,14 +22,9 @@ struct JPEGLSPNMRoundTripTests {
 
     // MARK: - Helpers
 
-    /// Load a PGM or PPM fixture file from the TestFixtures directory.
+    /// Load deterministic, Raster-authored PGM, PPM, or JPEG-LS data.
     private func fixtureData(named name: String) throws -> Data {
-        let path = TestFixtureLoader.fixturesPath + "/" + name
-        guard FileManager.default.fileExists(atPath: path) else {
-            struct MissingFixture: Error { let path: String }
-            throw MissingFixture(path: path)
-        }
-        return try Data(contentsOf: URL(fileURLWithPath: path))
+        try SyntheticFixtureLoader.loadFixture(named: name)
     }
 
     /// Write `data` to a temporary file and return its URL.
@@ -77,7 +72,7 @@ struct JPEGLSPNMRoundTripTests {
 
     @Test("Parse 8-bit PGM header and pixel data")
     func testParsePGMHeader8bit() throws {
-        let data = try fixtureData(named: "test8bs2.pgm")
+        let data = try fixtureData(named: SyntheticFixtureName.blue8HalfResolution)
         let (width, height, maxVal, components, _) = try parsePNMHeader(data)
         #expect(width == 128)
         #expect(height == 128)
@@ -87,7 +82,7 @@ struct JPEGLSPNMRoundTripTests {
 
     @Test("Parse 16-bit PGM header and pixel data")
     func testParsePGMHeader16bit() throws {
-        let data = try fixtureData(named: "test16.pgm")
+        let data = try fixtureData(named: SyntheticFixtureName.gray12)
         let (width, height, maxVal, components, _) = try parsePNMHeader(data)
         #expect(width == 256)
         #expect(height == 256)
@@ -97,7 +92,7 @@ struct JPEGLSPNMRoundTripTests {
 
     @Test("Parse PPM header and pixel data")
     func testParsePPMHeader() throws {
-        let data = try fixtureData(named: "test8.ppm")
+        let data = try fixtureData(named: SyntheticFixtureName.rgb8)
         let (width, height, maxVal, components, _) = try parsePNMHeader(data)
         #expect(width == 256)
         #expect(height == 256)
@@ -162,7 +157,7 @@ struct JPEGLSPNMRoundTripTests {
 
     @Test("Round-trip PGM 8-bit grayscale via JPEGLS library")
     func testRoundTripPGM8bit() throws {
-        let inputData = try fixtureData(named: "test8bs2.pgm")
+        let inputData = try fixtureData(named: SyntheticFixtureName.blue8HalfResolution)
         let (width, height, maxVal, components, headerLen) = try parsePNMHeader(inputData)
         #expect(components == 1)
 
@@ -200,7 +195,7 @@ struct JPEGLSPNMRoundTripTests {
 
     @Test("Round-trip PPM 8-bit colour via JPEGLS library")
     func testRoundTripPPM8bit() throws {
-        let inputData = try fixtureData(named: "test8.ppm")
+        let inputData = try fixtureData(named: SyntheticFixtureName.rgb8)
         let (width, height, maxVal, components, headerLen) = try parsePNMHeader(inputData)
         #expect(components == 3)
         #expect(maxVal == 255)
@@ -238,7 +233,7 @@ struct JPEGLSPNMRoundTripTests {
 
     @Test("Round-trip PGM 12-bit grayscale via JPEGLS library")
     func testRoundTripPGM12bit() throws {
-        let inputData = try fixtureData(named: "test16.pgm")
+        let inputData = try fixtureData(named: SyntheticFixtureName.gray12)
         let (width, height, maxVal, components, headerLen) = try parsePNMHeader(inputData)
         #expect(components == 1)
         #expect(maxVal == 4095)
@@ -275,8 +270,8 @@ struct JPEGLSPNMRoundTripTests {
 
     @Test("Decode JPEG-LS 8-bit grayscale to PGM format matches reference")
     func testDecodeToPGMMatchesReference() throws {
-        // Load the CharLS grayscale reference file and decode it.
-        let jlsData = try fixtureData(named: "t8nde0.jls")
+        // Load the generated grayscale regression stream and decode it.
+        let jlsData = try fixtureData(named: SyntheticFixtureName.gray8CustomLossless)
         let decoded = try JPEGLSDecoder().decode(jlsData)
         #expect(decoded.components.count == 1)
 
@@ -292,7 +287,7 @@ struct JPEGLSPNMRoundTripTests {
         }
 
         // Parse the reference PGM and compare.
-        let refData = try fixtureData(named: "test8bs2.pgm")
+        let refData = try fixtureData(named: SyntheticFixtureName.blue8HalfResolution)
         let (rW, rH, _, _, rHL) = try parsePNMHeader(refData)
         let (_, _, _, _, oHL) = try parsePNMHeader(pgmData)
 
@@ -306,7 +301,7 @@ struct JPEGLSPNMRoundTripTests {
 
     @Test("Decode JPEG-LS 8-bit colour to PPM format matches reference")
     func testDecodeToPPMMatchesReference() throws {
-        let jlsData = try fixtureData(named: "t8c0e0.jls")
+        let jlsData = try fixtureData(named: SyntheticFixtureName.rgb8PlanarLossless)
         let decoded = try JPEGLSDecoder().decode(jlsData)
         #expect(decoded.components.count == 3)
 
@@ -326,7 +321,7 @@ struct JPEGLSPNMRoundTripTests {
         }
 
         // Parse the reference PPM and compare pixel data.
-        let refData  = try fixtureData(named: "test8.ppm")
+        let refData  = try fixtureData(named: SyntheticFixtureName.rgb8)
         let (rW, rH, _, _, rHL) = try parsePNMHeader(refData)
         let (_, _, _, _, oHL)   = try parsePNMHeader(ppmData)
         #expect(width == rW)
@@ -341,7 +336,7 @@ struct JPEGLSPNMRoundTripTests {
 
     @Test("Encode from 8-bit PGM produces 8-bit JPEG-LS")
     func testPGM8bitProduces8BitEncoding() throws {
-        let inputData = try fixtureData(named: "test8bs2.pgm")
+        let inputData = try fixtureData(named: SyntheticFixtureName.blue8HalfResolution)
         let (_, _, _, _, headerLen) = try parsePNMHeader(inputData)
         let pixelBytes = inputData.subdata(in: headerLen..<inputData.count)
 
@@ -363,7 +358,7 @@ struct JPEGLSPNMRoundTripTests {
 
     @Test("Encode from 12-bit PGM (MAXVAL=4095) produces 12-bit JPEG-LS")
     func testPGM12bitProduces12BitEncoding() throws {
-        let inputData = try fixtureData(named: "test16.pgm")
+        let inputData = try fixtureData(named: SyntheticFixtureName.gray12)
         let (width, height, maxVal, _, headerLen) = try parsePNMHeader(inputData)
         #expect(maxVal == 4095)
 
@@ -390,7 +385,7 @@ struct JPEGLSPNMRoundTripTests {
     @Test("PGM file detected by .pgm extension and P5 magic bytes")
     func testPGMDetectionByExtensionAndMagic() throws {
         // Verify that a real PGM fixture has P5 magic bytes.
-        let data = try fixtureData(named: "test8bs2.pgm")
+        let data = try fixtureData(named: SyntheticFixtureName.blue8HalfResolution)
         #expect(data.count >= 2)
         #expect(data[0] == UInt8(ascii: "P"))
         #expect(data[1] == UInt8(ascii: "5"))
@@ -399,7 +394,7 @@ struct JPEGLSPNMRoundTripTests {
     @Test("PPM file detected by .ppm extension and P6 magic bytes")
     func testPPMDetectionByExtensionAndMagic() throws {
         // Verify that a real PPM fixture has P6 magic bytes.
-        let data = try fixtureData(named: "test8.ppm")
+        let data = try fixtureData(named: SyntheticFixtureName.rgb8)
         #expect(data.count >= 2)
         #expect(data[0] == UInt8(ascii: "P"))
         #expect(data[1] == UInt8(ascii: "6"))
@@ -408,7 +403,7 @@ struct JPEGLSPNMRoundTripTests {
     @Test("Non-PNM files have neither P5 nor P6 magic bytes")
     func testNonPNMFiles() throws {
         // JPEG-LS files start with the SOI marker (0xFF 0xD8), not P5/P6.
-        let jlsData = try fixtureData(named: "t8nde0.jls")
+        let jlsData = try fixtureData(named: SyntheticFixtureName.gray8CustomLossless)
         let isP5 = jlsData.count >= 2 && jlsData[0] == UInt8(ascii: "P") && jlsData[1] == UInt8(ascii: "5")
         let isP6 = jlsData.count >= 2 && jlsData[0] == UInt8(ascii: "P") && jlsData[1] == UInt8(ascii: "6")
         #expect(!isP5)
@@ -434,8 +429,8 @@ struct JPEGLSPNMRoundTripTests {
     @Test("Decode PGM format: single-component images write PGM, three-component images write PPM")
     func testDecodeFormatAutoselection() throws {
         // Verify that a grayscale decoded image has 1 component (→ PGM) and an RGB image has 3 (→ PPM).
-        let grayscaleJLS = try fixtureData(named: "t8nde0.jls")
-        let colorJLS     = try fixtureData(named: "t8c0e0.jls")
+        let grayscaleJLS = try fixtureData(named: SyntheticFixtureName.gray8CustomLossless)
+        let colorJLS     = try fixtureData(named: SyntheticFixtureName.rgb8PlanarLossless)
 
         let grayscaleDecoded = try JPEGLSDecoder().decode(grayscaleJLS)
         let colorDecoded     = try JPEGLSDecoder().decode(colorJLS)

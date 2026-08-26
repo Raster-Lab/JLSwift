@@ -174,7 +174,7 @@ struct JPEGLSPixelBufferTests {
         #expect(neighbors?.actual == 40)
         #expect(neighbors?.left == 10)  // Uses top pixel (Ra=Rb at col=0)
         #expect(neighbors?.top == 10)
-        #expect(neighbors?.topLeft == 0)   // prevRowEdge=0 for row=1 per CharLS edge-pixel buffering
+        #expect(neighbors?.topLeft == 0)   // prevRowEdge=0 for row=1 per ITU-T.87 edge-pixel buffering
         #expect(neighbors?.topRight == 20)
     }
     

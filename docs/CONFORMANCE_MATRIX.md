@@ -56,7 +56,7 @@ to its implementation in JLSwift and records the conformance status of each item
 | 4.2.1 | qbpp = (NEAR == 0) ? 0 : (2×NEAR + 1) | `JPEGLSRegularMode.qbpp` | ✅ |
 | 4.2.2 | Prediction error: Errval = x − Px' | `JPEGLSRegularMode.computePredictionError` | ✅ |
 | 4.2.2 | Modular reduction for near-lossless | `JPEGLSRegularMode.computePredictionError` | ✅ |
-| 4.2.2 | Error quantisation and reconstruction for near-lossless | Not yet implemented for encoder | ⚠️ |
+| 4.2.2 | Error quantisation and reconstruction for near-lossless | `JPEGLSRegularMode.computePredictionError` / `computeReconstructedValue` | ✅ |
 
 ### 4.3 Context Modelling
 
@@ -123,7 +123,7 @@ to its implementation in JLSwift and records the conformance status of each item
 | LSE (0xFF 0xF8) | `JPEGLSMarker.jpegLSExtension` | ✅ |
 | DNL (0xFF 0xDC) | `JPEGLSMarker.defineNumberOfLines` — parsed, content discarded | 🔧 **Fixed** |
 | DRI (0xFF 0xDD) | `JPEGLSMarker.defineRestartInterval` — restart interval stored in `JPEGLSParseResult.restartInterval` | 🔧 **Fixed** |
-| RST (0xFF 0xD0–0xD7) | Parsed and skipped in scan data (full restart decoding deferred) | 📋 |
+| RST (0xFF 0xD0–0xD7) | Encoded and decoded for lossless non-interleaved scans; other modes rejected | ⚠️ Partial |
 | APP (0xFF 0xE0–0xEF) | Parsed/skipped | ✅ |
 | COM (0xFF 0xFE) | Parsed/skipped | ✅ |
 
@@ -169,8 +169,8 @@ to its implementation in JLSwift and records the conformance status of each item
 |------|----------------|--------|
 | Standard FF 00 stuffing (encoder) | `JPEGLSBitstreamWriter` | ✅ |
 | Standard FF 00 destuffing (decoder) | `JPEGLSBitstreamReader` | ✅ |
-| CharLS extended stuffing (FF 60–7F) | `JPEGLSBitstreamReader` (CharLS compatibility) | ✅ |
-| CharLS non-marker FF XX destuffing | `JPEGLSParser` (CharLS compatibility) | ✅ |
+| Stuffed entropy continuation (FF 00–7F) | `JPEGLSBitstreamReader` | ✅ |
+| Scan-boundary distinction by following-byte MSB | `JPEGLSParser` | ✅ |
 
 ---
 
@@ -222,7 +222,7 @@ gradient before computing the index (`81*(Q1+4) + 9*(Q2+4) + (Q3+4)`), causing a
 contexts to map to a single value (364) after clamping.  
 **Fix:** Removed the offset; the formula now correctly produces indices in [0, 364].  
 **Impact:** All 365 distinct contexts are now used, dramatically improving compression
-efficiency and enabling CharLS interoperability.
+efficiency and enabling standards-compliant interoperability.
 
 ### 2. Context A Initialisation (Significant)
 
@@ -240,7 +240,7 @@ sign-adjusted: if the context sign is −1, Errval = −Errval. This normalised 
 gets encoded as MErrval.  
 **Previous implementation:** The raw (non-sign-adjusted) error was encoded directly.  
 **Fix:** The encoder now computes `signAdjustedError = sign × rawError` and encodes that.  
-**Impact:** Required for correct CharLS interoperability.
+**Impact:** Required for correct standards-compliant interoperability.
 
 ### 4. Sign-Adjusted Error in Decoder Reconstruction (Critical)
 
@@ -250,7 +250,7 @@ x = Px' + sign × Errval (undoing the sign normalisation).
 **Fix:** The decoder now computes rawError = sign × signAdjustedError and reconstructs
 x = Px' + rawError.  
 **Impact:** Decoder now correctly reconstructs pixels from externally-generated JPEG-LS
-streams (e.g. CharLS).
+streams produced by independent JPEG-LS implementations.
 
 ### 5. Bias B Update Uses Sign-Adjusted Error (Significant)
 
@@ -327,7 +327,7 @@ neighbour lookups in near-lossless mode. `JPEGLSRunMode.detectRunLength` uses
 
 | Deviation | Standard Section | Planned Fix |
 |-----------|-----------------|-------------|
-| Restart markers (RST0–RST7) full decode support | §5.1 | Future milestone |
+| Restart markers for near-lossless or interleaved scans | §5.1 | Extend current lossless non-interleaved support |
 
 ---
 
@@ -347,7 +347,7 @@ derives k from these. `updateRunInterruptionContext(absError:)` updates and rese
 The encoder's `writeRunInterruptionBits` and the decoder's `decodeRun` both use
 and update this adaptive k.  
 **Impact:** Run interruption samples are now coded with the correct adaptive Golomb
-parameter, improving compression efficiency and enabling CharLS interoperability for
+parameter, improving compression efficiency and enabling cross-implementation interoperability for
 images with run interruptions.
 
 ### 12. DRI Marker Parsing (File Format Compliance)
@@ -384,6 +384,6 @@ upon since the frame header has already been parsed).
 | `JPEGLSRegularModeTests.swift` | Encoder pipeline including sign-adjusted error | ✅ Passing |
 | `JPEGLSRegularModeDecoderTests.swift` | Decoder pipeline including sign-adjusted reconstruction | ✅ Passing |
 | `JPEGLSDecoderTests.swift` | Round-trip encoding and decoding, including flat-region and near-lossless | ✅ Passing |
-| `CharLSConformanceTests.swift` | Bit-exact comparison with CharLS reference files | 📋 Disabled (other decoder drift issues remain) |
+| `JPEGLSConformanceTests.swift` | Generated structural and pixel regression vectors | ✅ Passing |
 
 **Overall test coverage:** 96.05% (above the 95% requirement)

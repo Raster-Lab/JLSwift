@@ -45,9 +45,6 @@ let package = Package(
                 "JPEGLS",
                 .product(name: "ArgumentParser", package: "swift-argument-parser"),
             ],
-            resources: [
-                .copy("TestFixtures")
-            ],
             swiftSettings: [
                 .swiftLanguageMode(.v6)
             ]

@@ -386,7 +386,7 @@ open Tests/JPEGLSTests/JPEGLSMultiComponentEncoderTests.swift
 open Tests/JPEGLSTests/JPEGLSMultiComponentDecoderTests.swift
 
 # View parser examples
-open Tests/JPEGLSTests/CharLSConformanceTests.swift
+open Tests/JPEGLSTests/JPEGLSConformanceTests.swift
 ```
 
 ### Performance Benchmarking

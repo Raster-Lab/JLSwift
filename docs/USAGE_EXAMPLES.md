@@ -1304,7 +1304,7 @@ ls Tests/JPEGLSTests/
 
 # Run specific test suites
 swift test --filter JPEGLSMultiComponentEncoderTests
-swift test --filter CharLSConformanceTests
+swift test --filter JPEGLSGeneratedVectorTests
 swift test --filter JPEGLSPerformanceBenchmarks
 ```
 

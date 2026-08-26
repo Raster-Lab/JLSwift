@@ -6,7 +6,7 @@ Synthesis of six verified analysis lenses + measured baseline. Scope: pure-Swift
 
 ## 1. The performance story
 
-**Where time goes today.** Baseline (release, Apple Silicon): real DICOM encode **26.4 MB/s**, decode **40.1 MB/s** aggregate (CT 21.8/30.8, MG 33.1/53.1); synthetic 16-bit 2048² encode 37.3 MB/s, decode 58.0 MB/s. CharLS-class C++ does 200–400+ MB/s single-threaded — a 5–10x gap.
+**Where time goes today.** Baseline (release, Apple Silicon): real DICOM encode **26.4 MB/s**, decode **40.1 MB/s** aggregate (CT 21.8/30.8, MG 33.1/53.1); synthetic 16-bit 2048² encode 37.3 MB/s, decode 58.0 MB/s. Optimised native C++ JPEG-LS codecs commonly reach 200–400+ MB/s single-threaded — a 5–10x gap.
 
 The profile (8,482 samples, 150-iteration 16-bit roundtrip; full report was at `/tmp/jlswift-sample.txt`) shows the gap is **Swift mechanics, not JPEG-LS math**:
 
@@ -22,7 +22,7 @@ The profile (8,482 samples, 150-iteration 16-bit roundtrip; full report was at `
 
 Corroboration: a measured `-Ounchecked` A/B gave **+65–85% encode, +35–48% decode** — i.e., checks alone are a third to half the runtime. A writer microbench measured `Data.append(UInt8)` at **38.9 ns/byte vs 0.53 ns** for `[UInt8]` (~70x), against a total per-pixel budget of ~20–120 ns.
 
-**Realistic end state.** Phase 1 (days): ~1.5–2x → real-DICOM encode ~40–55 MB/s. Phase 2 (structural, 1–2 weeks): cumulative 3–6x → **100–200+ MB/s single-threaded**, i.e., low end of CharLS-class. Phase 3 adds multicore wall-clock wins (restart-interval stripes, batch parallelism), not single-thread MB/s. The core scanline loop is inherently sequential (causal prediction + adaptive Golomb + run mode); nothing below violates that.
+**Realistic end state.** Phase 1 (days): ~1.5–2x → real-DICOM encode ~40–55 MB/s. Phase 2 (structural, 1–2 weeks): cumulative 3–6x → **100–200+ MB/s single-threaded**, i.e. the low end of optimised native implementations. Phase 3 adds multicore wall-clock wins (restart-interval stripes, batch parallelism), not single-thread MB/s. The core scanline loop is inherently sequential (causal prediction + adaptive Golomb + run mode); nothing below violates that.
 
 **Invariant for all phases:** every change in Phases 1–2 is representational — it must produce **byte-identical encoded streams and pixel-identical decodes**. Gate every merge on the golden-hash check + bench-dicom lossless round-trip (§6).
 
@@ -55,7 +55,7 @@ Corroboration: a measured `-Ounchecked` A/B gave **+65–85% encode, +35–48% d
 - **Change:** Port the encoder's init-time `gradientTable` (`Encoder/JPEGLSRegularMode.swift:94-114, 157-163`) into `Decoder/JPEGLSRegularModeDecoder.swift:103-115`, matching the strict-vs-inclusive Table A.7 boundary semantics (verified line-by-line bit-identical by the verifier). Pass q1/q2/q3 (or contextIndex+sign) from the scan-loop run-test (`JPEGLSDecoder.swift:611-614`) into `decodeSinglePixel` (:783-792) and a slimmed `decodePixel` (`JPEGLSRegularModeDecoder.swift:304-313`).
 - **Safety:** pure functions of the same (a,b,c,d) and immutable thresholds; LUT semantics verified bit-identical.
 - **Impact:** the profile shows `quantizeGradient` as an outlined call at ~6.5% of total; disassembly shows the compiler already CSEs the source-level 9x down to 3 calls — so expect ~5–10% decode, not more.
-- **Verify:** golden decoded-pixel hashes against existing `.jls` fixtures; bench-dicom.
+- **Verify:** golden decoded-pixel hashes against deterministic generated vectors; bench-dicom.
 
 ### W1.5 Run-length scan: per-line hoist + word-compare for near==0
 - **Change:** `Encoder/JPEGLSRunMode.swift:91-113` scans `[Int]` element-wise with `abs()`. For near==0 scan via `withUnsafeBufferPointer` with plain `!=` / 64-bit word compares against the run value; keep `abs()` only for near>0. Hoist the row slice once per line instead of per run entry (`JPEGLSEncoder.swift:730-738`, 928-936, ~1150-1165).
@@ -82,7 +82,7 @@ Corroboration: a measured `-Ounchecked` A/B gave **+65–85% encode, +35–48% d
 - **Change:** Rewrite `Core/JPEGLSBitstreamReader.swift:147-195` around a `UInt64` bit window over `[UInt8]` (one-time copy of the scan range from W1.6.3, or scoped `withUnsafeBytes`): refill 4–6 bytes at a time applying the 0xFF/stuff-bit rule per refilled byte (current logic at :164-177 contributes 8+7 bits per FF+stuffed pair — replicate exactly); add nonthrowing `peekBits`/`consume`; decode the unary prefix with one `leadingZeroBitCount` on the peeked word. Replace the per-bit `readBits(1)` loops in `readGolombCode` (`JPEGLSDecoder.swift:969-984`) and `readRunLength` (:1012-1038) with peek+clz+consume.
 - **Safety:** consumes the identical bit sequence; preserve (a) the limited-code threshold at :978 (cap the clz path), (b) `readRunLength`'s early exit at `runLength >= remainingInLine` (:1027 — a run can end without a terminating 0 bit).
 - **Impact:** today every unary bit is a function call with refill check + Data-subscript byte fetch; this is the canonical decoder optimization. Est. 1.5–2.5x decode combined with W1.6.3.
-- **Verify:** golden decoded-pixel hashes on existing `.jls` fixtures including the corpus's one real JPEG-LS DICOM frame (decode-conformance fixture); bench-dicom.
+- **Verify:** golden decoded-pixel hashes on deterministic generated vectors plus synthetic DICOM round trips; bench-dicom.
 
 ### W2.2 Flat pixel storage + carried-neighbor scan loops (the keystone)
 *Merges: encoder getNeighbors-restructure, decoder getNeighbors/CoW-rows, three `[[Int]]`-storage findings, fillRunResult branch.*
@@ -106,7 +106,7 @@ Corroboration: a measured `-Ounchecked` A/B gave **+65–85% encode, +35–48% d
 
 ### W3.2 Restart-interval (DRI/RSTm) intra-frame parallelism
 - The only standards-compliant way to parallelize a single large scan (17 MP MG frames). Implement per T.87: encoder writes DRI, emits RSTm every N lines with full context + run-index + bit-buffer reset; intervals encode in parallel into per-interval buffers and concatenate; decoder indexes RST markers (cheap byte scan) and decodes intervals concurrently. Today the parser stores `restartInterval` but nothing consumes it, and `extractScanData` truncates at the first RST marker — a conformant restart stream currently **fails to decode**; fix that first regardless. `Core/JPEGLSTileProcessor.swift` is dead code — delete it or rebind it to this stripe partitioning.
-- **Caveats:** changes the bitstream (small ratio cost), so the bit-identical gate does not apply — gate on lossless round-trip + CharLS interop fixtures (restart handling is a classic cross-implementation bug area). Make it an opt-in encode flag, default off. Near-linear multicore on big frames; does **not** close the single-thread gap. Effort: large. Do this only after Phase 2, when single-thread is respectable.
+- **Caveats:** changes the bitstream (small ratio cost), so the bit-identical gate does not apply — gate on lossless round trips, standards-derived restart vectors, and independent implementation testing before release. Make it an opt-in encode flag, default off. Near-linear multicore on big frames; does **not** close the single-thread gap. Effort: large. Do this only after Phase 2, when single-thread is respectable.
 
 ### W3.3 Acceleration-layer disposition + docs honesty
 - The entire `Sources/JPEGLS/Platform/` layer (11 files, 4,365 lines) plus `JPEGLSBufferPool` and `JPEGLSCacheFriendlyBuffer` have **zero production call sites** — the baseline is pure scalar Swift. Delete Platform/Vulkan, Platform/Metal, Platform/x86_64 (removal guide exists: `docs/X86_64_REMOVAL_GUIDE.md`), Platform/Accelerate and their ~4,750 lines of tests; the one salvageable *idea* (SIMD run scan) is re-implemented properly in W2.2's follow-up, not transplanted (the existing version takes `[Int32]`, builds vectors from bounds-checked subscripts, and resolves matches lane-by-lane).
@@ -140,7 +140,7 @@ GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=safe.bareRepository GIT_CONFIG_VALUE_0=all \
 
 **Bit-exactness gate (run after EVERY Phase 1–2 change; this is the merge blocker):**
 1. Before starting work, with the baseline binary: encode the two synthetic references and ~10 fixed DICOM frames (one per modality from the local corpus copy below) to `.jls`; store SHA-256 of each encoded file and of each decoded pixel dump in a `golden/` checksum file.
-2. After each change: re-encode/re-decode the same inputs; **all hashes must match**. Exception: W3.2 (restart markers) legitimately changes bytes — gate it on lossless round-trip + CharLS interop instead.
+2. After each change: re-encode/re-decode the same inputs; **all hashes must match**. Exception: W3.2 (restart markers) legitimately changes bytes — gate it on lossless round trips plus the restart-interval regression suite instead.
 3. Full test suite: `GIT_CONFIG_COUNT=1 ... swift test` (same prefix).
 
 **Synthetic CPU-truth benchmark (no I/O noise, matches the profiled baseline):**
