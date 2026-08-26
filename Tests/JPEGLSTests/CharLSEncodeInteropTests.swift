@@ -1,5 +1,5 @@
-// SPDX-License-Identifier: BSD-3-Clause
-// Copyright (c) 2025 Raster-Lab
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 Raster Images Private Limited
 // CharLS Encode Interoperability Tests
 //
 // Phase 12.2: JLSwift-encoded → (JLSwift-decoded) interoperability tests.
