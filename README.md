@@ -759,4 +759,11 @@ When contributing to JLSwift, please follow these guidelines:
 
 ## License
 
-This project is available under the terms specified by the repository owner.
+JLSwift code and documentation owned by Raster Images Private Limited are
+licensed under the [Apache License 2.0](LICENSE). See [NOTICE](NOTICE) for the
+project attribution.
+
+The byte-identical CharLS JPEG-LS conformance fixtures under
+`Tests/JPEGLSTests/TestFixtures` remain under BSD-3-Clause and are not
+relicensed. Their provenance, retained copyright notices, and full licence text
+are in [LICENSE-BSD-3-Clause.txt](Tests/JPEGLSTests/TestFixtures/LICENSE-BSD-3-Clause.txt).
