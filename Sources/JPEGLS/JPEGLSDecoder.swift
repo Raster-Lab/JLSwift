@@ -865,6 +865,9 @@ public struct JPEGLSDecoder: Sendable {
     /// buffer scoped over the whole region: no nested-array indirection,
     /// no per-access bounds checks, no copy-on-write uniqueness checks
     /// per row, and half the memory traffic of [[Int]].
+    /// Allocating convenience. Decodes into a freshly allocated packed plane by
+    /// calling the same core the caller-destination path uses, so the two
+    /// cannot diverge (MEM-10).
     private func decodeFlatRegion(
         reader: JPEGLSBitstreamReader,
         rows: Int,
@@ -874,12 +877,37 @@ public struct JPEGLSDecoder: Sendable {
         limit: Int,
         qbppBits: Int
     ) throws -> [UInt16] {
+        var flat = [UInt16](repeating: 0, count: width * rows)
+        try flat.withUnsafeMutableBufferPointer { buf in
+            try decodeFlatRegion(into: buf, rowStride: width, reader: reader, rows: rows,
+                                 width: width, parameters: parameters, near: near,
+                                 limit: limit, qbppBits: qbppBits)
+        }
+        return flat
+    }
+
+    /// The decoder's whole final-output path. `rowStride` is in samples and may
+    /// exceed `width`, which is what lets a caller pass their own padded plane;
+    /// bytes between `width` and `rowStride` are never written.
+    func decodeFlatRegion(
+        into buf: UnsafeMutableBufferPointer<UInt16>,
+        rowStride: Int,
+        reader: JPEGLSBitstreamReader,
+        rows: Int,
+        width: Int,
+        parameters: JPEGLSPresetParameters,
+        near: Int,
+        limit: Int,
+        qbppBits: Int
+    ) throws {
+        precondition(rowStride >= width, "row stride cannot be narrower than the image row")
+        precondition(rows == 0 || buf.count >= (rows - 1) * rowStride + width,
+                     "destination is shorter than the declared layout")
         let decoder = try JPEGLSRegularModeDecoder(parameters: parameters, near: near)
         let runDecoder = try JPEGLSRunModeDecoder(parameters: parameters, near: near)
         var context = try JPEGLSContextModel(parameters: parameters, near: near)
-        var flat = [UInt16](repeating: 0, count: width * rows)
 
-        try flat.withUnsafeMutableBufferPointer { buf in
+        do {
             // Track the left-edge value for boundary Rc at col=0.
             // The edge buffer is previous_line[0], which equals the first pixel
             // of the row decoded two iterations ago (0 for rows 0 and 1).
@@ -889,8 +917,8 @@ public struct JPEGLSDecoder: Sendable {
             for row in 0..<rows {
                 // Note: RUNindex is NOT reset per line. Per ITU-T.87 §A.7.1,
                 // RUNindex persists across scan lines; it is only initialised to 0 at scan start.
-                let rowBase = row * width
-                let prevBase = rowBase - width
+                let rowBase = row * rowStride
+                let prevBase = rowBase - rowStride
 
                 // Capture the edge value before this row updates it.
                 let edgeForThisRow = prevRowEdge
@@ -996,8 +1024,6 @@ public struct JPEGLSDecoder: Sendable {
                 }
             }
         }
-
-        return flat
     }
     
     /// Decode a single line for a component (used for line-interleaved mode)
