@@ -1,4 +1,5 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 Raster Images Private Limited
 //
 // The shared-contract codec surface for JPEG-LS.
 //
