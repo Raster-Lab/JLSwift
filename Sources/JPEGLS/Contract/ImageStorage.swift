@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: Apache-2.0
 import Foundation
 
 /// An opaque lease value. Providers create a fresh token for each reservation and

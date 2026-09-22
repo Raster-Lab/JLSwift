@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: Apache-2.0
 import Foundation
 
 /// No codec-specific controls are implemented during contract feasibility.
