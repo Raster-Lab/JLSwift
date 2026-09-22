@@ -151,8 +151,16 @@ public final class JPEGLSParser {
                 )
             }
             
-            let byte2 = try reader.readByte()
-            
+            var byte2 = try reader.readByte()
+
+            // ITU-T T.81 B.1.1.2 (inherited by T.87): any marker may be preceded
+            // by any number of 0xFF fill bytes. Encoders such as CharLS emit one
+            // before EOI when the entropy coder's last byte is 0xFF, so skip fill
+            // bytes before interpreting the marker code.
+            while byte2 == JPEGLSMarker.markerPrefix {
+                byte2 = try reader.readByte()
+            }
+
             // Try to parse as known marker
             guard let marker = JPEGLSMarker(rawValue: byte2) else {
                 // Unknown marker - skip it gracefully
