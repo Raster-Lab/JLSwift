@@ -114,7 +114,10 @@ public final class JPEGLSBitstreamReader {
         return bytes[position]
     }
 
-    /// Read a marker (2-byte sequence starting with 0xFF)
+    /// Read a marker (0xFF, optionally more 0xFF fill bytes, then the code)
+    ///
+    /// ITU-T T.81 B.1.1.2 allows any number of 0xFF fill bytes before a marker
+    /// code; they are skipped here.
     ///
     /// - Returns: The marker
     /// - Throws: `JPEGLSError` if marker is invalid or not found
@@ -124,7 +127,10 @@ public final class JPEGLSBitstreamReader {
             throw JPEGLSError.invalidMarker(byte1: byte1, byte2: 0)
         }
 
-        let byte2 = try readByte()
+        var byte2 = try readByte()
+        while byte2 == JPEGLSMarker.markerPrefix {
+            byte2 = try readByte()
+        }
         guard let marker = JPEGLSMarker(rawValue: byte2) else {
             throw JPEGLSError.invalidMarker(byte1: byte1, byte2: byte2)
         }
