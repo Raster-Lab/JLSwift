@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Fill bytes before markers** (also released as 0.9.2 on the 0.9 line).
+  ITU-T T.81 B.1.1.2 (inherited by T.87) allows any number of 0xFF fill bytes
+  before a marker. CharLS (DCMTK `dcmcjpls`) writes one before EOI whenever the
+  entropy coder's final byte is 0xFF, and the parser read `FF FF D9` as an
+  unknown marker with a length field, failing with "premature end of bitstream"
+  on such single-row DICOM frames. `JPEGLSParser` and
+  `JPEGLSBitstreamReader.readMarker` now skip fill bytes; the scan body already
+  excluded them. Regression tests carry the CharLS streams.
+
 ## [0.10.0-rc.1] — 2026-09-21 (release candidate)
 
 ### Added
